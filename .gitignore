@@ -2,3 +2,6 @@
 __pycache__/
 *.pyc
 *.js
+.venv/
+data/
+logs/

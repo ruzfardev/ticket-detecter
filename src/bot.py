@@ -112,8 +112,9 @@ def _handle(token: str, chat_id: str, text: str):
     # /checknow
     elif text == "/checknow":
         _send(token, chat_id, "🔍 Tekshirilmoqda...")
-        if _on_checknow:
-            threading.Thread(target=_on_checknow, daemon=True).start()
+        fn = _on_checknow
+        if fn:
+            threading.Thread(target=lambda: fn(manual=True), daemon=True).start()
         else:
             _send(token, chat_id, "❌ Checker hali tayyor emas.")
 

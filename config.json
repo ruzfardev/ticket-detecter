@@ -1,22 +1,22 @@
 {
-  "check_interval_minutes": 15,
+  "check_interval_minutes": 10,
   "heartbeat_time": "08:00",
   "routes": [
-    {
-      "name": "Urganch → Toshkent",
-      "dep_station_code": "2900790",
-      "arr_station_code": "2900000",
-      "date_from": "2026-03-28",
-      "date_to": "2026-04-05",
-      "car_types": []
-    },
     {
       "name": "Toshkent → Urganch",
       "dep_station_code": "2900000",
       "arr_station_code": "2900790",
-      "date_from": "2026-04-05",
-      "date_to": "2026-04-10",
-      "car_types": []
+      "date_from": "2026-04-24",
+      "date_to": "2026-04-24",
+      "car_types": ["плацкарта", "купе"]
+    },
+    {
+      "name": "Urganch → Toshkent",
+      "dep_station_code": "2900790",
+      "arr_station_code": "2900000",
+      "date_from": "2026-04-26",
+      "date_to": "2026-04-26",
+      "car_types": ["плацкарта", "купе"]
     }
   ]
 }

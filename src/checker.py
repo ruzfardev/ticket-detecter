@@ -8,6 +8,25 @@ BASE_URL = "https://eticket.railway.uz"
 TRAINS_LIST_ENDPOINT = f"{BASE_URL}/api/v3/handbook/trains/list"
 TRAIN_DETAIL_ENDPOINT = f"{BASE_URL}/api/v1/handbook/trains"
 
+# Normalize car type names across languages (API returns uz/ru/mixed)
+CAR_TYPE_MAP = {
+    "plaskartli": "плацкарта",
+    "плацкартный": "плацкарта",
+    "плацкарта": "плацкарта",
+    "kupe": "купе",
+    "купе": "купе",
+    "lyuks": "люкс",
+    "люкс": "люкс",
+    "sv": "св",
+    "св": "св",
+    "sidyachiy": "сидячий",
+    "сидячий": "сидячий",
+}
+
+
+def _normalize_car_type(raw: str) -> str:
+    return CAR_TYPE_MAP.get(raw.strip().lower(), raw.strip().lower())
+
 
 @dataclass
 class CarDetail:
@@ -96,12 +115,12 @@ def check_tickets(
         if not cars:
             continue
 
-        car_types = [c.get("type", "").strip() for c in cars if c.get("type")]
+        car_types = [_normalize_car_type(c.get("type", "")) for c in cars if c.get("type")]
         total_free = sum(c.get("freeSeats", 0) for c in cars)
 
         if allowed_car_types:
-            normalized = [t.lower() for t in allowed_car_types]
-            matched = [t for t in car_types if t.lower() in normalized]
+            normalized = [_normalize_car_type(t) for t in allowed_car_types]
+            matched = [t for t in car_types if t in normalized]
             if not matched:
                 continue
             car_types = matched
