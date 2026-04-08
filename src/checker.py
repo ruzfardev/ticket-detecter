@@ -57,6 +57,7 @@ def _fetch_train_detail(
     arr_station_code: str,
     train_number: str,
     train_id: Optional[str],
+    allowed_car_types: Optional[list[str]] = None,
 ) -> list[CarDetail]:
     payload = {
         "depDate": dep_date,
@@ -75,8 +76,11 @@ def _fetch_train_detail(
 
     car_groups = resp.json().get("data", {}).get("train", {}).get("carGroup", [])
     result = []
+    normalized_filter = [_normalize_car_type(t) for t in allowed_car_types] if allowed_car_types else None
     for group in car_groups:
-        car_type = group.get("typeShow") or group.get("type", "")
+        car_type = _normalize_car_type(group.get("typeShow") or group.get("type", ""))
+        if normalized_filter and car_type not in normalized_filter:
+            continue
         for car in group.get("cars", []):
             places = car.get("places") or []
             result.append(CarDetail(
@@ -115,15 +119,16 @@ def check_tickets(
         if not cars:
             continue
 
-        car_types = [_normalize_car_type(c.get("type", "")) for c in cars if c.get("type")]
-        total_free = sum(c.get("freeSeats", 0) for c in cars)
+        car_entries = [(c, _normalize_car_type(c.get("type", ""))) for c in cars if c.get("type")]
 
         if allowed_car_types:
             normalized = [_normalize_car_type(t) for t in allowed_car_types]
-            matched = [t for t in car_types if t in normalized]
-            if not matched:
+            car_entries = [(c, t) for c, t in car_entries if t in normalized]
+            if not car_entries:
                 continue
-            car_types = matched
+
+        car_types = [t for _, t in car_entries]
+        total_free = sum(c.get("freeSeats", 0) for c, _ in car_entries)
 
         sub = train.get("subRoute", {})
         available.append(AvailableTrain(
@@ -147,7 +152,7 @@ def check_tickets(
         try:
             train.cars_detail = _fetch_train_detail(
                 dep_date, dep_station_code, arr_station_code,
-                train.number, train.train_id,
+                train.number, train.train_id, allowed_car_types,
             )
         except Exception as e:
             print(f"[checker] Detail fetch failed for {train.number}: {e}")

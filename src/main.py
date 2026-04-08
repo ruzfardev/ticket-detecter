@@ -71,7 +71,10 @@ def run_checks(manual=False):
         car_types = route.get("car_types") or None
         dates = expand_dates(route)
 
+        today = date.today().isoformat()
         for check_date in dates:
+            if check_date < today:
+                continue
             try:
                 print(f"[check] {name} | {check_date} ...", end=" ", flush=True)
                 trains = checker.check_tickets(dep, arr, check_date, car_types)

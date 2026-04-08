@@ -61,12 +61,23 @@ def _key(route_name: str, date: str, train_number: str) -> str:
 
 
 def should_notify(route_name: str, date: str, train_number: str, free_seats: int) -> bool:
-    """Returns True if we should send a Telegram notification for this train."""
+    """Returns True if we should send a Telegram notification for this train.
+
+    Notify when:
+    - Train seen for the first time
+    - Was 0 seats, now has seats
+    - Seats increased (any amount)
+    """
     state = _load()
     k = _key(route_name, date, train_number)
     prev = state.get("trains", {}).get(k)
-    # Notify if: never seen before, OR previously had 0 seats and now has seats
-    return prev is None or prev == 0
+    if prev is None:
+        return True
+    if prev == 0 and free_seats > 0:
+        return True
+    if free_seats > prev:
+        return True
+    return False
 
 
 def update(route_name: str, date: str, train_number: str, free_seats: int):
