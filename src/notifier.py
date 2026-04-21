@@ -1,21 +1,85 @@
 import requests
 
-TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage"
+TELEGRAM_API_BASE = "https://api.telegram.org/bot{token}"
 
 
-def send_message(bot_token: str, chat_id: str, text: str) -> bool:
-    url = TELEGRAM_API.format(token=bot_token)
+def send_message(
+    bot_token: str,
+    chat_id: str,
+    text: str,
+    reply_markup: dict | None = None,
+    disable_notification: bool = False,
+) -> bool:
+    url = TELEGRAM_API_BASE.format(token=bot_token) + "/sendMessage"
     payload = {
         "chat_id": chat_id,
         "text": text,
         "parse_mode": "HTML",
         "disable_web_page_preview": True,
+        "disable_notification": disable_notification,
     }
+    if reply_markup is not None:
+        payload["reply_markup"] = reply_markup
     try:
         resp = requests.post(url, json=payload, timeout=15)
         return resp.status_code == 200
     except Exception as e:
         print(f"[notifier] Telegram send error: {e}")
+        return False
+
+
+def edit_message(
+    bot_token: str,
+    chat_id: str,
+    message_id: int,
+    text: str,
+    reply_markup: dict | None = None,
+) -> bool:
+    url = TELEGRAM_API_BASE.format(token=bot_token) + "/editMessageText"
+    payload = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+    }
+    if reply_markup is not None:
+        payload["reply_markup"] = reply_markup
+    try:
+        resp = requests.post(url, json=payload, timeout=15)
+        return resp.status_code == 200
+    except Exception as e:
+        print(f"[notifier] Telegram edit error: {e}")
+        return False
+
+
+def answer_callback(bot_token: str, callback_id: str, text: str = "", show_alert: bool = False) -> bool:
+    url = TELEGRAM_API_BASE.format(token=bot_token) + "/answerCallbackQuery"
+    payload = {"callback_query_id": callback_id, "text": text, "show_alert": show_alert}
+    try:
+        resp = requests.post(url, json=payload, timeout=10)
+        return resp.status_code == 200
+    except Exception as e:
+        print(f"[notifier] Telegram callback-answer error: {e}")
+        return False
+
+
+def send_chat_action(bot_token: str, chat_id: str, action: str = "typing") -> bool:
+    url = TELEGRAM_API_BASE.format(token=bot_token) + "/sendChatAction"
+    try:
+        resp = requests.post(url, json={"chat_id": chat_id, "action": action}, timeout=10)
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
+def set_bot_commands(bot_token: str, commands: list[dict]) -> bool:
+    url = TELEGRAM_API_BASE.format(token=bot_token) + "/setMyCommands"
+    try:
+        resp = requests.post(url, json={"commands": commands}, timeout=10)
+        return resp.status_code == 200
+    except Exception as e:
+        print(f"[notifier] setMyCommands error: {e}")
         return False
 
 
@@ -35,7 +99,6 @@ def format_ticket_alert(route_name: str, date: str, trains) -> str:
         )
 
         if train.cars_detail:
-            # Group by car type
             by_type: dict[str, list] = {}
             for car in train.cars_detail:
                 if car.free_seats > 0:
@@ -48,13 +111,12 @@ def format_ticket_alert(route_name: str, date: str, trains) -> str:
                     extra = f" ..." if len(car.places) > 10 else ""
                     lines.append(f"     Vagon {car.number}: {car.free_seats} joy ({places_str}{extra})")
         else:
-            # Fallback to summary from list endpoint
             car_str = ", ".join(train.car_types) if train.car_types else "mavjud"
             lines.append(f"  🪑 {car_str}")
 
         lines.append("")
 
-    lines.append(f'🔗 <a href="https://eticket.railway.uz/uz/home">Bilet olish</a>')
+    lines.append('🔗 <a href="https://eticket.railway.uz/uz/home">Bilet olish</a>')
     return "\n".join(lines)
 
 

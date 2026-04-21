@@ -16,9 +16,13 @@ import notifier
 import state
 import bot
 import eventlog
+import runtime
 
 ROOT = Path(__file__).parent.parent
 load_dotenv(ROOT / ".env")
+
+# Track the scheduled check-job so we can reschedule on interval change.
+_check_job = None
 
 
 def load_config() -> dict:
@@ -45,11 +49,16 @@ def _is_connection_error(e: Exception) -> bool:
 
 
 def run_checks(manual=False):
+    # Respect the pause flag unless the user explicitly asked via /checknow
+    if runtime.is_paused() and not manual:
+        print("[main] Paused — skipping scheduled check.")
+        return
+
+    started = time.monotonic()
     config = load_config()
     bot_token = os.environ["TELEGRAM_BOT_TOKEN"]
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
 
-    # Collect all monitored dates for state cleanup
     all_dates = set()
     for route in config["routes"]:
         all_dates.update(expand_dates(route))
@@ -60,6 +69,7 @@ def run_checks(manual=False):
     any_tickets_found = False
     dates_checked = 0
     tickets_this_run = 0
+    last_error: str | None = None
 
     for route in config["routes"]:
         if site_is_down:
@@ -83,7 +93,8 @@ def run_checks(manual=False):
                 for train in trains:
                     any_tickets_found = True
                     tickets_this_run += 1
-                    eventlog.log("ticket_found", route=name, date=check_date, train=train.number, seats=train.total_free)
+                    eventlog.log("ticket_found", route=name, date=check_date,
+                                 train=train.number, seats=train.total_free)
                     if state.should_notify(name, check_date, train.number, train.total_free):
                         print(f"NOTIFY {train.number} ({train.total_free} seats)")
                         msg = notifier.format_ticket_alert(name, check_date, [train])
@@ -97,22 +108,25 @@ def run_checks(manual=False):
 
             except RuntimeError as e:
                 print(f"\n[main] Auth error: {e}")
+                last_error = f"auth: {e}"
                 if not state.is_error_active("auth_failed"):
-                    notifier.send_message(bot_token, chat_id, notifier.format_error_alert(f"Login xatoligi:\n{e}"))
+                    notifier.send_message(bot_token, chat_id,
+                                          notifier.format_error_alert(f"Login xatoligi:\n{e}"))
                     state.set_error_active("auth_failed", True)
+                _finish_run(started, dates_checked, tickets_this_run, last_error)
                 return
 
             except Exception as e:
                 if _is_connection_error(e):
                     print(f"\n[main] Site unreachable: {e}")
                     site_is_down = True
+                    last_error = "site unreachable"
                     break
+                last_error = str(e)
                 print(f"\n[main] Error checking {name} {check_date}: {e}")
 
-    # Log the completed check cycle
     eventlog.log("check_done", routes=len(config["routes"]), dates=dates_checked, found=tickets_this_run)
 
-    # Site down/up transitions
     if site_is_down:
         eventlog.log("site_down")
         print("[main] Site unreachable — sending notification.")
@@ -129,10 +143,30 @@ def run_checks(manual=False):
             state.set_error_active("site_down", False)
         elif manual and not any_tickets_found:
             notifier.send_message(bot_token, chat_id, "✅ Tekshirildi — hozircha bo'sh joy topilmadi.")
+        elif manual and any_tickets_found:
+            notifier.send_message(
+                bot_token, chat_id,
+                f"✅ Tekshirildi — {tickets_this_run} ta chipta topildi.",
+            )
 
-    # Clear auth error flag once checks succeed
     if not site_is_down and state.is_error_active("auth_failed"):
         state.set_error_active("auth_failed", False)
+
+    _finish_run(started, dates_checked, tickets_this_run, last_error)
+
+
+def _finish_run(started: float, dates_checked: int, tickets: int, last_error: str | None):
+    duration = time.monotonic() - started
+    runtime.mark_check_end(duration, dates_checked, tickets, last_error)
+    _update_next_check_time()
+
+
+def _update_next_check_time():
+    if _check_job is None or runtime.is_paused():
+        runtime.set_next_check(None)
+        return
+    # schedule stores next_run as a datetime
+    runtime.set_next_check(_check_job.next_run)
 
 
 def send_daily_summary():
@@ -172,13 +206,11 @@ def send_daily_summary():
             lines.append("")
 
         if downs:
-            # Pair downs with next up to calculate durations
             down_periods = []
             up_times = [datetime.fromisoformat(u["ts"]) for u in ups]
             total_minutes = 0
             for d in downs:
                 d_ts = datetime.fromisoformat(d["ts"])
-                # find first up after this down
                 recovery = next((u for u in up_times if u > d_ts), None)
                 if recovery:
                     mins = int((recovery - d_ts).total_seconds() / 60)
@@ -211,6 +243,16 @@ def send_heartbeat():
     notifier.send_message(bot_token, chat_id, msg)
 
 
+def reschedule(interval_minutes: int):
+    """Cancel the current check job and install a new one at `interval_minutes`."""
+    global _check_job
+    if _check_job is not None:
+        schedule.cancel_job(_check_job)
+    _check_job = schedule.every(interval_minutes).minutes.do(run_checks)
+    _update_next_check_time()
+    print(f"[main] Rescheduled checks to every {interval_minutes} min.")
+
+
 def main():
     auth.init(
         username=os.environ["RAILWAY_USERNAME"],
@@ -224,7 +266,13 @@ def main():
     print(f"[main] Ticket checker started. Interval: {interval} min, Heartbeat: {heartbeat_time}")
     print(f"[main] Routes: {len(config['routes'])}")
 
-    bot.set_checknow_callback(run_checks)
+    runtime.set_callbacks(
+        reschedule=reschedule,
+        run_checks=run_checks,
+        send_summary=send_daily_summary,
+        send_heartbeat=send_heartbeat,
+    )
+
     bot.start_polling(
         bot_token=os.environ["TELEGRAM_BOT_TOKEN"],
         allowed_chat_id=os.environ["TELEGRAM_CHAT_ID"],
@@ -232,13 +280,14 @@ def main():
 
     run_checks()
 
-    schedule.every(interval).minutes.do(run_checks)
+    reschedule(interval)
     schedule.every().day.at(heartbeat_time).do(send_heartbeat)
     schedule.every().day.at("23:59").do(send_daily_summary)
 
     while True:
         schedule.run_pending()
-        time.sleep(30)
+        _update_next_check_time()
+        time.sleep(5)
 
 
 if __name__ == "__main__":

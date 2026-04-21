@@ -145,16 +145,48 @@ Bot ishga tushgach Telegram ga "Bot ishlayapti" xabari keladi va birinchi tekshi
 
 ## Telegram bot buyruqlari
 
-Botga quyidagi buyruqlarni yuborish mumkin:
+Bot har bir xabarga javob beradi va inline tugmalar bilan jihozlangan. Asosiy menyuni ochish uchun `/start` yoki `/menu` yuboring.
+
+**Navigatsiya**
 
 | Buyruq | Izoh |
 |--------|------|
-| `/routes` | Hozirgi marshrutlar va sanalarni ko'rish |
-| `/checknow` | Darhol tekshirishni boshlash |
-| `/interval 10` | Tekshirish intervalini 10 daqiqaga o'zgartirish |
-| `/setdates 1 2026-04-01 2026-04-10` | 1-marshrut sanalarini yangilash |
+| `/start` | Botni ishga tushirish va asosiy menyu |
+| `/menu` | Asosiy menyu (tugmalar bilan) |
+| `/help` | Buyruqlarning to'liq ro'yxati |
+| `/status` | Bot holati, oxirgi va keyingi tekshiruv |
+| `/stats` | 24 soatlik statistika |
+| `/routes` | Marshrutlar ro'yxati |
+| `/stations` | Ma'lum stantsiya kodlari |
 
-> Faqat `.env` dagi `TELEGRAM_CHAT_ID` dan kelgan buyruqlar qabul qilinadi.
+**Tekshirish boshqaruvi**
+
+| Buyruq | Izoh |
+|--------|------|
+| `/checknow` | Darhol tekshirishni boshlash |
+| `/pause` | Rejalashtirilgan tekshiruvlarni pauza qilish |
+| `/resume` | Tekshiruvni davom ettirish |
+| `/summary` | Kunlik hisobotni darhol yuborish |
+
+**Sozlash**
+
+| Buyruq | Izoh |
+|--------|------|
+| `/interval 10` | Tekshirish intervalini o'zgartirish (qayta ishga tushirmasdan) |
+| `/heartbeat 08:00` | Kunlik heartbeat vaqtini sozlash |
+| `/setdates 1 2026-04-01 2026-04-10` | 1-marshrut sanalarini yangilash |
+| `/setcars 1` | 1-marshrutning vagon turlarini tanlash (tugmalar bilan) |
+| `/addroute` | Yangi marshrutni bosqichma-bosqich qo'shish |
+| `/delroute 2` | 2-marshrutni o'chirish (tasdiq so'raladi) |
+| `/cancel` | Joriy jarayonni (masalan, /addroute) bekor qilish |
+
+**Qo'shimcha**
+
+- Bot slash-siz xabarlarga ham javob beradi: "salom", "tekshir", "holat" va h.k.
+- Noma'lum buyruq yuborilsa yordam menyusi ko'rsatiladi — foydalanuvchi hech qachon javobsiz qolmaydi.
+- `/interval` va marshrut o'zgarishlari botni qayta ishga tushirmasdan darhol qo'llaniladi.
+
+> Faqat `.env` dagi `TELEGRAM_CHAT_ID` dan kelgan xabarlar qayta ishlanadi.
 
 ---
 
@@ -225,11 +257,14 @@ ticket-detecter/
 │   ├── main.py       # Asosiy scheduler
 │   ├── auth.py       # eticket.railway.uz login
 │   ├── checker.py    # Chipta tekshirish
-│   ├── notifier.py   # Telegram xabar formati
+│   ├── notifier.py   # Telegram xabar yuborish va formati
 │   ├── state.py      # Takroriy xabar oldini olish
-│   └── bot.py        # Telegram bot buyruqlari
+│   ├── bot.py        # Telegram bot: buyruqlar, menyu, wizardlar
+│   ├── runtime.py    # Scheduler ↔ bot uchun umumiy holat
+│   └── eventlog.py   # Tekshiruv hodisalari jurnali
 ├── data/
-│   └── seen_trains.json  # Holat fayli (avtomatik yaratiladi)
+│   ├── seen_trains.json  # Holat fayli (avtomatik yaratiladi)
+│   └── events.jsonl      # Hodisalar jurnali (avtomatik yaratiladi)
 ├── config.json       # Marshrutlar va sozlamalar
 ├── .env              # Maxfiy ma'lumotlar (git ga qo'shilmaydi)
 ├── .env.example      # .env namunasi
