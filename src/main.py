@@ -95,8 +95,10 @@ def run_checks(manual=False):
                     tickets_this_run += 1
                     eventlog.log("ticket_found", route=name, date=check_date,
                                  train=train.number, seats=train.total_free)
-                    if state.should_notify(name, check_date, train.number, train.total_free):
-                        print(f"NOTIFY {train.number} ({train.total_free} seats)")
+                    should = state.should_notify(name, check_date, train.number, train.total_free)
+                    if should or manual:
+                        reason = "NOTIFY" if should else "MANUAL"
+                        print(f"{reason} {train.number} ({train.total_free} seats)")
                         msg = notifier.format_ticket_alert(name, check_date, [train])
                         notifier.send_message(bot_token, chat_id, msg)
                     else:
@@ -143,11 +145,6 @@ def run_checks(manual=False):
             state.set_error_active("site_down", False)
         elif manual and not any_tickets_found:
             notifier.send_message(bot_token, chat_id, "✅ Tekshirildi — hozircha bo'sh joy topilmadi.")
-        elif manual and any_tickets_found:
-            notifier.send_message(
-                bot_token, chat_id,
-                f"✅ Tekshirildi — {tickets_this_run} ta chipta topildi.",
-            )
 
     if not site_is_down and state.is_error_active("auth_failed"):
         state.set_error_active("auth_failed", False)

@@ -83,6 +83,17 @@ def set_bot_commands(bot_token: str, commands: list[dict]) -> bool:
         return False
 
 
+# Car types where odd seat numbers are lower berths and even are upper.
+# Convention holds for плацкарта (side + main) and купе (4-berth compartments).
+_BERTH_TYPES = {"плацкарта", "купе"}
+
+
+def _split_berths(places: list[int]) -> tuple[list[int], list[int]]:
+    lower = sorted(p for p in places if p % 2 == 1)
+    upper = sorted(p for p in places if p % 2 == 0)
+    return lower, upper
+
+
 def format_ticket_alert(route_name: str, date: str, trains) -> str:
     lines = [
         "🚂 <b>Chipta topildi!</b>",
@@ -95,7 +106,7 @@ def format_ticket_alert(route_name: str, date: str, trains) -> str:
         lines.append(
             f"• <b>{train.number}</b> ({train.brand})\n"
             f"  🕐 {train.departure} → {train.arrival} ({train.time_on_way})\n"
-            f"  💺 Jami bo'sh: <b>{train.total_free} ta</b>"
+            f"  💺 Jami: <b>{train.total_free} ta</b>"
         )
 
         if train.cars_detail:
@@ -106,10 +117,23 @@ def format_ticket_alert(route_name: str, date: str, trains) -> str:
 
             for car_type, cars in by_type.items():
                 lines.append(f"  🪑 <b>{car_type}</b>:")
+                use_berths = car_type in _BERTH_TYPES
                 for car in cars:
-                    places_str = ", ".join(str(p) for p in car.places[:10])
-                    extra = f" ..." if len(car.places) > 10 else ""
-                    lines.append(f"     Vagon {car.number}: {car.free_seats} joy ({places_str}{extra})")
+                    if use_berths:
+                        lower, upper = _split_berths(car.places)
+                        lines.append(f"     Vagon {car.number} ({car.free_seats} ta):")
+                        if lower:
+                            preview = ", ".join(str(p) for p in lower[:12])
+                            extra = " ..." if len(lower) > 12 else ""
+                            lines.append(f"        ⬇️ pastki ({len(lower)}): {preview}{extra}")
+                        if upper:
+                            preview = ", ".join(str(p) for p in upper[:12])
+                            extra = " ..." if len(upper) > 12 else ""
+                            lines.append(f"        ⬆️ tepa   ({len(upper)}): {preview}{extra}")
+                    else:
+                        preview = ", ".join(str(p) for p in car.places[:12])
+                        extra = " ..." if len(car.places) > 12 else ""
+                        lines.append(f"     Vagon {car.number}: {car.free_seats} joy ({preview}{extra})")
         else:
             car_str = ", ".join(train.car_types) if train.car_types else "mavjud"
             lines.append(f"  🪑 {car_str}")
