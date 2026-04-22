@@ -114,10 +114,13 @@ def _main_menu_keyboard() -> dict:
 
 
 def _interval_keyboard() -> dict:
+    # callback_data format: "setinterval:<seconds>"
     return {
         "inline_keyboard": [
-            [{"text": f"{m} daq", "callback_data": f"setinterval:{m}"} for m in (5, 10, 15)],
-            [{"text": f"{m} daq", "callback_data": f"setinterval:{m}"} for m in (20, 30, 60)],
+            [{"text": f"{s} soniya", "callback_data": f"setinterval:{s}"} for s in (30, 45)],
+            [{"text": f"{s} soniya", "callback_data": f"setinterval:{s}"} for s in (60, 90, 120)],
+            [{"text": f"{m} daq", "callback_data": f"setinterval:{m * 60}"} for m in (5, 10, 15)],
+            [{"text": f"{m} daq", "callback_data": f"setinterval:{m * 60}"} for m in (20, 30, 60)],
             [{"text": "⬅️ Orqaga", "callback_data": "menu"}],
         ]
     }
@@ -177,11 +180,12 @@ def _fmt_status(config: dict) -> str:
     last = runtime.last_check_at
     nxt = runtime.next_check_at
 
+    cfg_seconds = config.get("check_interval_seconds") or config.get("check_interval_minutes", 15) * 60
     lines = [
         "📊 <b>Bot holati</b>\n",
         f"• Rejim: {'⏸ Pauza' if paused else '▶️ Ishlamoqda'}",
         f"• Ish vaqti: {runtime.uptime_str()}",
-        f"• Interval: {config.get('check_interval_minutes', 15)} daq",
+        f"• Interval: {_fmt_interval(cfg_seconds)}",
         f"• Heartbeat: {config.get('heartbeat_time', '08:00')}",
         f"• Marshrutlar: {len(config['routes'])} ta",
         "",
@@ -338,25 +342,68 @@ def _cmd_resume(arg: str):
     _send("▶️ <b>Davom etdi.</b>\nKeyingi tekshiruv rejaga muvofiq bajariladi.", _main_menu_keyboard())
 
 
+_INTERVAL_RE = re.compile(r"^\s*(\d+)\s*([smd]?)\s*$", re.IGNORECASE)
+
+
+def _parse_interval(arg: str) -> int | None:
+    """Parse user input into seconds. Accepts '30s', '2m', '10' (minutes back-compat).
+    Returns None on invalid input."""
+    m = _INTERVAL_RE.match(arg)
+    if not m:
+        return None
+    n = int(m.group(1))
+    unit = m.group(2).lower()
+    if unit == "s":
+        return n
+    if unit == "m" or unit == "":
+        # Bare number = minutes (back-compat with earlier /interval 10)
+        return n * 60
+    if unit == "d":
+        return n * 60
+    return None
+
+
+def _fmt_interval(seconds: int) -> str:
+    if seconds < 60:
+        return f"{seconds} soniya"
+    if seconds % 60 == 0:
+        return f"{seconds // 60} daqiqa"
+    return f"{seconds // 60} daq {seconds % 60} son"
+
+
 def _cmd_interval(arg: str):
     if not arg:
-        _send("⏱ <b>Interval ni tanlang:</b>", _interval_keyboard())
+        _send("⏱ <b>Interval ni tanlang:</b>\n\nYoki qo'lda: <code>/interval 30s</code>, <code>/interval 2m</code>",
+              _interval_keyboard())
         return
-    if not arg.isdigit():
-        _send("❌ Ishlatish: <code>/interval 10</code>\nYoki tugmalar orqali tanlang.", _interval_keyboard())
+    seconds = _parse_interval(arg)
+    if seconds is None:
+        _send(
+            "❌ Ishlatish:\n"
+            "• <code>/interval 30s</code> — soniyada\n"
+            "• <code>/interval 2m</code> — daqiqada\n"
+            "• <code>/interval 10</code> — daqiqa (qisqartirilgan)\n\n"
+            "Yoki tugmalar orqali tanlang:",
+            _interval_keyboard(),
+        )
         return
-    _apply_interval(int(arg))
+    _apply_interval(seconds)
 
 
-def _apply_interval(minutes: int):
-    if minutes < 1 or minutes > 120:
-        _send("❌ Interval 1–120 daqiqa orasida bo'lishi kerak.")
+def _apply_interval(seconds: int):
+    if seconds < 10 or seconds > 7200:
+        _send("❌ Interval 10 soniya – 2 soat orasida bo'lishi kerak.")
         return
     config = _load_config()
-    config["check_interval_minutes"] = minutes
+    config["check_interval_seconds"] = seconds
+    # Keep legacy key in sync for full-minute values; drop it otherwise
+    if seconds % 60 == 0:
+        config["check_interval_minutes"] = seconds // 60
+    else:
+        config.pop("check_interval_minutes", None)
     _save_config(config)
-    runtime.reschedule(minutes)
-    _send(f"✅ Interval <b>{minutes} daqiqa</b> ga o'zgartirildi va darhol qo'llanildi.",
+    runtime.reschedule(seconds)
+    _send(f"✅ Interval <b>{_fmt_interval(seconds)}</b> ga o'zgartirildi va darhol qo'llanildi.",
           _main_menu_keyboard())
 
 

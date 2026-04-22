@@ -172,7 +172,7 @@ Bot har bir xabarga javob beradi va inline tugmalar bilan jihozlangan. Asosiy me
 
 | Buyruq | Izoh |
 |--------|------|
-| `/interval 10` | Tekshirish intervalini o'zgartirish (qayta ishga tushirmasdan) |
+| `/interval 30s` / `/interval 2m` / `/interval 10` | Intervalni soniya yoki daqiqada o'zgartirish (qayta ishga tushirmasdan) |
 | `/heartbeat 08:00` | Kunlik heartbeat vaqtini sozlash |
 | `/setdates 1 2026-04-01 2026-04-10` | 1-marshrut sanalarini yangilash |
 | `/setcars 1` | 1-marshrutning vagon turlarini tanlash (tugmalar bilan) |

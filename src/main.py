@@ -243,14 +243,14 @@ def send_heartbeat():
     notifier.send_message(bot_token, chat_id, msg)
 
 
-def reschedule(interval_minutes: int):
-    """Cancel the current check job and install a new one at `interval_minutes`."""
+def reschedule(interval_seconds: int):
+    """Cancel the current check job and install a new one at `interval_seconds`."""
     global _check_job
     if _check_job is not None:
         schedule.cancel_job(_check_job)
-    _check_job = schedule.every(interval_minutes).minutes.do(run_checks)
+    _check_job = schedule.every(interval_seconds).seconds.do(run_checks)
     _update_next_check_time()
-    print(f"[main] Rescheduled checks to every {interval_minutes} min.")
+    print(f"[main] Rescheduled checks to every {interval_seconds} s.")
 
 
 def main():
@@ -260,10 +260,10 @@ def main():
     )
 
     config = load_config()
-    interval = config.get("check_interval_minutes", 15)
+    interval_s = config.get("check_interval_seconds") or config.get("check_interval_minutes", 15) * 60
     heartbeat_time = config.get("heartbeat_time", "08:00")
 
-    print(f"[main] Ticket checker started. Interval: {interval} min, Heartbeat: {heartbeat_time}")
+    print(f"[main] Ticket checker started. Interval: {interval_s} s, Heartbeat: {heartbeat_time}")
     print(f"[main] Routes: {len(config['routes'])}")
 
     runtime.set_callbacks(
@@ -280,14 +280,14 @@ def main():
 
     run_checks()
 
-    reschedule(interval)
+    reschedule(interval_s)
     schedule.every().day.at(heartbeat_time).do(send_heartbeat)
     schedule.every().day.at("23:59").do(send_daily_summary)
 
     while True:
         schedule.run_pending()
         _update_next_check_time()
-        time.sleep(5)
+        time.sleep(1)
 
 
 if __name__ == "__main__":
