@@ -43,11 +43,17 @@ def get_dispatcher() -> Dispatcher:
 
 def _register_routers(dp: Dispatcher) -> None:
     # Imported here to avoid circulars
-    from app.bot.handlers import callbacks, fallback, help_, language, menu, start
+    from app.bot.handlers import (
+        callbacks, donate, fallback, help_, language, menu,
+        payments, premium, start,
+    )
 
     dp.include_router(start.router)
     dp.include_router(help_.router)
     dp.include_router(menu.router)          # reply-keyboard button taps
+    dp.include_router(premium.router)       # /premium + ⭐ Premium label
+    dp.include_router(donate.router)        # /donate + ❤️ Donate label
+    dp.include_router(payments.router)      # pre_checkout_query, successful_payment
     dp.include_router(language.router)
     dp.include_router(callbacks.router)     # inline-button generic
     dp.include_router(fallback.router)      # catch-all — must be last

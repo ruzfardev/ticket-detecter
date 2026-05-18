@@ -1,0 +1,76 @@
+"""
+Stars payment flow handlers.
+
+Telegram calls our bot with two updates during a Stars purchase:
+  1. pre_checkout_query — we must reply within 10s with ok or error
+  2. successful_payment  — payment cleared, user got Premium / donated
+"""
+
+from __future__ import annotations
+
+from aiogram import F, Router
+from aiogram.types import Message, PreCheckoutQuery
+
+from app.bot.backend_client import precheck_payment, record_payment_success
+from app.core.logging import logger
+
+router = Router()
+
+
+@router.pre_checkout_query()
+async def on_pre_checkout(q: PreCheckoutQuery) -> None:
+    try:
+        result = await precheck_payment(
+            tg_user_id=q.from_user.id,
+            invoice_payload=q.invoice_payload,
+            stars_amount=q.total_amount,
+        )
+    except Exception as e:
+        logger.exception("precheck_call_failed", error=str(e))
+        await q.answer(ok=False, error_message="Service unavailable")
+        return
+
+    ok = bool(result.get("ok"))
+    err = result.get("error_message") or "Validation failed"
+    if ok:
+        await q.answer(ok=True)
+    else:
+        await q.answer(ok=False, error_message=err)
+        logger.warning("precheck_rejected", payload=q.invoice_payload, reason=err)
+
+
+@router.message(F.successful_payment)
+async def on_successful_payment(msg: Message) -> None:
+    sp = msg.successful_payment
+    try:
+        result = await record_payment_success(
+            tg_user_id=msg.from_user.id,
+            tg_payment_charge_id=sp.telegram_payment_charge_id,
+            provider_charge_id=sp.provider_payment_charge_id or None,
+            invoice_payload=sp.invoice_payload,
+            stars_amount=sp.total_amount,
+            raw=sp.model_dump(),
+        )
+    except Exception as e:
+        logger.exception("payment_record_failed", error=str(e))
+        await msg.answer("✅ To'lov qabul qilindi, lekin xabar yuborishda xato. "
+                         "Iltimos, qayta urinib ko'ring yoki @TicketDetectorSupport.")
+        return
+
+    if result.get("type") == "premium":
+        until = result.get("granted_until", "")[:10]
+        await msg.answer(
+            f"🎉 <b>Premium aktivlashtirildi!</b>\n\n"
+            f"• Slot: 3 ta xabarnoma\n"
+            f"• Cadence: har 10 sekundda\n"
+            f"• Tugash: {until}\n\n"
+            f"Endi 3 ta poyezdni bir vaqtda kuzata olasiz."
+        )
+    elif result.get("type") == "donate":
+        await msg.answer(
+            f"💝 <b>Katta rahmat!</b>\n\n"
+            f"Sizning {result.get('stars')} ⭐ qo'llab-quvvatlovingiz "
+            f"botning rivojlanishi uchun ishlatiladi."
+        )
+    else:
+        await msg.answer("✅ To'lov qabul qilindi.")
