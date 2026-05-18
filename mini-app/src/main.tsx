@@ -1,16 +1,12 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { AppRoot } from "@telegram-apps/telegram-ui";
 import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 
-import "@telegram-apps/telegram-ui/dist/styles.css";
-import "./ui/tokens.css";
-import "./styles.css";
+import "./index.css";
 
 import { App } from "./App";
-import { useTelegram } from "./hooks/useTelegram";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,16 +18,24 @@ const queryClient = new QueryClient({
 });
 
 function Root() {
-  const { colorScheme, platform } = useTelegram();
   return (
-    <AppRoot appearance={colorScheme} platform={platform}>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </QueryClientProvider>
-      <Toaster position="top-center" theme={colorScheme} />
-    </AppRoot>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+      <Toaster
+        position="bottom-center"
+        offset={96}
+        toastOptions={{
+          classNames: {
+            toast:
+              "!bg-canvas !border !border-hairline !text-ink !font-sans !rounded-lg !shadow-md",
+            title: "!text-ink !text-body-md !font-medium",
+            description: "!text-muted !text-body-sm",
+          },
+        }}
+      />
+    </QueryClientProvider>
   );
 }
 

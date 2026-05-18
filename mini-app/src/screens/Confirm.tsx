@@ -1,25 +1,26 @@
-import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Cell, List, Section } from "@telegram-apps/telegram-ui";
 import { toast } from "sonner";
 import {
   MapPin, CalendarDays, TrainFront, Armchair, ArrowDownToLine, ArrowUpToLine,
 } from "lucide-react";
 
 import { createSubscription } from "@/api/client";
-import { useMainButton } from "@/hooks/useMainButton";
-import { useTelegram } from "@/hooks/useTelegram";
+import { useHaptic } from "@/hooks/useHaptic";
 import { useWizardGuard } from "@/hooks/useWizardGuard";
 import { useWizard } from "@/store/wizard";
-import { IconText } from "@/ui";
+import { Screen } from "@/components/Screen";
+import { StickyAction } from "@/components/StickyAction";
+import { Button } from "@/components/ui/button";
+import { ListGroup, ListRow } from "@/components/ui/list";
+import { Spinner } from "@/components/ui/spinner";
 
 export function Confirm() {
   useWizardGuard(["dep_code", "arr_code", "travel_date", "train_number", "car_types"]);
 
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { haptic } = useTelegram();
+  const haptic = useHaptic();
   const reset = useWizard(s => s.reset);
   const w = useWizard();
 
@@ -38,7 +39,7 @@ export function Confirm() {
       });
     },
     onSuccess: () => {
-      haptic?.notificationOccurred?.("success");
+      haptic.notify("success");
       toast.success("Xabarnoma yaratildi");
       qc.invalidateQueries({ queryKey: ["subs"] });
       qc.invalidateQueries({ queryKey: ["me"] });
@@ -46,7 +47,7 @@ export function Confirm() {
       navigate("/home", { replace: true });
     },
     onError: (err: any) => {
-      haptic?.notificationOccurred?.("error");
+      haptic.notify("error");
       const code = err.response?.data?.error?.code;
       if (code === "slot_limit_reached") {
         toast.error("Slot to'lgan. Premium kerak.");
@@ -57,44 +58,75 @@ export function Confirm() {
     },
   });
 
-  const onSubmit = useCallback(() => mutation.mutate(), [mutation]);
-  useMainButton({
-    text: "Saqlash",
-    enabled: !mutation.isPending,
-    progress: mutation.isPending,
-    onClick: onSubmit,
-  });
-
+  const BerthIcon = w.berth === "lower" ? ArrowDownToLine : ArrowUpToLine;
   const berthLabel =
     w.berth === "lower" ? "Pastki" :
     w.berth === "upper" ? "Tepa" :
     null;
-  const BerthIcon = w.berth === "lower" ? ArrowDownToLine : ArrowUpToLine;
 
   return (
-    <List>
-      <Section
-        header="Tasdiqlash"
-        footer="Bo'sh joy paydo bo'lganda Telegram orqali darhol xabar olasiz."
-      >
-        <Cell subtitle="Marshrut" before={<MapPin size={18} strokeWidth={1.75} />}>
-          {w.dep_name} → {w.arr_name}
-        </Cell>
-        <Cell subtitle="Sana" before={<CalendarDays size={18} strokeWidth={1.75} />}>
-          {w.travel_date}
-        </Cell>
-        <Cell subtitle="Poyezd" before={<TrainFront size={18} strokeWidth={1.75} />}>
-          {w.train_number}{w.train_brand ? ` · ${w.train_brand}` : ""}
-        </Cell>
-        <Cell subtitle="Vagon turi" before={<Armchair size={18} strokeWidth={1.75} />}>
-          {w.car_types.join(", ")}
-        </Cell>
+    <Screen
+      padded
+      wizard
+      title="Tasdiqlash"
+      subtitle="O'zgartirish uchun qatorga bosing"
+    >
+      <ListGroup>
+        <ListRow
+          before={<MapPin className="h-5 w-5 text-ink" strokeWidth={1.75} />}
+          title={`${w.dep_name} → ${w.arr_name}`}
+          subtitle="Marshrut"
+          chevron
+          onClick={() => navigate("/new")}
+        />
+        <ListRow
+          before={<CalendarDays className="h-5 w-5 text-ink" strokeWidth={1.75} />}
+          title={w.travel_date ?? ""}
+          subtitle="Sana"
+          chevron
+          onClick={() => navigate("/new/date")}
+        />
+        <ListRow
+          before={<TrainFront className="h-5 w-5 text-ink" strokeWidth={1.75} />}
+          title={`${w.train_number}${w.train_brand ? ` · ${w.train_brand}` : ""}`}
+          subtitle="Poyezd"
+          chevron
+          onClick={() => navigate("/new/train")}
+        />
+        <ListRow
+          before={<Armchair className="h-5 w-5 text-ink" strokeWidth={1.75} />}
+          title={w.car_types.join(", ")}
+          subtitle="Vagon turi"
+          chevron
+          onClick={() => navigate("/new/car-type")}
+        />
         {berthLabel && (
-          <Cell subtitle="Joy turi">
-            <IconText icon={BerthIcon}>{berthLabel}</IconText>
-          </Cell>
+          <ListRow
+            before={<BerthIcon className="h-5 w-5 text-ink" strokeWidth={1.75} />}
+            title={berthLabel}
+            subtitle="Joy turi"
+            chevron
+            onClick={() => navigate("/new/berth")}
+          />
         )}
-      </Section>
-    </List>
+      </ListGroup>
+
+      <p className="text-body-sm text-muted px-1">
+        Bo'sh joy paydo bo'lganda Telegram orqali darhol xabar olasiz.
+      </p>
+
+      <StickyAction>
+        <Button full disabled={mutation.isPending} onClick={() => mutation.mutate()}>
+          {mutation.isPending ? (
+            <span className="inline-flex items-center gap-2">
+              <Spinner size="sm" className="text-on-primary" />
+              Saqlanmoqda...
+            </span>
+          ) : (
+            "Saqlash"
+          )}
+        </Button>
+      </StickyAction>
+    </Screen>
   );
 }

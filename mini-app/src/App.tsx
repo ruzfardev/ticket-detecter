@@ -13,13 +13,13 @@ import { Premium } from "./screens/Premium";
 import { Donate } from "./screens/Donate";
 import { DonateCustom } from "./screens/DonateCustom";
 import { Settings } from "./screens/Settings";
-import { MainLayout } from "./components/MainLayout";
+import { BottomNav } from "./components/BottomNav";
 import { useBackButton } from "./hooks/useBackButton";
 
 const TABBED_ROUTES = new Set(["/home", "/premium", "/settings"]);
 const ROOT_ROUTES = new Set(["/"]);
 
-const tabbed = (el: JSX.Element) => <MainLayout>{el}</MainLayout>;
+const tabbed = (el: JSX.Element) => <BottomNav>{el}</BottomNav>;
 
 export function App() {
   const location = useLocation();

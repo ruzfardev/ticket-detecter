@@ -1,28 +1,22 @@
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Banner, Cell, List, Section,
-} from "@telegram-apps/telegram-ui";
 import { toast } from "sonner";
-import {
-  Coffee, Cookie, Cake, Gift, Heart, Pencil, ChevronRight,
-} from "lucide-react";
+import { Coffee, Cookie, Cake, Gift, Heart, Pencil } from "lucide-react";
 
 import { getInvoice, getPlans } from "@/api/client";
 import { useTelegram } from "@/hooks/useTelegram";
-import { IconText, Money, StatusView } from "@/ui";
+import { Screen } from "@/components/Screen";
+import { StatusView } from "@/components/StatusView";
+import { Money } from "@/components/Money";
+import { Card } from "@/components/ui/card";
+import { ListGroup, ListRow } from "@/components/ui/list";
 
-const PLAN_ICONS: Record<string, any> = {
+const PLAN_ICONS: Record<string, typeof Coffee> = {
   donate_25:  Coffee,
   donate_50:  Cookie,
   donate_100: Cake,
   donate_500: Gift,
 };
-
-function planIcon(id: string) {
-  const Icon = PLAN_ICONS[id] ?? Gift;
-  return <Icon size={22} strokeWidth={1.75} />;
-}
 
 export function Donate() {
   const navigate = useNavigate();
@@ -47,35 +41,43 @@ export function Donate() {
   if (!plans.data) return <StatusView kind="error" />;
 
   return (
-    <List>
-      <Banner
-        header={<IconText icon={Heart} size={22}>Loyihaga rahmat</IconText>}
-        subheader="Premium bermaydi — faqat botni qo'llab-quvvatlash."
-        type="section"
-      />
+    <Screen padded>
+      <Card variant="coral" pad="lg">
+        <div className="flex flex-col gap-3">
+          <Heart className="h-6 w-6 text-on-primary" strokeWidth={1.75} fill="currentColor" />
+          <h1 className="font-display text-display-md tracking-tight text-on-primary">
+            Loyihaga rahmat
+          </h1>
+          <p className="text-body-md text-on-primary/80">
+            Premium bermaydi — faqat botni qo'llab-quvvatlash uchun.
+          </p>
+        </div>
+      </Card>
 
-      <Section header="Tayyor variantlar">
-        {plans.data.donate.map(d => (
-          <Cell
-            key={d.id}
-            before={planIcon(d.id)}
-            after={<Money stars={d.stars} />}
-            onClick={() => donate(d.id)}
-          >
-            {d.label}
-          </Cell>
-        ))}
-      </Section>
+      <ListGroup label="Tayyor variantlar">
+        {plans.data.donate.map(d => {
+          const Icon = PLAN_ICONS[d.id] ?? Gift;
+          return (
+            <ListRow
+              key={d.id}
+              before={<Icon className="h-5 w-5 text-ink" strokeWidth={1.75} />}
+              title={d.label}
+              after={<Money stars={d.stars} />}
+              onClick={() => donate(d.id)}
+            />
+          );
+        })}
+      </ListGroup>
 
-      <Section>
-        <Cell
-          before={<Pencil size={22} strokeWidth={1.75} />}
-          after={<ChevronRight size={18} strokeWidth={1.75} />}
+      <ListGroup>
+        <ListRow
+          before={<Pencil className="h-5 w-5 text-ink" strokeWidth={1.75} />}
+          title="Boshqa miqdor"
+          subtitle="O'zingiz xohlagan summa"
+          chevron
           onClick={() => navigate("/donate/custom")}
-        >
-          Boshqa miqdor
-        </Cell>
-      </Section>
-    </List>
+        />
+      </ListGroup>
+    </Screen>
   );
 }

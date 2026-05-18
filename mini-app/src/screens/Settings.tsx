@@ -1,6 +1,5 @@
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Cell, List, Section } from "@telegram-apps/telegram-ui";
 import { toast } from "sonner";
 import {
   Check, MessageCircle, Megaphone, Heart, User,
@@ -8,16 +7,16 @@ import {
 
 import { getMe, updateLang } from "@/api/client";
 import { useTelegram } from "@/hooks/useTelegram";
-import { StatusView } from "@/ui";
+import { Screen } from "@/components/Screen";
+import { StatusView } from "@/components/StatusView";
+import { ListGroup, ListRow } from "@/components/ui/list";
 
-// Flag emojis are content (language identity), not UI decoration.
+// Flag emojis are content (language identity), not chrome.
 const LANGS = [
   { code: "uz", flag: "🇺🇿", label: "O'zbekcha" },
   { code: "ru", flag: "🇷🇺", label: "Русский" },
   { code: "en", flag: "🇬🇧", label: "English" },
 ];
-
-const icon = (Icon: any) => <Icon size={20} strokeWidth={1.75} />;
 
 export function Settings() {
   const navigate = useNavigate();
@@ -36,58 +35,56 @@ export function Settings() {
   if (!me.data) return <StatusView kind="error" />;
 
   const currentLang = me.data.user.lang;
+  const userId = me.data.user.tg_user_id?.toString();
 
   return (
-    <List>
-      <Section header="Til">
+    <Screen tabbed padded title="Sozlamalar">
+      <ListGroup label="Til">
         {LANGS.map(l => (
-          <Cell
+          <ListRow
             key={l.code}
-            before={<span style={{ fontSize: 22, lineHeight: 1 }}>{l.flag}</span>}
+            before={<span className="text-[22px] leading-none">{l.flag}</span>}
+            title={l.label}
             after={
-              currentLang === l.code
-                ? <Check size={20} strokeWidth={2} color="var(--tg-accent)" />
-                : null
+              currentLang === l.code ? (
+                <Check className="h-5 w-5 text-coral" strokeWidth={2} />
+              ) : null
             }
             onClick={() => mutateLang.mutate(l.code)}
-          >
-            {l.label}
-          </Cell>
+          />
         ))}
-      </Section>
+      </ListGroup>
 
-      <Section header="Aloqa">
-        <Cell
-          before={icon(MessageCircle)}
+      <ListGroup label="Aloqa">
+        <ListRow
+          before={<MessageCircle className="h-5 w-5 text-ink" strokeWidth={1.75} />}
+          title="Support"
           onClick={() => openLink("https://t.me/TicketDetectorSupport")}
-        >
-          Support
-        </Cell>
-        <Cell
-          before={icon(Megaphone)}
+        />
+        <ListRow
+          before={<Megaphone className="h-5 w-5 text-ink" strokeWidth={1.75} />}
+          title="Yangiliklar kanali"
           onClick={() => openLink("https://t.me/TicketTips")}
-        >
-          Yangiliklar kanali
-        </Cell>
-      </Section>
+        />
+      </ListGroup>
 
-      <Section header="Boshqa">
-        <Cell
-          before={icon(Heart)}
+      <ListGroup label="Boshqa">
+        <ListRow
+          before={<Heart className="h-5 w-5 text-coral" strokeWidth={1.75} />}
+          title="Loyihani qo'llab-quvvatlash"
+          subtitle="Telegram Stars orqali"
           onClick={() => navigate("/donate")}
-        >
-          Loyihani qo'llab-quvvatlash
-        </Cell>
-      </Section>
+          chevron
+        />
+      </ListGroup>
 
-      <Section footer="v0.1.0">
-        <Cell
-          before={icon(User)}
-          subtitle={me.data.user.tg_user_id?.toString()}
-        >
-          Foydalanuvchi ID
-        </Cell>
-      </Section>
-    </List>
+      <ListGroup footer="v0.1.0">
+        <ListRow
+          before={<User className="h-5 w-5 text-muted" strokeWidth={1.75} />}
+          title="Foydalanuvchi ID"
+          subtitle={userId}
+        />
+      </ListGroup>
+    </Screen>
   );
 }

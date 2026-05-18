@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Cell, List, Section } from "@telegram-apps/telegram-ui";
 import { toast } from "sonner";
 import {
   CalendarDays, TrainFront, Armchair, Activity,
@@ -12,11 +11,14 @@ import {
   deleteSubscription, listSubscriptions, patchSubscription,
 } from "@/api/client";
 import { useTelegram } from "@/hooks/useTelegram";
-import { IconText, StatusView } from "@/ui";
+import { Screen } from "@/components/Screen";
+import { StatusView } from "@/components/StatusView";
+import { Badge } from "@/components/ui/badge";
+import { ListGroup, ListRow } from "@/components/ui/list";
 
-function berthLabel(berth: string) {
-  if (berth === "lower") return { Icon: ArrowDownToLine, text: "pastki" };
-  if (berth === "upper") return { Icon: ArrowUpToLine, text: "tepa" };
+function berth(b: string) {
+  if (b === "lower") return { Icon: ArrowDownToLine, text: "pastki" };
+  if (b === "upper") return { Icon: ArrowUpToLine, text: "tepa" };
   return { Icon: Minus, text: "har qanday" };
 }
 
@@ -62,54 +64,89 @@ export function SubDetails() {
     );
   }
 
-  const { Icon: BerthIcon, text: berthText } = berthLabel(sub.berth);
+  const { Icon: BerthIcon, text: berthText } = berth(sub.berth);
   const busy = toggle.isPending || remove.isPending;
 
   return (
-    <List>
-      <Section header={`${sub.dep_name} → ${sub.arr_name}`}>
-        <Cell subtitle="Sana" before={<CalendarDays size={18} strokeWidth={1.75} />}>
-          {sub.travel_date}
-        </Cell>
-        <Cell subtitle="Poyezd" before={<TrainFront size={18} strokeWidth={1.75} />}>
-          {sub.train_number ?? "har qanday"}
-        </Cell>
-        <Cell subtitle="Vagon" before={<Armchair size={18} strokeWidth={1.75} />}>
-          {(sub.car_types.join(", ") || "barchasi")} · <IconText icon={BerthIcon} size={14}>{berthText}</IconText>
-        </Cell>
-        <Cell subtitle="Holat" before={<Activity size={18} strokeWidth={1.75} />}>
-          {sub.is_active ? "Aktiv" : "Pauzada"}
-        </Cell>
-      </Section>
+    <Screen
+      padded
+      title={`${sub.dep_name} → ${sub.arr_name}`}
+      subtitle={
+        <span className="inline-flex items-center gap-2">
+          <Badge variant={sub.is_active ? "success" : "muted"}>
+            {sub.is_active ? "Aktiv" : "Pauzada"}
+          </Badge>
+        </span>
+      }
+    >
+      <ListGroup label="Tafsilotlar">
+        <ListRow
+          before={<CalendarDays className="h-5 w-5 text-ink" strokeWidth={1.75} />}
+          title={sub.travel_date}
+          subtitle="Sana"
+        />
+        <ListRow
+          before={<TrainFront className="h-5 w-5 text-ink" strokeWidth={1.75} />}
+          title={sub.train_number ?? "Har qanday"}
+          subtitle="Poyezd"
+        />
+        <ListRow
+          before={<Armchair className="h-5 w-5 text-ink" strokeWidth={1.75} />}
+          title={sub.car_types.join(", ") || "Barchasi"}
+          subtitle="Vagon turi"
+        />
+        <ListRow
+          before={<BerthIcon className="h-5 w-5 text-ink" strokeWidth={1.75} />}
+          title={berthText}
+          subtitle="Joy turi"
+        />
+        <ListRow
+          before={<Activity className="h-5 w-5 text-ink" strokeWidth={1.75} />}
+          title={sub.is_active ? "Aktiv" : "Pauzada"}
+          subtitle="Holat"
+        />
+      </ListGroup>
 
-      <Section header="Statistika">
-        <Cell subtitle="Yaratilgan">{new Date(sub.created_at).toLocaleString()}</Cell>
-        <Cell subtitle="Yuborilgan xabarlar">{sub.notif_count}</Cell>
+      <ListGroup label="Statistika">
+        <ListRow
+          title={new Date(sub.created_at).toLocaleString()}
+          subtitle="Yaratilgan"
+        />
+        <ListRow
+          title={sub.notif_count.toString()}
+          subtitle="Yuborilgan xabarlar"
+        />
         {sub.last_notified_at && (
-          <Cell subtitle="Oxirgi xabar">{new Date(sub.last_notified_at).toLocaleString()}</Cell>
+          <ListRow
+            title={new Date(sub.last_notified_at).toLocaleString()}
+            subtitle="Oxirgi xabar"
+          />
         )}
-      </Section>
+      </ListGroup>
 
-      <Section header="Boshqarish">
-        <Cell
+      <ListGroup label="Boshqarish">
+        <ListRow
           before={
-            sub.is_active
-              ? <Pause size={20} strokeWidth={1.75} />
-              : <Play size={20} strokeWidth={1.75} />
+            sub.is_active ? (
+              <Pause className="h-5 w-5 text-ink" strokeWidth={1.75} />
+            ) : (
+              <Play className="h-5 w-5 text-ink" strokeWidth={1.75} />
+            )
           }
-          onClick={busy ? undefined : () => toggle.mutate()}
-        >
-          {sub.is_active ? "Pauza qilish" : "Davom ettirish"}
-        </Cell>
-        <Cell
-          before={<Trash2 size={20} strokeWidth={1.75} color="var(--tg-danger)" />}
-          onClick={busy ? undefined : async () => {
+          title={sub.is_active ? "Pauza qilish" : "Davom ettirish"}
+          disabled={busy}
+          onClick={() => toggle.mutate()}
+        />
+        <ListRow
+          before={<Trash2 className="h-5 w-5 text-error" strokeWidth={1.75} />}
+          title="O'chirish"
+          destructive
+          disabled={busy}
+          onClick={async () => {
             if (await showConfirm("O'chirishni xohlaysizmi?")) remove.mutate();
           }}
-        >
-          <span style={{ color: "var(--tg-danger)" }}>O'chirish</span>
-        </Cell>
-      </Section>
-    </List>
+        />
+      </ListGroup>
+    </Screen>
   );
 }

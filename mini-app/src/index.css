@@ -1,0 +1,106 @@
+@import "@fontsource/eb-garamond/400.css";
+@import "@fontsource/eb-garamond/500.css";
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource-variable/jetbrains-mono";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Brand */
+    --coral:          16 50% 58%;
+    --coral-active:   14 46% 45%;
+    --coral-disabled: 30 26% 87%;
+
+    /* Surfaces — warm cream trinity */
+    --canvas:               48 33% 97%;
+    --surface-soft:         37 40% 94%;
+    --surface-card:         39 34% 90%;
+    --surface-cream-strong: 38 37% 87%;
+    --surface-dark:         40  7% 9%;
+    --surface-dark-elevated:36  7% 14%;
+    --surface-dark-soft:    45  7% 11%;
+
+    /* Text */
+    --ink:         60 3% 8%;
+    --body:        60 3% 23%;
+    --body-strong: 60 3% 14%;
+    --muted:       45 4% 38%;
+    --muted-soft:  42 6% 46%;
+    --hairline:      30 26% 87%;
+    --hairline-soft: 35 26% 90%;
+    --on-primary:   0 0% 100%;
+    --on-dark:      48 33% 97%;
+    --on-dark-soft: 42 6% 61%;
+
+    /* Accents */
+    --accent-teal:  170 37% 54%;
+    --accent-amber:  28 77% 63%;
+
+    /* Semantic */
+    --success: 132 38% 54%;
+    --warning:  44 80% 46%;
+    --error:     0 51% 52%;
+
+    /* Layout */
+    --tabbar-h: 76px;
+  }
+
+  /* Reset / base */
+  * {
+    @apply border-border;
+    -webkit-tap-highlight-color: transparent;
+  }
+  html {
+    background: hsl(var(--canvas));
+    overscroll-behavior: contain;
+  }
+  html, body, #root {
+    @apply m-0 p-0 min-h-screen bg-canvas text-ink font-sans;
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    @apply text-body-md;
+  }
+  h1, h2, h3 {
+    @apply font-display text-ink;
+  }
+
+  /* react-day-picker — overrides to Anthropic palette */
+  .rdp-root {
+    --rdp-accent-color: hsl(var(--coral));
+    --rdp-accent-background-color: hsl(var(--coral));
+    --rdp-background-color: hsl(var(--surface-card));
+    font-family: inherit;
+    padding: 12px 16px;
+    width: 100%;
+  }
+  .rdp-months, .rdp-month, .rdp-month_grid { width: 100%; }
+  .rdp-day_button { border-radius: 10px; }
+
+  /* Subtle scrollbar */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--hairline)); border-radius: 4px; }
+}
+
+@layer components {
+  /* Anthropic spike-mark glyph — rendered via mask for crisp scaling */
+  .spike-mark {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    background: currentColor;
+    vertical-align: -0.1em;
+    -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 0L13.6 10.4L24 12L13.6 13.6L12 24L10.4 13.6L0 12L10.4 10.4Z' fill='black'/></svg>") center/contain no-repeat;
+            mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 0L13.6 10.4L24 12L13.6 13.6L12 24L10.4 13.6L0 12L10.4 10.4Z' fill='black'/></svg>") center/contain no-repeat;
+  }
+
+  .hairline {
+    @apply border border-hairline;
+  }
+}

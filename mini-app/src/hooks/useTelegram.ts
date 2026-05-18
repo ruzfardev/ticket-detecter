@@ -11,6 +11,9 @@ declare global {
 export type ColorScheme = "light" | "dark";
 export type Platform = "ios" | "base";
 
+// Anthropic cream canvas. Telegram needs the literal hex — it can't read CSS vars.
+const CANVAS_HEX = "#faf9f5";
+
 export function useTelegram() {
   const tg = window.Telegram?.WebApp;
 
@@ -18,10 +21,26 @@ export function useTelegram() {
     if (!tg) return;
     tg.ready();
     tg.expand();
-    // Match TG header colors
+
+    // Sync Telegram chrome to cream canvas so the WebApp header + bg match.
     try {
-      tg.setHeaderColor?.("bg_color");
+      tg.setHeaderColor?.(CANVAS_HEX);
+      tg.setBackgroundColor?.(CANVAS_HEX);
     } catch {}
+
+    // Expose viewportStableHeight as a CSS var so layouts can avoid the
+    // soft-keyboard zone. Keeps fixed-bottom elements above the keyboard.
+    const setVh = () => {
+      const h = tg.viewportStableHeight ?? tg.viewportHeight ?? window.innerHeight;
+      document.documentElement.style.setProperty("--app-vh", `${h}px`);
+    };
+    setVh();
+    tg.onEvent?.("viewportChanged", setVh);
+    window.addEventListener("resize", setVh);
+    return () => {
+      tg.offEvent?.("viewportChanged", setVh);
+      window.removeEventListener("resize", setVh);
+    };
   }, [tg]);
 
   return useMemo(() => {

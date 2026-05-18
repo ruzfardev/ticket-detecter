@@ -1,27 +1,29 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Caption, Cell, Input, List, Section } from "@telegram-apps/telegram-ui";
 import { toast } from "sonner";
 
 import { getInvoice, getPlans } from "@/api/client";
-import { useMainButton } from "@/hooks/useMainButton";
 import { useTelegram } from "@/hooks/useTelegram";
-import { Money, StatusView } from "@/ui";
+import { Screen } from "@/components/Screen";
+import { StatusView } from "@/components/StatusView";
+import { Money } from "@/components/Money";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export function DonateCustom() {
   const plans = useQuery({ queryKey: ["plans"], queryFn: getPlans });
   const { openInvoice, haptic } = useTelegram();
   const [raw, setRaw] = useState("50");
 
-  const range = plans.data?.donate_custom_range;
-  const parsed = Number(raw);
-  const valid =
-    !!range &&
-    Number.isFinite(parsed) &&
-    parsed >= range.min &&
-    parsed <= range.max;
+  if (plans.isLoading) return <StatusView kind="loading" />;
+  if (!plans.data) return <StatusView kind="error" />;
 
-  const onSubmit = useCallback(async () => {
+  const range = plans.data.donate_custom_range;
+  const parsed = Number(raw);
+  const valid = Number.isFinite(parsed) && parsed >= range.min && parsed <= range.max;
+
+  const onSubmit = async () => {
     if (!valid) return;
     try {
       const inv = await getInvoice("donate_custom", parsed);
@@ -34,35 +36,38 @@ export function DonateCustom() {
     } catch (e: any) {
       toast.error(e.response?.data?.error?.message || "Xato");
     }
-  }, [valid, parsed, openInvoice, haptic]);
-
-  useMainButton({
-    text: valid ? `${parsed} ⭐ yuborish` : "Miqdorni kiriting",
-    enabled: valid,
-    onClick: onSubmit,
-  });
-
-  if (plans.isLoading) return <StatusView kind="loading" />;
-  if (!plans.data || !range) return <StatusView kind="error" />;
+  };
 
   return (
-    <List>
-      <Section
-        header="Boshqa miqdor"
-        footer={`Diapazon: ${range.min}–${range.max} ⭐`}
-      >
+    <Screen
+      padded
+      title="Boshqa miqdor"
+      subtitle={`${range.min}–${range.max} ⭐ oralig'ida`}
+    >
+      <div className="space-y-2">
+        <Label htmlFor="amount">Miqdor</Label>
         <Input
+          id="amount"
           type="number"
+          inputMode="numeric"
           value={raw}
           min={range.min}
           max={range.max}
           onChange={e => setRaw(e.target.value)}
-          placeholder="Miqdor"
+          placeholder="50"
+          after={<span className="text-accent-amber">★</span>}
         />
-        <Cell subtitle="Yuboriladi">
-          {valid ? <Money stars={parsed} /> : <Caption>—</Caption>}
-        </Cell>
-      </Section>
-    </List>
+      </div>
+
+      {valid && (
+        <p className="text-body-md text-muted px-1">
+          Yuboriladi: <Money stars={parsed} className="text-ink" />
+        </p>
+      )}
+
+      <Button full disabled={!valid} onClick={onSubmit}>
+        {valid ? `${parsed} ⭐ yuborish` : "Miqdorni kiriting"}
+      </Button>
+    </Screen>
   );
 }
