@@ -1,0 +1,109 @@
+# Production deployment — Postgres + Backend (API + Bot) + Worker + Mini App + Caddy
+#
+# Required .env file alongside (or pass --env-file):
+#   POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
+#   BOT_TOKEN, WEBHOOK_SECRET, WEBHOOK_URL
+#   INTERNAL_JWT_SECRET, RAILWAY_CRED_KEY
+#   DOMAIN_API, DOMAIN_APP (e.g., api.tdbot.example, app.tdbot.example)
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    image: ticketbot-backend:latest
+    restart: unless-stopped
+    environment:
+      MODE: prod
+      LOG_LEVEL: INFO
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      BOT_TOKEN: ${BOT_TOKEN}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      WEBHOOK_URL: ${WEBHOOK_URL}
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET}
+      RAILWAY_CRED_KEY: ${RAILWAY_CRED_KEY}
+      ADMIN_CHAT_ID: ${ADMIN_CHAT_ID:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [internal, web]
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request, sys; urllib.request.urlopen('http://localhost:8000/health', timeout=3); sys.exit(0)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    image: ticketbot-backend:latest
+    command: ["python", "-m", "app.worker.main"]
+    restart: unless-stopped
+    environment:
+      MODE: prod
+      LOG_LEVEL: INFO
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      BOT_TOKEN: ${BOT_TOKEN}
+      RAILWAY_CRED_KEY: ${RAILWAY_CRED_KEY}
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [internal]
+
+  mini-app:
+    build:
+      context: ../mini-app
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: https://${DOMAIN_API}
+    image: ticketbot-mini-app:latest
+    restart: unless-stopped
+    networks: [web]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN_API: ${DOMAIN_API}
+      DOMAIN_APP: ${DOMAIN_APP}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [web]
+    depends_on: [backend, mini-app]
+
+networks:
+  internal:
+  web:
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

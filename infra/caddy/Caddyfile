@@ -1,0 +1,54 @@
+{
+    email admin@example.com
+}
+
+{$DOMAIN_API} {
+    encode gzip zstd
+
+    handle /webhooks/* {
+        reverse_proxy backend:8000
+    }
+
+    handle /health* {
+        reverse_proxy backend:8000
+    }
+
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+
+    handle /docs* {
+        respond 404
+    }
+
+    handle /openapi.json {
+        respond 404
+    }
+
+    handle {
+        respond "Ticket Detector API" 200
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}
+
+{$DOMAIN_APP} {
+    encode gzip zstd
+
+    header {
+        # Allow Telegram WebView to frame this site
+        Content-Security-Policy "frame-ancestors 'self' https://*.telegram.org https://web.telegram.org;"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    reverse_proxy mini-app:80
+
+    log {
+        output stdout
+        format json
+    }
+}
