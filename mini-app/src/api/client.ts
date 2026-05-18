@@ -1,4 +1,5 @@
 import axios from "axios";
+import { mockApi } from "./mock";
 
 const initData = window.Telegram?.WebApp?.initData ?? "";
 
@@ -14,8 +15,7 @@ api.interceptors.response.use(
   r => r,
   err => {
     const status = err.response?.status;
-    if (status === 401) {
-      // Session is dead — only initData can recover; ask user to reopen.
+    if (status === 401 && !mockApi.isEnabled) {
       window.Telegram?.WebApp?.showAlert?.(
         "Sessiya tugagan. Mini App ni qaytadan oching.",
         () => window.Telegram?.WebApp?.close?.(),
@@ -88,41 +88,71 @@ export type PlansResponse = {
   donate_custom_range: { min: number; max: number };
 };
 
-// ---- Endpoints ----
+// ---- Endpoints (mocked when VITE_DEV_MOCK=true) ----
 
-export const authTg     = () => api.post<Me>("/api/v1/auth/tg").then(r => r.data);
-export const getMe      = () => api.get<Me>("/api/v1/me").then(r => r.data);
-export const updateLang = (lang: string) => api.patch("/api/v1/me", { lang }).then(r => r.data);
+export const authTg = () =>
+  mockApi.isEnabled
+    ? mockApi.authTg()
+    : api.post<Me>("/api/v1/auth/tg").then(r => r.data);
+
+export const getMe = () =>
+  mockApi.isEnabled
+    ? mockApi.getMe()
+    : api.get<Me>("/api/v1/me").then(r => r.data);
+
+export const updateLang = (lang: string) =>
+  mockApi.isEnabled
+    ? mockApi.updateLang(lang)
+    : api.patch("/api/v1/me", { lang }).then(r => r.data);
 
 export const listStations = (q = "", lang = "uz") =>
-  api.get<{ stations: Station[] }>("/api/v1/stations", { params: { q, lang } })
-    .then(r => r.data.stations);
+  mockApi.isEnabled
+    ? mockApi.listStations(q)
+    : api.get<{ stations: Station[] }>("/api/v1/stations", { params: { q, lang } })
+        .then(r => r.data.stations);
 
 export const searchTrains = (body: { dep_code: string; arr_code: string; date: string }) =>
-  api.post<{ trains: Train[] }>("/api/v1/trains/search", body).then(r => r.data.trains);
+  mockApi.isEnabled
+    ? mockApi.searchTrains(body)
+    : api.post<{ trains: Train[] }>("/api/v1/trains/search", body).then(r => r.data.trains);
 
 export const listSubscriptions = () =>
-  api.get<{ subscriptions: Subscription[]; slot: { max: number; used: number } }>(
-    "/api/v1/subscriptions"
-  ).then(r => r.data);
+  mockApi.isEnabled
+    ? mockApi.listSubscriptions()
+    : api.get<{ subscriptions: Subscription[]; slot: { max: number; used: number } }>(
+        "/api/v1/subscriptions"
+      ).then(r => r.data);
 
 export const createSubscription = (body: {
   dep_code: string; arr_code: string; travel_date: string;
   train_number?: string | null;
   car_types: string[]; berth: "lower" | "upper" | "any";
-}) => api.post<{ subscription: Subscription }>("/api/v1/subscriptions", body)
+}) =>
+  mockApi.isEnabled
+    ? mockApi.createSubscription(body)
+    : api.post<{ subscription: Subscription }>("/api/v1/subscriptions", body)
         .then(r => r.data.subscription);
 
 export const patchSubscription = (id: number, body: { is_active?: boolean }) =>
-  api.patch<{ subscription: Subscription }>(`/api/v1/subscriptions/${id}`, body)
-    .then(r => r.data.subscription);
+  mockApi.isEnabled
+    ? mockApi.patchSubscription(id, body)
+    : api.patch<{ subscription: Subscription }>(`/api/v1/subscriptions/${id}`, body)
+        .then(r => r.data.subscription);
 
 export const deleteSubscription = (id: number) =>
-  api.delete(`/api/v1/subscriptions/${id}`).then(() => null);
+  mockApi.isEnabled
+    ? mockApi.deleteSubscription(id)
+    : api.delete(`/api/v1/subscriptions/${id}`).then(() => null);
 
-export const getPlans   = () => api.get<PlansResponse>("/api/v1/payments/plans").then(r => r.data);
+export const getPlans = () =>
+  mockApi.isEnabled
+    ? mockApi.getPlans()
+    : api.get<PlansResponse>("/api/v1/payments/plans").then(r => r.data);
+
 export const getInvoice = (plan: string, amount?: number) =>
-  api.get<{ invoice_link: string; type: string; plan: string; stars_amount: number }>(
-    "/api/v1/payments/invoice",
-    { params: { plan, amount } },
-  ).then(r => r.data);
+  mockApi.isEnabled
+    ? mockApi.getInvoice(plan, amount)
+    : api.get<{ invoice_link: string; type: string; plan: string; stars_amount: number }>(
+        "/api/v1/payments/invoice",
+        { params: { plan, amount } },
+      ).then(r => r.data);

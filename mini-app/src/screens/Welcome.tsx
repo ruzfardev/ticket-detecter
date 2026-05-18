@@ -17,7 +17,7 @@ export function Welcome() {
   return (
     <div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
       <Placeholder
-        header="🎫 Ticket Detector"
+        header="Ticket Detector"
         description={
           error ? "Ulanishda xato — qaytadan oching."
           : isPending ? "Ulanmoqda..."

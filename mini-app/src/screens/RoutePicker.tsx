@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Avatar, Cell, Chip, Input, List, Section, Skeleton,
+  Avatar, Cell, Input, List, Section, Skeleton,
 } from "@telegram-apps/telegram-ui";
-import { Search } from "lucide-react";
+import { Search, MapPin } from "lucide-react";
 
 import { listStations, Station } from "@/api/client";
 import { useTelegram } from "@/hooks/useTelegram";
@@ -70,7 +70,7 @@ export function RoutePicker() {
           stations?.slice(0, 30).map(s => (
             <Cell
               key={s.code}
-              before={<Avatar size={32}>🚉</Avatar>}
+              before={<Avatar size={28}><MapPin size={16} strokeWidth={1.75} /></Avatar>}
               subtitle={s.city ?? undefined}
               onClick={() => pick(s)}
             >

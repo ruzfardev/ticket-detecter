@@ -4,9 +4,22 @@ import {
   Banner, Button, Cell, Input, List, Modal, Section, Spinner,
 } from "@telegram-apps/telegram-ui";
 import { toast } from "sonner";
+import { Coffee, Cookie, Cake, Gift, Heart, Pencil } from "lucide-react";
 
 import { getInvoice, getPlans } from "@/api/client";
 import { useTelegram } from "@/hooks/useTelegram";
+
+const PLAN_ICONS: Record<string, any> = {
+  donate_25:  Coffee,
+  donate_50:  Cookie,
+  donate_100: Cake,
+  donate_500: Gift,
+};
+
+const planIcon = (id: string) => {
+  const Icon = PLAN_ICONS[id] ?? Gift;
+  return <Icon size={22} strokeWidth={1.75} />;
+};
 
 export function Donate() {
   const plans = useQuery({ queryKey: ["plans"], queryFn: getPlans });
@@ -20,7 +33,7 @@ export function Donate() {
       openInvoice(inv.invoice_link, status => {
         if (status === "paid") {
           haptic?.notificationOccurred?.("success");
-          toast.success("Katta rahmat! 🙏");
+          toast.success("Katta rahmat!");
           setCustomOpen(false);
         }
       });
@@ -35,8 +48,13 @@ export function Donate() {
   return (
     <List>
       <Banner
-        header="💝 Botni qo'llab-quvvatlash"
-        subheader="Premium bermaydi — faqat loyihaga yordam. Rahmat 🙏"
+        header={
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <Heart size={22} strokeWidth={1.75} fill="currentColor" />
+            Botni qo'llab-quvvatlash
+          </span>
+        }
+        subheader="Premium bermaydi — faqat loyihaga yordam."
         type="section"
       />
 
@@ -44,14 +62,17 @@ export function Donate() {
         {plans.data?.donate.map(d => (
           <Cell
             key={d.id}
-            before={d.emoji}
-            after={<b>⭐ {d.stars}</b>}
+            before={planIcon(d.id)}
+            after={<b style={{ fontVariantNumeric: "tabular-nums" }}>{d.stars} ⭐</b>}
             onClick={() => donate(d.id)}
           >
             {d.label}
           </Cell>
         ))}
-        <Cell before="✏️" onClick={() => setCustomOpen(true)}>
+        <Cell
+          before={<Pencil size={22} strokeWidth={1.75} />}
+          onClick={() => setCustomOpen(true)}
+        >
           Boshqa miqdor
         </Cell>
       </Section>
@@ -71,7 +92,7 @@ export function Donate() {
           />
           <div style={{ marginTop: 16 }}>
             <Button stretched onClick={() => donate("donate_custom", amount)}>
-              ⭐ {amount} bilan rahmat aytish
+              {amount} ⭐ bilan rahmat aytish
             </Button>
           </div>
         </div>

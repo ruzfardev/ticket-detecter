@@ -4,11 +4,26 @@ import {
   Button, Cell, List, Section, Spinner,
 } from "@telegram-apps/telegram-ui";
 import { toast } from "sonner";
+import {
+  CalendarDays, TrainFront, Armchair, Activity,
+  Pause, Play, Trash2, ArrowDownToLine, ArrowUpToLine, Minus,
+} from "lucide-react";
 
 import {
   deleteSubscription, listSubscriptions, patchSubscription,
 } from "@/api/client";
 import { useTelegram } from "@/hooks/useTelegram";
+
+const iconBefore = (Icon: any) => (
+  <Icon size={18} strokeWidth={1.75}
+        style={{ marginRight: 6, verticalAlign: "text-bottom" }} />
+);
+
+function BerthLabel({ berth }: { berth: string }) {
+  if (berth === "lower") return <>{iconBefore(ArrowDownToLine)}pastki</>;
+  if (berth === "upper") return <>{iconBefore(ArrowUpToLine)}tepa</>;
+  return <>{iconBefore(Minus)}har qanday</>;
+}
 
 export function SubDetails() {
   const { id } = useParams();
@@ -44,10 +59,20 @@ export function SubDetails() {
   return (
     <List>
       <Section header={`${sub.dep_name} → ${sub.arr_name}`}>
-        <Cell subtitle="Sana">📅 {sub.travel_date}</Cell>
-        <Cell subtitle="Poyezd">🚆 {sub.train_number ?? "har qanday"}</Cell>
-        <Cell subtitle="Vagon">🪑 {sub.car_types.join(", ") || "barchasi"} · {berthLabel(sub.berth)}</Cell>
-        <Cell subtitle="Holat">{sub.is_active ? "🟢 Aktiv" : "⏸ Pauzada"}</Cell>
+        <Cell subtitle="Sana">
+          {iconBefore(CalendarDays)}{sub.travel_date}
+        </Cell>
+        <Cell subtitle="Poyezd">
+          {iconBefore(TrainFront)}{sub.train_number ?? "har qanday"}
+        </Cell>
+        <Cell subtitle="Vagon">
+          {iconBefore(Armchair)}{sub.car_types.join(", ") || "barchasi"}
+          {" · "}
+          <BerthLabel berth={sub.berth} />
+        </Cell>
+        <Cell subtitle="Holat">
+          {iconBefore(Activity)}{sub.is_active ? "Aktiv" : "Pauzada"}
+        </Cell>
       </Section>
 
       <Section header="Statistika">
@@ -60,21 +85,21 @@ export function SubDetails() {
 
       <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
         <Button mode="bezeled" stretched onClick={() => toggle.mutate()}
-                loading={toggle.isPending}>
-          {sub.is_active ? "⏸ Pauza qilish" : "▶️ Davom ettirish"}
+                loading={toggle.isPending}
+                before={sub.is_active
+                  ? <Pause size={18} strokeWidth={1.75} />
+                  : <Play size={18} strokeWidth={1.75} />}>
+          {sub.is_active ? "Pauza qilish" : "Davom ettirish"}
         </Button>
         <Button mode="plain" stretched
                 onClick={async () => {
                   if (await showConfirm("O'chirishni xohlaysizmi?")) remove.mutate();
                 }}
-                loading={remove.isPending}>
-          🗑 O'chirish
+                loading={remove.isPending}
+                before={<Trash2 size={18} strokeWidth={1.75} />}>
+          O'chirish
         </Button>
       </div>
     </List>
   );
-}
-
-function berthLabel(b: string): string {
-  return { lower: "⬇️ pastki", upper: "⬆️ tepa", any: "🟦 har qanday" }[b] || b;
 }

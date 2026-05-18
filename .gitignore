@@ -52,3 +52,6 @@ infra/caddy_data/
 
 # Alembic local
 backend/alembic.ini.local
+
+# TypeScript build info
+mini-app/tsconfig.tsbuildinfo
