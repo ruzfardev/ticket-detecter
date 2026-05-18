@@ -1,0 +1,25 @@
+# Local dev compose — just Postgres.
+# Backend, bot, worker, mini-app run on the host during M1-M4 development.
+# Production compose lives in docker-compose.prod.yml (added in M6).
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: ticketbot-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ticketbot
+      POSTGRES_USER: ticketbot
+      POSTGRES_PASSWORD: dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ticketbot -d ticketbot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_dev_data:
