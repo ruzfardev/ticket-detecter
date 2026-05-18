@@ -1,62 +1,73 @@
-import { useEffect } from "react";
+import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Badge, Caption, Cell, List, Placeholder, Section, Skeleton, Spinner,
+  Badge, Cell, List, Placeholder, Section, Spinner,
 } from "@telegram-apps/telegram-ui";
 
 import { searchTrains } from "@/api/client";
-import { useTelegram } from "@/hooks/useTelegram";
+import { useMainButton } from "@/hooks/useMainButton";
+import { useWizardField } from "@/hooks/useWizardField";
+import { useWizardGuard } from "@/hooks/useWizardGuard";
 import { useWizard } from "@/store/wizard";
 
+function fmtTime(iso: string): string {
+  if (iso.includes("T") && iso.length >= 16) return iso.slice(11, 16);
+  return iso;
+}
+
 export function TrainPicker() {
+  useWizardGuard(["dep_code", "arr_code", "travel_date"]);
+
   const navigate = useNavigate();
-  const { mainButton } = useTelegram();
-  const { dep_code, arr_code, travel_date, train_number, setField } = useWizard();
+  const setField = useWizard(s => s.setField);
+  const dep_code = useWizardField("dep_code");
+  const arr_code = useWizardField("arr_code");
+  const travel_date = useWizardField("travel_date");
+  const train_number = useWizardField("train_number");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["trains", dep_code, arr_code, travel_date],
     queryFn: () => searchTrains({
-      dep_code: dep_code!, arr_code: arr_code!, date: travel_date!,
+      dep_code: dep_code as string,
+      arr_code: arr_code as string,
+      date: travel_date as string,
     }),
     enabled: !!(dep_code && arr_code && travel_date),
   });
 
-  useEffect(() => {
-    if (!mainButton) return;
-    mainButton.setText("Davom etish");
-    mainButton.show();
-    if (train_number) mainButton.enable();
-    else mainButton.disable();
-    const handler = () => navigate("/new/car-type");
-    mainButton.onClick(handler);
-    return () => mainButton.offClick(handler);
-  }, [mainButton, train_number, navigate]);
-
-  if (isLoading) {
-    return <Skeleton visible><div style={{ height: 300 }} /></Skeleton>;
-  }
-  if (error) {
-    return <Placeholder header="⚠️ railway.uz mavjud emas" description="Bir oz keyin qayta urinib ko'ring." />;
-  }
-  if (!data?.length) {
-    return <Placeholder header="📭 Poyezdlar topilmadi" description="Boshqa sana tanlang." />;
-  }
+  const onContinue = useCallback(() => navigate("/new/car-type"), [navigate]);
+  useMainButton({ text: "Davom etish", enabled: !!train_number, onClick: onContinue });
 
   return (
     <List>
-      <Section header={`${data.length} ta poyezd topildi`}>
-        {data.map(t => {
+      <Section header={data ? `${data.length} ta poyezd` : "Poyezdlar"}>
+        {isLoading && (
+          <Cell><Spinner size="s" /></Cell>
+        )}
+        {!!error && (
+          <Placeholder
+            header="railway.uz mavjud emas"
+            description="Bir oz keyin qayta urinib ko'ring."
+          />
+        )}
+        {!isLoading && !error && data?.length === 0 && (
+          <Placeholder
+            header="Poyezdlar topilmadi"
+            description="Boshqa sanani tanlang."
+          />
+        )}
+        {data?.map(t => {
           const total = t.car_types.reduce((s, c) => s + c.free_seats, 0);
+          const types = t.car_types.map(c => `${c.type} (${c.free_seats})`).join(", ");
           return (
             <Cell
               key={t.number}
               subtitle={
                 <>
                   {fmtTime(t.departure)} → {fmtTime(t.arrival)}
-                  {t.time_on_way ? ` (${t.time_on_way})` : ""}
-                  {" · "}
-                  {t.car_types.map(c => `${c.type} (${c.free_seats})`).join(", ") || "joy yo'q"}
+                  {t.time_on_way ? ` · ${t.time_on_way}` : ""}
+                  {types ? ` · ${types}` : " · joy yo'q"}
                 </>
               }
               after={
@@ -77,9 +88,4 @@ export function TrainPicker() {
       </Section>
     </List>
   );
-}
-
-function fmtTime(iso: string): string {
-  if (iso.includes("T") && iso.length >= 16) return iso.slice(11, 16);
-  return iso;
 }

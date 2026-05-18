@@ -17,28 +17,10 @@ let me: Me = {
     tier: "free",
     premium_until: null,
   },
-  slot: { max: 1, used: 1 },
+  slot: { max: 1, used: 0 },
 };
 
-let subscriptions: Subscription[] = [
-  {
-    id: 17,
-    user_id: 1,
-    dep_code: "2900000",
-    arr_code: "2900790",
-    dep_name: "Toshkent",
-    arr_name: "Urganch",
-    travel_date: "2026-06-15",
-    train_number: "076Ж",
-    car_types: ["плацкарта"],
-    berth: "lower",
-    is_active: true,
-    muted_until: null,
-    created_at: "2026-05-18T10:00:00Z",
-    last_notified_at: "2026-05-18T11:23:00Z",
-    notif_count: 3,
-  },
-];
+let subscriptions: Subscription[] = [];
 
 const stations: Station[] = [
   { code: "2900000", name: "Toshkent",        name_uz: "Toshkent",        name_ru: "Ташкент",   city: "Toshkent" },

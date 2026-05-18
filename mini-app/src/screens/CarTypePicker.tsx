@@ -1,31 +1,32 @@
-import { useEffect } from "react";
+import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Cell, Checkbox, List, Section } from "@telegram-apps/telegram-ui";
 
-import { useTelegram } from "@/hooks/useTelegram";
+import { useMainButton } from "@/hooks/useMainButton";
+import { useWizardField } from "@/hooks/useWizardField";
+import { useWizardGuard } from "@/hooks/useWizardGuard";
 import { useWizard } from "@/store/wizard";
 
 const CAR_TYPES = ["плацкарта", "купе", "люкс", "св", "сидячий"] as const;
 const BERTH_TYPES = new Set(["плацкарта", "купе"]);
 
 export function CarTypePicker() {
-  const navigate = useNavigate();
-  const { mainButton } = useTelegram();
-  const { car_types, setField } = useWizard();
+  useWizardGuard(["dep_code", "arr_code", "travel_date", "train_number"]);
 
-  useEffect(() => {
-    if (!mainButton) return;
-    mainButton.setText("Davom etish");
-    mainButton.show();
-    if (car_types.length > 0) mainButton.enable();
-    else mainButton.disable();
-    const handler = () => {
-      const needsBerth = car_types.some(t => BERTH_TYPES.has(t));
-      navigate(needsBerth ? "/new/berth" : "/new/confirm");
-    };
-    mainButton.onClick(handler);
-    return () => mainButton.offClick(handler);
-  }, [mainButton, car_types, navigate]);
+  const navigate = useNavigate();
+  const setField = useWizard(s => s.setField);
+  const car_types = useWizardField("car_types");
+
+  const onContinue = useCallback(() => {
+    const needsBerth = car_types.some(t => BERTH_TYPES.has(t));
+    navigate(needsBerth ? "/new/berth" : "/new/confirm");
+  }, [car_types, navigate]);
+
+  useMainButton({
+    text: "Davom etish",
+    enabled: car_types.length > 0,
+    onClick: onContinue,
+  });
 
   const toggle = (t: string) => {
     setField(
@@ -38,7 +39,7 @@ export function CarTypePicker() {
     <List>
       <Section
         header="Vagon turi"
-        footer="Bir nechta tanlash mumkin. Bo'sh qoldirsangiz hammasi tekshiriladi (lekin kamida 1 ta tanlash kerak)."
+        footer="Bir nechta tanlash mumkin. Faqat plackart va kupe past/tepa o'rinni qo'llab-quvvatlaydi."
       >
         {CAR_TYPES.map(t => (
           <Cell

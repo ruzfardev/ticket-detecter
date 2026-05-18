@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 
 import "@telegram-apps/telegram-ui/dist/styles.css";
+import "./ui/tokens.css";
 import "./styles.css";
 
 import { App } from "./App";

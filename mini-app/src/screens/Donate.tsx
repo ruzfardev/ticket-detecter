@@ -1,13 +1,16 @@
-import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Banner, Button, Cell, Input, List, Modal, Section, Spinner,
+  Banner, Cell, List, Section,
 } from "@telegram-apps/telegram-ui";
 import { toast } from "sonner";
-import { Coffee, Cookie, Cake, Gift, Heart, Pencil } from "lucide-react";
+import {
+  Coffee, Cookie, Cake, Gift, Heart, Pencil, ChevronRight,
+} from "lucide-react";
 
 import { getInvoice, getPlans } from "@/api/client";
 import { useTelegram } from "@/hooks/useTelegram";
+import { IconText, Money, StatusView } from "@/ui";
 
 const PLAN_ICONS: Record<string, any> = {
   donate_25:  Coffee,
@@ -16,25 +19,23 @@ const PLAN_ICONS: Record<string, any> = {
   donate_500: Gift,
 };
 
-const planIcon = (id: string) => {
+function planIcon(id: string) {
   const Icon = PLAN_ICONS[id] ?? Gift;
   return <Icon size={22} strokeWidth={1.75} />;
-};
+}
 
 export function Donate() {
+  const navigate = useNavigate();
   const plans = useQuery({ queryKey: ["plans"], queryFn: getPlans });
   const { openInvoice, haptic } = useTelegram();
-  const [customOpen, setCustomOpen] = useState(false);
-  const [amount, setAmount] = useState(50);
 
-  const donate = async (planId: string, amt?: number) => {
+  const donate = async (planId: string) => {
     try {
-      const inv = await getInvoice(planId, amt);
+      const inv = await getInvoice(planId);
       openInvoice(inv.invoice_link, status => {
         if (status === "paid") {
           haptic?.notificationOccurred?.("success");
           toast.success("Katta rahmat!");
-          setCustomOpen(false);
         }
       });
     } catch (e: any) {
@@ -42,61 +43,39 @@ export function Donate() {
     }
   };
 
-  if (plans.isLoading) return <Spinner size="l" />;
-  const range = plans.data?.donate_custom_range;
+  if (plans.isLoading) return <StatusView kind="loading" />;
+  if (!plans.data) return <StatusView kind="error" />;
 
   return (
     <List>
       <Banner
-        header={
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <Heart size={22} strokeWidth={1.75} fill="currentColor" />
-            Botni qo'llab-quvvatlash
-          </span>
-        }
-        subheader="Premium bermaydi — faqat loyihaga yordam."
+        header={<IconText icon={Heart} size={22}>Loyihaga rahmat</IconText>}
+        subheader="Premium bermaydi — faqat botni qo'llab-quvvatlash."
         type="section"
       />
 
-      <Section>
-        {plans.data?.donate.map(d => (
+      <Section header="Tayyor variantlar">
+        {plans.data.donate.map(d => (
           <Cell
             key={d.id}
             before={planIcon(d.id)}
-            after={<b style={{ fontVariantNumeric: "tabular-nums" }}>{d.stars} ⭐</b>}
+            after={<Money stars={d.stars} />}
             onClick={() => donate(d.id)}
           >
             {d.label}
           </Cell>
         ))}
+      </Section>
+
+      <Section>
         <Cell
           before={<Pencil size={22} strokeWidth={1.75} />}
-          onClick={() => setCustomOpen(true)}
+          after={<ChevronRight size={18} strokeWidth={1.75} />}
+          onClick={() => navigate("/donate/custom")}
         >
           Boshqa miqdor
         </Cell>
       </Section>
-
-      <Modal open={customOpen} onOpenChange={setCustomOpen}>
-        <div style={{ padding: 16 }}>
-          <h3 style={{ margin: "0 0 12px" }}>Miqdorni tanlang</h3>
-          <p style={{ margin: "0 0 12px", color: "var(--tg-theme-hint-color)" }}>
-            Diapazon: {range?.min}–{range?.max} ⭐
-          </p>
-          <Input
-            type="number"
-            value={amount}
-            min={range?.min}
-            max={range?.max}
-            onChange={e => setAmount(+e.target.value)}
-          />
-          <div style={{ marginTop: 16 }}>
-            <Button stretched onClick={() => donate("donate_custom", amount)}>
-              {amount} ⭐ bilan rahmat aytish
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </List>
   );
 }

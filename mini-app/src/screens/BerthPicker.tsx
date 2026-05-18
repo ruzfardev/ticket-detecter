@@ -1,10 +1,13 @@
-import { useEffect } from "react";
+import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Cell, List, Radio, Section } from "@telegram-apps/telegram-ui";
 import { ArrowDownToLine, ArrowUpToLine, Minus } from "lucide-react";
 
-import { useTelegram } from "@/hooks/useTelegram";
+import { useMainButton } from "@/hooks/useMainButton";
+import { useWizardField } from "@/hooks/useWizardField";
+import { useWizardGuard } from "@/hooks/useWizardGuard";
 import { useWizard, Berth } from "@/store/wizard";
+import { IconText } from "@/ui";
 
 type Option = {
   value: Berth;
@@ -20,38 +23,26 @@ const OPTIONS: Option[] = [
 ];
 
 export function BerthPicker() {
-  const navigate = useNavigate();
-  const { mainButton } = useTelegram();
-  const { berth, setField } = useWizard();
+  useWizardGuard(["dep_code", "arr_code", "travel_date", "train_number", "car_types"]);
 
-  useEffect(() => {
-    if (!mainButton) return;
-    mainButton.setText("Davom etish");
-    mainButton.show();
-    mainButton.enable();
-    const handler = () => navigate("/new/confirm");
-    mainButton.onClick(handler);
-    return () => mainButton.offClick(handler);
-  }, [mainButton, navigate]);
+  const navigate = useNavigate();
+  const setField = useWizard(s => s.setField);
+  const berth = useWizardField("berth");
+
+  const onContinue = useCallback(() => navigate("/new/confirm"), [navigate]);
+  useMainButton({ text: "Davom etish", enabled: true, onClick: onContinue });
 
   return (
     <List>
-      <Section header="Joy turi" footer="Faqat плацкарта va купе uchun ahamiyatli.">
+      <Section header="Joy turi" footer="Faqat plackart va kupe uchun.">
         {OPTIONS.map(({ value, title, sub, Icon }) => (
           <Cell
             key={value}
-            before={
-              <Radio name="berth" value={value}
-                     checked={berth === value}
-                     onChange={() => setField("berth", value)} />
-            }
+            before={<Radio name="berth" value={value} checked={berth === value} readOnly />}
             subtitle={sub}
             onClick={() => setField("berth", value)}
           >
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <Icon size={18} strokeWidth={1.75} />
-              {title}
-            </span>
+            <IconText icon={Icon}>{title}</IconText>
           </Cell>
         ))}
       </Section>

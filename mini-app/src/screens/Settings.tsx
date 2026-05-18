@@ -1,15 +1,16 @@
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Cell, List, Section, Spinner } from "@telegram-apps/telegram-ui";
+import { Cell, List, Section } from "@telegram-apps/telegram-ui";
 import { toast } from "sonner";
 import {
-  Check, ChevronRight, MessageCircle, Megaphone, Heart, User,
+  Check, MessageCircle, Megaphone, Heart, User,
 } from "lucide-react";
 
 import { getMe, updateLang } from "@/api/client";
 import { useTelegram } from "@/hooks/useTelegram";
+import { StatusView } from "@/ui";
 
-// Flag emojis intentionally kept — they ARE the content (language identity).
+// Flag emojis are content (language identity), not UI decoration.
 const LANGS = [
   { code: "uz", flag: "🇺🇿", label: "O'zbekcha" },
   { code: "ru", flag: "🇷🇺", label: "Русский" },
@@ -31,7 +32,10 @@ export function Settings() {
     },
   });
 
-  if (me.isLoading) return <Spinner size="l" />;
+  if (me.isLoading) return <StatusView kind="loading" />;
+  if (!me.data) return <StatusView kind="error" />;
+
+  const currentLang = me.data.user.lang;
 
   return (
     <List>
@@ -39,10 +43,10 @@ export function Settings() {
         {LANGS.map(l => (
           <Cell
             key={l.code}
-            before={<span style={{ fontSize: 22 }}>{l.flag}</span>}
+            before={<span style={{ fontSize: 22, lineHeight: 1 }}>{l.flag}</span>}
             after={
-              me.data?.user.lang === l.code
-                ? <Check size={20} strokeWidth={2} color="var(--tg-theme-button-color)" />
+              currentLang === l.code
+                ? <Check size={20} strokeWidth={2} color="var(--tg-accent)" />
                 : null
             }
             onClick={() => mutateLang.mutate(l.code)}
@@ -55,31 +59,31 @@ export function Settings() {
       <Section header="Aloqa">
         <Cell
           before={icon(MessageCircle)}
-          after={icon(ChevronRight)}
           onClick={() => openLink("https://t.me/TicketDetectorSupport")}
         >
           Support
         </Cell>
         <Cell
           before={icon(Megaphone)}
-          after={icon(ChevronRight)}
           onClick={() => openLink("https://t.me/TicketTips")}
         >
           Yangiliklar kanali
         </Cell>
+      </Section>
+
+      <Section header="Boshqa">
         <Cell
           before={icon(Heart)}
-          after={icon(ChevronRight)}
           onClick={() => navigate("/donate")}
         >
-          Donate
+          Loyihani qo'llab-quvvatlash
         </Cell>
       </Section>
 
       <Section footer="v0.1.0">
         <Cell
           before={icon(User)}
-          subtitle={me.data?.user.tg_user_id?.toString()}
+          subtitle={me.data.user.tg_user_id?.toString()}
         >
           Foydalanuvchi ID
         </Cell>

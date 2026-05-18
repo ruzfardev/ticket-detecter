@@ -17,7 +17,7 @@ export function MainLayout({ children }: Props) {
 
   return (
     <>
-      <div style={{ paddingBottom: 88 }}>
+      <div style={{ paddingBottom: "calc(var(--tabbar-h) + var(--safe-bottom))" }}>
         {children}
       </div>
       <Tabbar>

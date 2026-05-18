@@ -1,14 +1,15 @@
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Avatar, Badge, Cell, List, Placeholder, Section, Spinner,
+  Avatar, Badge, Cell, List, Placeholder, Section,
 } from "@telegram-apps/telegram-ui";
 import {
-  Plus, Sparkles, Heart, TrainFront, CalendarDays, ChevronRight,
+  Plus, Sparkles, TrainFront, CalendarDays, ChevronRight,
 } from "lucide-react";
 
 import { getMe, listSubscriptions } from "@/api/client";
 import { useWizard } from "@/store/wizard";
+import { IconText, StatusView } from "@/ui";
 
 export function Home() {
   const navigate = useNavigate();
@@ -16,36 +17,33 @@ export function Home() {
   const me = useQuery({ queryKey: ["me"], queryFn: getMe });
   const subs = useQuery({ queryKey: ["subs"], queryFn: listSubscriptions });
 
-  if (me.isLoading || subs.isLoading) {
-    return (
-      <div style={{ display: "grid", placeItems: "center", padding: 40 }}>
-        <Spinner size="l" />
-      </div>
-    );
-  }
+  if (me.isLoading || subs.isLoading) return <StatusView kind="loading" />;
+  if (!me.data || !subs.data) return <StatusView kind="error" />;
 
-  const slotFull = me.data && me.data.slot.used >= me.data.slot.max;
-  const isFree = me.data?.user.tier === "free";
+  const { slot, user } = me.data;
+  const isFree = user.tier === "free";
+  const slotFull = slot.used >= slot.max;
+  const list = subs.data.subscriptions;
 
   const handleNew = () => {
     if (slotFull && isFree) {
       navigate("/premium");
-    } else {
-      reset();
-      navigate("/new");
+      return;
     }
+    reset();
+    navigate("/new");
   };
 
   return (
     <List>
-      <Section header={`Xabarnomalar (${me.data?.slot.used}/${me.data?.slot.max})`}>
-        {subs.data?.subscriptions.length === 0 ? (
+      <Section header={`Xabarnomalar · ${slot.used}/${slot.max}`}>
+        {list.length === 0 ? (
           <Placeholder
             header="Hozircha xabarnoma yo'q"
-            description="Pastdagi tugma orqali yangisini yarating."
+            description="Yangi marshrut qo'shing — joy paydo bo'lganda darhol xabar olasiz."
           />
         ) : (
-          subs.data?.subscriptions.map(s => (
+          list.map(s => (
             <Cell
               key={s.id}
               before={
@@ -54,21 +52,11 @@ export function Home() {
                 </Avatar>
               }
               subtitle={
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <CalendarDays size={14} strokeWidth={1.75} />
-                  {s.travel_date}
-                  {" · "}
-                  {s.train_number || "har qanday"}
-                  {" · "}
-                  {s.car_types.join(", ") || "barchasi"}
-                </span>
+                <IconText icon={CalendarDays} size={14} gap={1}>
+                  {`${s.travel_date} · ${s.train_number || "har qanday"}`}
+                </IconText>
               }
-              after={
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <Badge type="dot" mode={s.is_active ? "primary" : undefined} />
-                  <ChevronRight size={18} strokeWidth={1.75} />
-                </span>
-              }
+              after={<Badge type="dot" mode={s.is_active ? "primary" : undefined} />}
               onClick={() => navigate(`/sub/${s.id}`)}
             >
               {s.dep_name} → {s.arr_name}
@@ -85,14 +73,14 @@ export function Home() {
       </Section>
 
       {isFree && (
-        <Section>
+        <Section header="Yangilash">
           <Cell
             before={
-              <Avatar size={40} style={{ background: "var(--tg-theme-button-color, #2481cc)" }}>
-                <Sparkles size={20} strokeWidth={1.75} color="#fff" />
+              <Avatar size={40} style={{ background: "var(--tg-accent)" }}>
+                <Sparkles size={20} strokeWidth={1.75} color="var(--tg-accent-text)" />
               </Avatar>
             }
-            subtitle="3 ta slot + har 10s tekshirish"
+            subtitle="3 ta slot · 3× tezroq tekshirish"
             after={<ChevronRight size={18} strokeWidth={1.75} />}
             onClick={() => navigate("/premium")}
           >
@@ -100,21 +88,6 @@ export function Home() {
           </Cell>
         </Section>
       )}
-
-      <Section>
-        <Cell
-          before={
-            <Avatar size={40} style={{ background: "#FF6B6B" }}>
-              <Heart size={20} strokeWidth={1.75} color="#fff" fill="#fff" />
-            </Avatar>
-          }
-          subtitle="Loyihani qo'llab-quvvatlash"
-          after={<ChevronRight size={18} strokeWidth={1.75} />}
-          onClick={() => navigate("/donate")}
-        >
-          Donate
-        </Cell>
-      </Section>
     </List>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Cell, List, Section } from "@telegram-apps/telegram-ui";
@@ -8,30 +8,35 @@ import {
 } from "lucide-react";
 
 import { createSubscription } from "@/api/client";
+import { useMainButton } from "@/hooks/useMainButton";
 import { useTelegram } from "@/hooks/useTelegram";
+import { useWizardGuard } from "@/hooks/useWizardGuard";
 import { useWizard } from "@/store/wizard";
-
-const iconBefore = (Icon: any) => (
-  <Icon size={18} strokeWidth={1.75}
-        style={{ marginRight: 4, verticalAlign: "text-bottom" }} />
-);
+import { IconText } from "@/ui";
 
 export function Confirm() {
+  useWizardGuard(["dep_code", "arr_code", "travel_date", "train_number", "car_types"]);
+
   const navigate = useNavigate();
-  const { mainButton, haptic } = useTelegram();
   const qc = useQueryClient();
-  const w = useWizard();
+  const { haptic } = useTelegram();
   const reset = useWizard(s => s.reset);
+  const w = useWizard();
 
   const mutation = useMutation({
-    mutationFn: () => createSubscription({
-      dep_code: w.dep_code!,
-      arr_code: w.arr_code!,
-      travel_date: w.travel_date!,
-      train_number: w.train_number || null,
-      car_types: w.car_types,
-      berth: w.berth,
-    }),
+    mutationFn: () => {
+      if (!w.dep_code || !w.arr_code || !w.travel_date) {
+        throw new Error("incomplete_wizard");
+      }
+      return createSubscription({
+        dep_code: w.dep_code,
+        arr_code: w.arr_code,
+        travel_date: w.travel_date,
+        train_number: w.train_number || null,
+        car_types: w.car_types,
+        berth: w.berth,
+      });
+    },
     onSuccess: () => {
       haptic?.notificationOccurred?.("success");
       toast.success("Xabarnoma yaratildi");
@@ -47,41 +52,46 @@ export function Confirm() {
         toast.error("Slot to'lgan. Premium kerak.");
         setTimeout(() => navigate("/premium"), 800);
       } else {
-        toast.error(err.response?.data?.error?.message || "Saqlanmadi");
+        toast.error(err.response?.data?.error?.message || err.message || "Saqlanmadi");
       }
     },
   });
 
-  useEffect(() => {
-    if (!mainButton) return;
-    mainButton.setText("Saqlash");
-    mainButton.show();
-    mainButton.enable();
-    if (mutation.isPending) mainButton.showProgress(); else mainButton.hideProgress();
-    const handler = () => mutation.mutate();
-    mainButton.onClick(handler);
-    return () => mainButton.offClick(handler);
-  }, [mainButton, mutation]);
+  const onSubmit = useCallback(() => mutation.mutate(), [mutation]);
+  useMainButton({
+    text: "Saqlash",
+    enabled: !mutation.isPending,
+    progress: mutation.isPending,
+    onClick: onSubmit,
+  });
+
+  const berthLabel =
+    w.berth === "lower" ? "Pastki" :
+    w.berth === "upper" ? "Tepa" :
+    null;
+  const BerthIcon = w.berth === "lower" ? ArrowDownToLine : ArrowUpToLine;
 
   return (
     <List>
-      <Section header="Tasdiqlash" footer="Bo'sh joy paydo bo'lganda Telegram orqali darhol xabar olasiz.">
-        <Cell subtitle="Marshrut">
-          {iconBefore(MapPin)}{w.dep_name} → {w.arr_name}
+      <Section
+        header="Tasdiqlash"
+        footer="Bo'sh joy paydo bo'lganda Telegram orqali darhol xabar olasiz."
+      >
+        <Cell subtitle="Marshrut" before={<MapPin size={18} strokeWidth={1.75} />}>
+          {w.dep_name} → {w.arr_name}
         </Cell>
-        <Cell subtitle="Sana">
-          {iconBefore(CalendarDays)}{w.travel_date}
+        <Cell subtitle="Sana" before={<CalendarDays size={18} strokeWidth={1.75} />}>
+          {w.travel_date}
         </Cell>
-        <Cell subtitle="Poyezd">
-          {iconBefore(TrainFront)}{w.train_number} {w.train_brand ? `· ${w.train_brand}` : ""}
+        <Cell subtitle="Poyezd" before={<TrainFront size={18} strokeWidth={1.75} />}>
+          {w.train_number}{w.train_brand ? ` · ${w.train_brand}` : ""}
         </Cell>
-        <Cell subtitle="Vagon turi">
-          {iconBefore(Armchair)}{w.car_types.join(", ")}
+        <Cell subtitle="Vagon turi" before={<Armchair size={18} strokeWidth={1.75} />}>
+          {w.car_types.join(", ")}
         </Cell>
-        {w.berth !== "any" && (
+        {berthLabel && (
           <Cell subtitle="Joy turi">
-            {iconBefore(w.berth === "lower" ? ArrowDownToLine : ArrowUpToLine)}
-            {w.berth === "lower" ? "Pastki" : "Tepa"}
+            <IconText icon={BerthIcon}>{berthLabel}</IconText>
           </Cell>
         )}
       </Section>

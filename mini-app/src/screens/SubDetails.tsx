@@ -1,8 +1,7 @@
+import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Button, Cell, List, Section, Spinner,
-} from "@telegram-apps/telegram-ui";
+import { Cell, List, Section } from "@telegram-apps/telegram-ui";
 import { toast } from "sonner";
 import {
   CalendarDays, TrainFront, Armchair, Activity,
@@ -13,20 +12,16 @@ import {
   deleteSubscription, listSubscriptions, patchSubscription,
 } from "@/api/client";
 import { useTelegram } from "@/hooks/useTelegram";
+import { IconText, StatusView } from "@/ui";
 
-const iconBefore = (Icon: any) => (
-  <Icon size={18} strokeWidth={1.75}
-        style={{ marginRight: 6, verticalAlign: "text-bottom" }} />
-);
-
-function BerthLabel({ berth }: { berth: string }) {
-  if (berth === "lower") return <>{iconBefore(ArrowDownToLine)}pastki</>;
-  if (berth === "upper") return <>{iconBefore(ArrowUpToLine)}tepa</>;
-  return <>{iconBefore(Minus)}har qanday</>;
+function berthLabel(berth: string) {
+  if (berth === "lower") return { Icon: ArrowDownToLine, text: "pastki" };
+  if (berth === "upper") return { Icon: ArrowUpToLine, text: "tepa" };
+  return { Icon: Minus, text: "har qanday" };
 }
 
 export function SubDetails() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const subId = Number(id);
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -36,7 +31,10 @@ export function SubDetails() {
     queryKey: ["subs"],
     queryFn: listSubscriptions,
   });
-  const sub = data?.subscriptions.find(s => s.id === subId);
+  const sub = useMemo(
+    () => data?.subscriptions.find(s => s.id === subId),
+    [data, subId],
+  );
 
   const toggle = useMutation({
     mutationFn: () => patchSubscription(subId, { is_active: !sub?.is_active }),
@@ -53,25 +51,34 @@ export function SubDetails() {
     },
   });
 
-  if (isLoading) return <Spinner size="l" />;
-  if (!sub) return <div style={{ padding: 32 }}>Topilmadi</div>;
+  if (isLoading) return <StatusView kind="loading" />;
+  if (!sub) {
+    return (
+      <StatusView
+        kind="empty"
+        header="Topilmadi"
+        description="Bu xabarnoma o'chirilgan yoki mavjud emas."
+      />
+    );
+  }
+
+  const { Icon: BerthIcon, text: berthText } = berthLabel(sub.berth);
+  const busy = toggle.isPending || remove.isPending;
 
   return (
     <List>
       <Section header={`${sub.dep_name} → ${sub.arr_name}`}>
-        <Cell subtitle="Sana">
-          {iconBefore(CalendarDays)}{sub.travel_date}
+        <Cell subtitle="Sana" before={<CalendarDays size={18} strokeWidth={1.75} />}>
+          {sub.travel_date}
         </Cell>
-        <Cell subtitle="Poyezd">
-          {iconBefore(TrainFront)}{sub.train_number ?? "har qanday"}
+        <Cell subtitle="Poyezd" before={<TrainFront size={18} strokeWidth={1.75} />}>
+          {sub.train_number ?? "har qanday"}
         </Cell>
-        <Cell subtitle="Vagon">
-          {iconBefore(Armchair)}{sub.car_types.join(", ") || "barchasi"}
-          {" · "}
-          <BerthLabel berth={sub.berth} />
+        <Cell subtitle="Vagon" before={<Armchair size={18} strokeWidth={1.75} />}>
+          {(sub.car_types.join(", ") || "barchasi")} · <IconText icon={BerthIcon} size={14}>{berthText}</IconText>
         </Cell>
-        <Cell subtitle="Holat">
-          {iconBefore(Activity)}{sub.is_active ? "Aktiv" : "Pauzada"}
+        <Cell subtitle="Holat" before={<Activity size={18} strokeWidth={1.75} />}>
+          {sub.is_active ? "Aktiv" : "Pauzada"}
         </Cell>
       </Section>
 
@@ -83,23 +90,26 @@ export function SubDetails() {
         )}
       </Section>
 
-      <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
-        <Button mode="bezeled" stretched onClick={() => toggle.mutate()}
-                loading={toggle.isPending}
-                before={sub.is_active
-                  ? <Pause size={18} strokeWidth={1.75} />
-                  : <Play size={18} strokeWidth={1.75} />}>
+      <Section header="Boshqarish">
+        <Cell
+          before={
+            sub.is_active
+              ? <Pause size={20} strokeWidth={1.75} />
+              : <Play size={20} strokeWidth={1.75} />
+          }
+          onClick={busy ? undefined : () => toggle.mutate()}
+        >
           {sub.is_active ? "Pauza qilish" : "Davom ettirish"}
-        </Button>
-        <Button mode="plain" stretched
-                onClick={async () => {
-                  if (await showConfirm("O'chirishni xohlaysizmi?")) remove.mutate();
-                }}
-                loading={remove.isPending}
-                before={<Trash2 size={18} strokeWidth={1.75} />}>
-          O'chirish
-        </Button>
-      </div>
+        </Cell>
+        <Cell
+          before={<Trash2 size={20} strokeWidth={1.75} color="var(--tg-danger)" />}
+          onClick={busy ? undefined : async () => {
+            if (await showConfirm("O'chirishni xohlaysizmi?")) remove.mutate();
+          }}
+        >
+          <span style={{ color: "var(--tg-danger)" }}>O'chirish</span>
+        </Cell>
+      </Section>
     </List>
   );
 }
