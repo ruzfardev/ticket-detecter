@@ -1,251 +1,23 @@
-# Ticket Detector — eticket.railway.uz
+# Ticket Detector — Multi-user Telegram Bot + Mini App
 
-Poyezd chiptalarini avtomatik tekshiradi va Telegram orqali xabar beradi.
+O'zbekiston temir yo'l (eticket.railway.uz) chiptalarini avtomatik kuzatib, bo'sh joy paydo bo'lganda Telegram orqali real-time xabar beruvchi servis.
 
----
-
-## Talablar
-
-- Python 3.10+
-- Internet ulanishi (eticket.railway.uz va api.telegram.org ga kirish)
+**Status:** 🚧 Active development (multi-user rewrite). Eski single-user kod [legacy/](legacy/) ichida.
 
 ---
 
-## 1. Loyihani yuklab oling
-
-```bash
-git clone https://github.com/your-username/ticket-detecter.git
-cd ticket-detecter
-```
-
----
-
-## 2. Virtual muhit yarating va faollashtiring
-
-**Linux / macOS:**
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-**Windows (CMD):**
-```cmd
-python -m venv .venv
-.venv\Scripts\activate
-```
-
-**Windows (PowerShell):**
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-```
-
-**Windows (Git Bash):**
-```bash
-python -m venv .venv
-source .venv/Scripts/activate
-```
-
-> Faollashtirilganda terminal chapda `(.venv)` ko'rinishi kerak.
-
----
-
-## 3. Kerakli kutubxonalarni o'rnating
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-## 4. `.env` faylini sozlang
-
-`.env.example` dan nusxa oling:
-
-```bash
-cp .env.example .env
-```
-
-`.env` faylini oching va to'ldiring:
-
-```env
-RAILWAY_USERNAME=sizning_emailingiz@gmail.com
-RAILWAY_PASSWORD=sizning_parolingiz
-
-TELEGRAM_BOT_TOKEN=1234567890:AAExxx...
-TELEGRAM_CHAT_ID=970956519
-```
-
-**`TELEGRAM_CHAT_ID` ni qanday topish:**
-1. Telegramda `@userinfobot` ga `/start` yuboring
-2. Bot sizning `Id:` raqamingizni ko'rsatadi — shu raqamni yozing
-
----
-
-## 5. `config.json` ni sozlang
-
-```json
-{
-  "check_interval_minutes": 15,
-  "heartbeat_time": "08:00",
-  "routes": [
-    {
-      "name": "Urganch → Toshkent",
-      "dep_station_code": "2900790",
-      "arr_station_code": "2900000",
-      "date_from": "2026-03-28",
-      "date_to": "2026-04-05",
-      "car_types": []
-    },
-    {
-      "name": "Toshkent → Urganch",
-      "dep_station_code": "2900000",
-      "arr_station_code": "2900790",
-      "date_from": "2026-04-05",
-      "date_to": "2026-04-10",
-      "car_types": []
-    }
-  ]
-}
-```
-
-**Parametrlar:**
-
-| Kalit | Izoh |
-|-------|------|
-| `check_interval_minutes` | Qancha daqiqada bir tekshirish (1–120) |
-| `heartbeat_time` | Har kuni shu vaqtda "Bot ishlayapti" xabari yuboriladi |
-| `name` | Marshrut nomi (Telegram xabarida ko'rinadi) |
-| `dep_station_code` | Jo'nash stantsiyasi kodi |
-| `arr_station_code` | Manzil stantsiyasi kodi |
-| `date_from` | Tekshirish boshlanish sanasi (`YYYY-MM-DD`) |
-| `date_to` | Tekshirish tugash sanasi (`YYYY-MM-DD`) |
-| `car_types` | Vagon turi filtri. Bo'sh `[]` bo'lsa hammasi tekshiriladi |
-
-**Ma'lum stantsiya kodlari:**
-
-| Stantsiya | Kod |
-|-----------|-----|
-| Toshkent | `2900000` |
-| Urganch | `2900790` |
-
-Boshqa stantsiya kodlarini eticket.railway.uz da qidirib, F12 → Network tab dan `depStationCode` ni toping.
-
----
-
-## 6. Ishga tushirish
-
-```bash
-python src/main.py
-```
-
-Bot ishga tushgach Telegram ga "Bot ishlayapti" xabari keladi va birinchi tekshiruv darhol boshlanadi.
-
----
-
-## Telegram bot buyruqlari
-
-Bot har bir xabarga javob beradi va inline tugmalar bilan jihozlangan. Asosiy menyuni ochish uchun `/start` yoki `/menu` yuboring.
-
-**Navigatsiya**
-
-| Buyruq | Izoh |
-|--------|------|
-| `/start` | Botni ishga tushirish va asosiy menyu |
-| `/menu` | Asosiy menyu (tugmalar bilan) |
-| `/help` | Buyruqlarning to'liq ro'yxati |
-| `/status` | Bot holati, oxirgi va keyingi tekshiruv |
-| `/stats` | 24 soatlik statistika |
-| `/routes` | Marshrutlar ro'yxati |
-| `/stations` | Ma'lum stantsiya kodlari |
-
-**Tekshirish boshqaruvi**
-
-| Buyruq | Izoh |
-|--------|------|
-| `/checknow` | Darhol tekshirishni boshlash |
-| `/pause` | Rejalashtirilgan tekshiruvlarni pauza qilish |
-| `/resume` | Tekshiruvni davom ettirish |
-| `/summary` | Kunlik hisobotni darhol yuborish |
-
-**Sozlash**
-
-| Buyruq | Izoh |
-|--------|------|
-| `/interval 30s` / `/interval 2m` / `/interval 10` | Intervalni soniya yoki daqiqada o'zgartirish (qayta ishga tushirmasdan) |
-| `/heartbeat 08:00` | Kunlik heartbeat vaqtini sozlash |
-| `/setdates 1 2026-04-01 2026-04-10` | 1-marshrut sanalarini yangilash |
-| `/setcars 1` | 1-marshrutning vagon turlarini tanlash (tugmalar bilan) |
-| `/addroute` | Yangi marshrutni bosqichma-bosqich qo'shish |
-| `/delroute 2` | 2-marshrutni o'chirish (tasdiq so'raladi) |
-| `/cancel` | Joriy jarayonni (masalan, /addroute) bekor qilish |
-
-**Qo'shimcha**
-
-- Bot slash-siz xabarlarga ham javob beradi: "salom", "tekshir", "holat" va h.k.
-- Noma'lum buyruq yuborilsa yordam menyusi ko'rsatiladi — foydalanuvchi hech qachon javobsiz qolmaydi.
-- `/interval` va marshrut o'zgarishlari botni qayta ishga tushirmasdan darhol qo'llaniladi.
-
-> Faqat `.env` dagi `TELEGRAM_CHAT_ID` dan kelgan xabarlar qayta ishlanadi.
-
----
-
-## Serverda doim ishlab turishi uchun
-
-**`screen` orqali (Linux):**
-
-```bash
-screen -S ticket-bot
-source .venv/bin/activate
-python src/main.py
-# Ctrl+A, keyin D — fonga o'tkazish
-```
-
-Qayta ulash:
-```bash
-screen -r ticket-bot
-```
-
-**`systemd` service (Linux):**
-
-`/etc/systemd/system/ticket-bot.service` faylini yarating:
-
-```ini
-[Unit]
-Description=Ticket Detector Bot
-After=network.target
-
-[Service]
-WorkingDirectory=/path/to/ticket-detecter
-ExecStart=/path/to/ticket-detecter/.venv/bin/python src/main.py
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Ishga tushirish:
-```bash
-sudo systemctl enable ticket-bot
-sudo systemctl start ticket-bot
-sudo systemctl status ticket-bot
-```
-
----
-
-## Telegram xabari namunasi
+## Arxitektura (qisqacha)
 
 ```
-🎫 Chipta topildi! — Urganch → Toshkent
-📅 2026-03-31
-
-• 076Ж (Yo'lovchi)
-  🕐 16:05 → 05:23 (13:18)
-  🪑 Umumiy — 24 bo'sh o'rindiq
-     Vagon 21: 2 joy (38, 44)
-     Vagon 22: 5 joy (22, 40, 44, 48, 54)
+[TG Client] ─┬─► Bot UI       ─► [FastAPI Backend] ─► [Postgres]
+             └─► Mini App      ─► [FastAPI Backend] ─► [Postgres]
+                                          │
+                                  [Watcher Worker] ─► eticket.railway.uz
+                                          │
+                                  [Notifier] ─► [TG Bot API → user]
 ```
+
+Tafsilot: [doc/01-architecture.md](doc/01-architecture.md)
 
 ---
 
@@ -253,20 +25,84 @@ sudo systemctl status ticket-bot
 
 ```
 ticket-detecter/
-├── src/
-│   ├── main.py       # Asosiy scheduler
-│   ├── auth.py       # eticket.railway.uz login
-│   ├── checker.py    # Chipta tekshirish
-│   ├── notifier.py   # Telegram xabar yuborish va formati
-│   ├── state.py      # Takroriy xabar oldini olish
-│   ├── bot.py        # Telegram bot: buyruqlar, menyu, wizardlar
-│   ├── runtime.py    # Scheduler ↔ bot uchun umumiy holat
-│   └── eventlog.py   # Tekshiruv hodisalari jurnali
-├── data/
-│   ├── seen_trains.json  # Holat fayli (avtomatik yaratiladi)
-│   └── events.jsonl      # Hodisalar jurnali (avtomatik yaratiladi)
-├── config.json       # Marshrutlar va sozlamalar
-├── .env              # Maxfiy ma'lumotlar (git ga qo'shilmaydi)
-├── .env.example      # .env namunasi
-└── requirements.txt
+├── backend/         # FastAPI + aiogram bot + worker (Python 3.11+)
+│   ├── app/
+│   │   ├── api/         # public REST endpoints
+│   │   ├── internal/    # bot ↔ backend
+│   │   ├── bot/         # aiogram handlers
+│   │   ├── worker/      # railway.uz watcher
+│   │   ├── railway/     # railway.uz API client
+│   │   ├── db/          # asyncpg pool
+│   │   ├── core/        # config, logging
+│   │   ├── services/    # business logic
+│   │   ├── scripts/     # CLI utilities
+│   │   └── tasks/       # cron jobs (expire premium, gc)
+│   └── migrations/      # Alembic
+│
+├── mini-app/        # React + Vite + @telegram-apps/telegram-ui
+│
+├── infra/           # Docker Compose, Caddy, backup
+│
+├── doc/             # Design docs (12 ta MD fayl)
+│
+└── legacy/          # Eski single-user kod (reference uchun)
 ```
+
+---
+
+## Tezkor boshlash (dev)
+
+```bash
+# 1. Postgres ko'tarish
+cd infra
+docker compose up -d postgres
+
+# 2. Backend
+cd ../backend
+python -m venv .venv
+.venv\Scripts\Activate.ps1     # PowerShell
+# yoki: source .venv/bin/activate  # Linux/Mac
+pip install -e .
+
+# 3. .env
+cp ../.env.example ../.env
+# .env ni to'ldiring
+
+# 4. Migration
+alembic upgrade head
+
+# 5. Backend ishga tushirish
+uvicorn app.main:app --reload --port 8000
+
+# 6. Healthcheck
+curl http://localhost:8000/health
+```
+
+Mini App va bot uchun batafsil instruksiyalar:
+- [doc/09-deployment.md](doc/09-deployment.md) — to'liq deploy
+- [doc/11-roadmap.md](doc/11-roadmap.md) — implementatsiya bosqichlari
+
+---
+
+## Hujjatlar
+
+| # | Hujjat | Mavzu |
+|---|--------|-------|
+| 00 | [overview](doc/00-overview.md) | Mahsulot vizyoni, foydalanuvchi turlari |
+| 01 | [architecture](doc/01-architecture.md) | Komponentlar va oqim diagramlari |
+| 02 | [railway-api](doc/02-railway-api.md) | eticket.railway.uz API kontrakti |
+| 03 | [database-schema](doc/03-database-schema.md) | Postgres jadvallar |
+| 04 | [backend-api](doc/04-backend-api.md) | FastAPI REST endpointlari |
+| 05 | [bot-spec](doc/05-bot-spec.md) | aiogram bot dizayni |
+| 06 | [mini-app-spec](doc/06-mini-app-spec.md) | Telegram Mini App (TelegramUI) |
+| 07 | [payments](doc/07-payments.md) | Telegram Stars to'lov tizimi |
+| 08 | [worker-notifier](doc/08-worker-notifier.md) | Watcher cycle va notification |
+| 09 | [deployment](doc/09-deployment.md) | Docker Compose, deploy |
+| 10 | [observability](doc/10-observability.md) | Loglar, metriklar, alertlar |
+| 11 | [roadmap](doc/11-roadmap.md) | Implementatsiya milestone'lari |
+
+---
+
+## Litsenziya
+
+MIT — [LICENSE](LICENSE)
