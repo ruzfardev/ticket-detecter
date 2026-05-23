@@ -15,6 +15,7 @@ import { DonateCustom } from "./screens/DonateCustom";
 import { Settings } from "./screens/Settings";
 import { BottomNav } from "./components/BottomNav";
 import { useBackButton } from "./hooks/useBackButton";
+import { useThemeSync } from "./hooks/useThemeSync";
 
 const TABBED_ROUTES = new Set(["/home", "/premium", "/settings"]);
 const ROOT_ROUTES = new Set(["/"]);
@@ -22,6 +23,7 @@ const ROOT_ROUTES = new Set(["/"]);
 const tabbed = (el: JSX.Element) => <BottomNav>{el}</BottomNav>;
 
 export function App() {
+  useThemeSync();
   const location = useLocation();
   const hideBack =
     TABBED_ROUTES.has(location.pathname) || ROOT_ROUTES.has(location.pathname);

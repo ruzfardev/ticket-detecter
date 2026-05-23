@@ -37,7 +37,7 @@ export function Screen({
         "min-h-screen bg-canvas text-ink",
         "pt-5",
         tabbed
-          ? "pb-[calc(var(--tabbar-h,76px)+env(safe-area-inset-bottom,0px)+20px)]"
+          ? "pb-[calc(var(--tabbar-h,58px)+env(safe-area-inset-bottom,0px)+28px)]"
           : "pb-[calc(env(safe-area-inset-bottom,0px)+20px)]",
         padded && "px-4",
         center && "flex flex-col items-center justify-center",
