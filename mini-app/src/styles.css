@@ -1,24 +1,136 @@
+/* ============================================================
+   Theme tokens — map Telegram theme params to semantic names.
+   Fallbacks adapt to light/dark so browser/mock dev looks right.
+   ============================================================ */
+:root {
+  --bg:        var(--tg-theme-secondary-bg-color, #efeff4);
+  --card:      var(--tg-theme-bg-color, #ffffff);
+  --text:      var(--tg-theme-text-color, #000000);
+  --hint:      var(--tg-theme-hint-color, #8e8e93);
+  --accent:    var(--tg-theme-button-color, #2481cc);
+  --accent-tx: var(--tg-theme-button-text-color, #ffffff);
+  --link:      var(--tg-theme-link-color, var(--accent));
+
+  --separator: rgba(0, 0, 0, 0.07);
+  --press:     rgba(0, 0, 0, 0.04);
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+
+  --radius:    16px;
+  --radius-sm: 12px;
+  --gap:       12px;
+  --shadow:    0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-fab: 0 8px 28px rgba(0, 0, 0, 0.14);
+  --fab-bg:    rgba(255, 255, 255, 0.86);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:        var(--tg-theme-secondary-bg-color, #000000);
+    --card:      var(--tg-theme-bg-color, #1c1c1e);
+    --text:      var(--tg-theme-text-color, #ffffff);
+    --hint:      var(--tg-theme-hint-color, #98989e);
+    --separator: rgba(255, 255, 255, 0.1);
+    --press:     rgba(255, 255, 255, 0.06);
+    --shadow:    0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-fab: 0 8px 28px rgba(0, 0, 0, 0.5);
+    --fab-bg:    rgba(28, 28, 30, 0.86);
+  }
+}
+
 html, body, #root {
   margin: 0;
   padding: 0;
   min-height: 100vh;
-  background: var(--tg-theme-secondary-bg-color, #efeff4);
-  color: var(--tg-theme-text-color, #000);
+  background: var(--bg);
+  color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Kill horizontal scroll app-wide. */
+html, body {
+  overflow-x: hidden;
+  max-width: 100%;
 }
 
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* react-day-picker overrides to match Telegram theme */
-.rdp-root {
-  --rdp-accent-color: var(--tg-theme-button-color, #2481cc);
-  --rdp-accent-background-color: var(--tg-theme-button-color, #2481cc);
-  --rdp-background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
-  font-family: inherit;
-  padding: 16px;
+/* ============================================================
+   Interactive surfaces — press/hover that adapts to theme.
+   Inline styles handle layout; these classes handle states.
+   ============================================================ */
+.w-press {
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
+  -webkit-user-select: none;
+  user-select: none;
 }
-.rdp-day_button {
-  border-radius: 8px;
+@media (hover: hover) {
+  .w-press:hover { background-color: var(--press); }
+}
+.w-press:active { background-color: var(--press); transform: scale(0.985); }
+.w-press:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+/* Row inside a card — separators between siblings. */
+.w-row + .w-row { border-top: 1px solid var(--separator); }
+
+/* Fade/slide-in for page content (staggered via inline animation-delay). */
+@keyframes w-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.w-rise { animation: w-rise 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@keyframes w-spin { to { transform: rotate(360deg); } }
+
+/* Bottom sheet (station search etc.) */
+@keyframes w-sheet-in {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes w-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ============================================================
+   Custom calendar
+   ============================================================ */
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.cal-cell {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 500;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease, transform 0.1s ease;
+  font-variant-numeric: tabular-nums;
+}
+@media (hover: hover) {
+  .cal-cell:not(:disabled):not(.cal-selected):hover { background: var(--press); }
+}
+.cal-cell:active:not(:disabled) { transform: scale(0.9); }
+.cal-cell:disabled { color: var(--hint); opacity: 0.35; cursor: default; }
+.cal-selected { background: var(--accent); color: var(--accent-tx); font-weight: 700; }
+.cal-today:not(.cal-selected) { color: var(--accent); font-weight: 700; }
+.cal-dow {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--hint);
+  padding-bottom: 6px;
+  text-transform: uppercase;
 }

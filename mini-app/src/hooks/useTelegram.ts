@@ -30,10 +30,21 @@ export function useTelegram() {
     const colorScheme: ColorScheme =
       tg?.colorScheme === "dark" ? "dark" : "light";
 
+    const devUser =
+      import.meta.env.VITE_DEV_MOCK === "true" && !tg?.initDataUnsafe?.user
+        ? {
+            id: 999,
+            first_name: "Farrux",
+            last_name: "Dev",
+            username: "farrux_dev",
+            is_premium: false,
+          }
+        : undefined;
+
     return {
       ready: !!tg,
       initData: tg?.initData ?? "",
-      user: tg?.initDataUnsafe?.user,
+      user: tg?.initDataUnsafe?.user ?? devUser,
       colorScheme,
       platform,
       themeParams: tg?.themeParams,

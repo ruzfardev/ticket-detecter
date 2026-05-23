@@ -3,32 +3,35 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-
 
 import { Welcome } from "./screens/Welcome";
 import { Home } from "./screens/Home";
-import { RoutePicker } from "./screens/RoutePicker";
-import { DateScreen } from "./screens/DateScreen";
-import { TrainPicker } from "./screens/TrainPicker";
-import { CarTypePicker } from "./screens/CarTypePicker";
-import { BerthPicker } from "./screens/BerthPicker";
-import { Confirm } from "./screens/Confirm";
+import { NewWatch } from "./screens/NewWatch";
 import { SubDetails } from "./screens/SubDetails";
 import { Premium } from "./screens/Premium";
 import { Donate } from "./screens/Donate";
 import { Settings } from "./screens/Settings";
+import { History } from "./screens/History";
 import { MainLayout } from "./components/MainLayout";
 import { useTelegram } from "./hooks/useTelegram";
 
 // Screens that show the bottom Tabbar.
 const tabbed = (el: JSX.Element) => <MainLayout>{el}</MainLayout>;
+const TABBED_PATHS = ["/home", "/premium", "/settings"];
 
 export function App() {
-  const { backButton } = useTelegram();
+  const { backButton, mainButton } = useTelegram();
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Back button: hide on tabbed screens, show on wizard / details / donate.
+  // We use our own in-app buttons now. Keep the native MainButton hidden
+  // everywhere so it never leaks across pages.
+  useEffect(() => {
+    mainButton?.hide?.();
+  }, [mainButton, location.pathname]);
+
+  // Native back button mirrors the in-app PageHeader back arrow.
   useEffect(() => {
     if (!backButton) return;
-    const tabbedPath = ["/home", "/premium", "/settings"].includes(location.pathname);
-    if (tabbedPath || location.pathname === "/") backButton.hide();
+    const isTab = TABBED_PATHS.includes(location.pathname) || location.pathname === "/";
+    if (isTab) backButton.hide();
     else backButton.show();
 
     const handler = () => navigate(-1);
@@ -38,7 +41,7 @@ export function App() {
 
   return (
     <Routes>
-      <Route path="/"           element={<Welcome />} />
+      <Route path="/" element={<Welcome />} />
 
       {/* Tabbed (main) screens */}
       <Route path="/home"     element={tabbed(<Home />)} />
@@ -46,14 +49,10 @@ export function App() {
       <Route path="/settings" element={tabbed(<Settings />)} />
 
       {/* Stack screens (no tabbar) */}
-      <Route path="/new"          element={<RoutePicker />} />
-      <Route path="/new/date"     element={<DateScreen />} />
-      <Route path="/new/train"    element={<TrainPicker />} />
-      <Route path="/new/car-type" element={<CarTypePicker />} />
-      <Route path="/new/berth"    element={<BerthPicker />} />
-      <Route path="/new/confirm"  element={<Confirm />} />
-      <Route path="/sub/:id"      element={<SubDetails />} />
-      <Route path="/donate"       element={<Donate />} />
+      <Route path="/new"      element={<NewWatch />} />
+      <Route path="/sub/:id"  element={<SubDetails />} />
+      <Route path="/donate"   element={<Donate />} />
+      <Route path="/history"  element={<History />} />
 
       <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>

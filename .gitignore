@@ -55,3 +55,5 @@ backend/alembic.ini.local
 
 # TypeScript build info
 mini-app/tsconfig.tsbuildinfo
+.claude
+screenshots
