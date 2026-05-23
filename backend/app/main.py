@@ -121,6 +121,7 @@ def create_app() -> FastAPI:
             "http://localhost:5173",
             "http://127.0.0.1:5173",
         ],
+        allow_origin_regex=r"https://.*\.vercel\.app",
         allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["Content-Type", "X-Tg-Init-Data", "Authorization"],
     )
