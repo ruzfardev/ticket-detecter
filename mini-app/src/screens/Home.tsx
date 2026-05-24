@@ -71,7 +71,35 @@ export function Home() {
   const isFree = user.tier === "free";
   const slotFull = slot.used >= slot.max;
   const blocked = slotFull && isFree;
-  const list = subs.data.subscriptions;
+  const all = subs.data.subscriptions;
+  const active = all.filter(s => s.is_active);
+  const paused = all.filter(s => !s.is_active);
+
+  const subRow = (s: (typeof all)[number]) => (
+    <ListRow
+      key={s.id}
+      before={
+        <div className="flex h-10 w-10 items-center justify-center rounded-pill bg-canvas">
+          <TrainFront className="text-ink" width={20} height={20} strokeWidth={1.75} />
+        </div>
+      }
+      title={`${s.dep_name} → ${s.arr_name}`}
+      subtitle={
+        <span className="inline-flex items-center gap-1.5">
+          <CalendarDays width={14} height={14} strokeWidth={1.75} />
+          {s.travel_date} · {s.train_numbers.length ? s.train_numbers.join(", ") : "har qanday"}
+        </span>
+      }
+      after={
+        <span
+          className={`h-2 w-2 rounded-pill ${s.is_active ? "bg-coral" : "bg-muted-soft"}`}
+          aria-hidden
+        />
+      }
+      chevron
+      onClick={() => navigate(`/sub/${s.id}`)}
+    />
+  );
 
   const name =
     [tgUser?.first_name, tgUser?.last_name].filter(Boolean).join(" ") || "Mehmon";
@@ -127,7 +155,7 @@ export function Home() {
       </div>
 
       {/* Notifications */}
-      {list.length === 0 ? (
+      {all.length === 0 ? (
         <Card variant="feature" pad="lg">
           <div className="flex items-start gap-4">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-canvas">
@@ -142,33 +170,14 @@ export function Home() {
           </div>
         </Card>
       ) : (
-        <ListGroup label="Xabarnomalar">
-          {list.map(s => (
-            <ListRow
-              key={s.id}
-              before={
-                <div className="flex h-10 w-10 items-center justify-center rounded-pill bg-canvas">
-                  <TrainFront className="text-ink" width={20} height={20} strokeWidth={1.75} />
-                </div>
-              }
-              title={`${s.dep_name} → ${s.arr_name}`}
-              subtitle={
-                <span className="inline-flex items-center gap-1.5">
-                  <CalendarDays width={14} height={14} strokeWidth={1.75} />
-                  {s.travel_date} · {s.train_numbers.length ? s.train_numbers.join(", ") : "har qanday"}
-                </span>
-              }
-              after={
-                <span
-                  className={`h-2 w-2 rounded-pill ${s.is_active ? "bg-coral" : "bg-muted-soft"}`}
-                  aria-hidden
-                />
-              }
-              chevron
-              onClick={() => navigate(`/sub/${s.id}`)}
-            />
-          ))}
-        </ListGroup>
+        <>
+          {active.length > 0 && (
+            <ListGroup label="Xabarnomalar">{active.map(subRow)}</ListGroup>
+          )}
+          {paused.length > 0 && (
+            <ListGroup label="Pauzada">{paused.map(subRow)}</ListGroup>
+          )}
+        </>
       )}
 
       {/* Premium upsell (free only) */}
