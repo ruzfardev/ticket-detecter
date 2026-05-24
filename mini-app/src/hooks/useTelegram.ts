@@ -11,10 +11,6 @@ declare global {
 export type ColorScheme = "light" | "dark";
 export type Platform = "ios" | "base";
 
-// Anthropic canvas. Telegram needs the literal hex — it can't read CSS vars.
-// Must mirror --canvas in index.css for light / .dark.
-const CANVAS_HEX = { light: "#faf9f5", dark: "#181714" } as const;
-
 export function useTelegram() {
   const tg = window.Telegram?.WebApp;
 
@@ -23,17 +19,8 @@ export function useTelegram() {
     tg.ready();
     tg.expand();
 
-    // Sync Telegram chrome (header + bg) to our canvas per color scheme, and
-    // keep it in sync when the user flips their Telegram theme.
-    const syncChrome = () => {
-      const hex = tg.colorScheme === "dark" ? CANVAS_HEX.dark : CANVAS_HEX.light;
-      try {
-        tg.setHeaderColor?.(hex);
-        tg.setBackgroundColor?.(hex);
-      } catch {}
-    };
-    syncChrome();
-    tg.onEvent?.("themeChanged", syncChrome);
+    // Light/dark + Telegram chrome (header/bg) coloring lives in useThemeSync,
+    // which owns the effective theme (and the user's appearance preference).
 
     // Expose viewportStableHeight as a CSS var so layouts can avoid the
     // soft-keyboard zone. Keeps fixed-bottom elements above the keyboard.
@@ -45,7 +32,6 @@ export function useTelegram() {
     tg.onEvent?.("viewportChanged", setVh);
     window.addEventListener("resize", setVh);
     return () => {
-      tg.offEvent?.("themeChanged", syncChrome);
       tg.offEvent?.("viewportChanged", setVh);
       window.removeEventListener("resize", setVh);
     };
