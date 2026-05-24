@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 import asyncpg
 
 from app.auth.init_data import TgUser
+from app.core.config import settings
 from app.core.logging import logger
+
+# Admins (ADMIN_IDS) get permanent premium and effectively unlimited slots.
+_ADMIN_PREMIUM_UNTIL = datetime(2099, 12, 31, tzinfo=timezone.utc)
+_ADMIN_SLOT_MAX = 999
 
 
 @dataclass(slots=True)
@@ -54,9 +59,27 @@ async def upsert_from_tg(pool: asyncpg.Pool, tg_user: TgUser) -> tuple[UserRow, 
         tg_user.id, lang,
     )
     is_new = bool(row["is_new"])
+    user = _row_to_user(row)
+    if tg_user.id in settings.admin_id_set:
+        user = await _ensure_admin_premium(pool, user)
     if is_new:
         logger.info("user_created", tg_user_id=tg_user.id, lang=lang)
-    return _row_to_user(row), is_new
+    return user, is_new
+
+
+async def _ensure_admin_premium(pool: asyncpg.Pool, user: UserRow) -> UserRow:
+    """Admins always hold permanent premium. Idempotent — one UPDATE at most."""
+    if (user.tier == "premium" and user.premium_until
+            and user.premium_until >= _ADMIN_PREMIUM_UNTIL):
+        return user
+    await pool.execute(
+        "UPDATE users SET tier = 'premium', premium_until = $1 WHERE id = $2",
+        _ADMIN_PREMIUM_UNTIL, user.id,
+    )
+    logger.info("admin_premium_granted", user_id=user.id, tg_user_id=user.tg_user_id)
+    user.tier = "premium"
+    user.premium_until = _ADMIN_PREMIUM_UNTIL
+    return user
 
 
 async def get_by_tg_id(pool: asyncpg.Pool, tg_user_id: int) -> UserRow | None:
@@ -78,18 +101,21 @@ async def get_by_id(pool: asyncpg.Pool, user_id: int) -> UserRow | None:
 async def get_slot_stats(pool: asyncpg.Pool, user_id: int) -> SlotStats:
     row = await pool.fetchrow(
         """
-        SELECT u.tier,
+        SELECT u.tier, u.tg_user_id,
                COUNT(s.id) FILTER (WHERE s.is_active) AS slot_used
         FROM users u
         LEFT JOIN subscriptions s ON s.user_id = u.id
         WHERE u.id = $1
-        GROUP BY u.tier
+        GROUP BY u.tier, u.tg_user_id
         """,
         user_id,
     )
     if row is None:
         return SlotStats(max=1, used=0)
-    return SlotStats(max=slot_max_for_tier(row["tier"]), used=int(row["slot_used"] or 0))
+    used = int(row["slot_used"] or 0)
+    if row["tg_user_id"] in settings.admin_id_set:
+        return SlotStats(max=_ADMIN_SLOT_MAX, used=used)
+    return SlotStats(max=slot_max_for_tier(row["tier"]), used=used)
 
 
 async def update_lang(pool: asyncpg.Pool, user_id: int, lang: str) -> None:
