@@ -9,7 +9,6 @@ import { useWizard } from "@/store/wizard";
 import { useHaptic } from "@/hooks/useHaptic";
 import { useTelegram } from "@/hooks/useTelegram";
 import { Screen } from "@/components/Screen";
-import { Wordmark } from "@/components/Wordmark";
 import { StatusView } from "@/components/StatusView";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -92,8 +91,6 @@ export function Home() {
 
   return (
     <Screen tabbed padded>
-      <Wordmark size="sm" className="mx-auto" />
-
       {/* User header */}
       <header className="flex items-center gap-3">
         <Avatar url={tgUser?.photo_url} name={name} />
