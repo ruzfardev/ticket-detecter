@@ -6,16 +6,17 @@ type Props = {
 };
 
 const SIZE = {
-  sm: "text-title-sm",
-  md: "text-title-md",
-  lg: "text-display-sm",
+  sm: "h-7 w-7",
+  md: "h-10 w-10",
+  lg: "h-20 w-20",
 };
 
 export function Wordmark({ className, size = "md" }: Props) {
   return (
-    <span className={cn("inline-flex items-center gap-1.5 font-display", SIZE[size], className)}>
-      <span className="spike-mark text-ink" />
-      <span className="font-medium tracking-tight">Ticket Detector</span>
-    </span>
+    <img
+      src="/logo.svg"
+      alt="Ticket Detector"
+      className={cn("block select-none", SIZE[size], className)}
+    />
   );
 }

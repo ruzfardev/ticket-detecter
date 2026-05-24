@@ -72,7 +72,7 @@ const config: Config = {
         },
       },
       fontFamily: {
-        display: ["'EB Garamond'", "Tiempos Headline", "Cormorant Garamond", "Garamond", "serif"],
+        display: ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
         sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
         mono: ["'JetBrains Mono Variable'", "ui-monospace", "monospace"],
       },
