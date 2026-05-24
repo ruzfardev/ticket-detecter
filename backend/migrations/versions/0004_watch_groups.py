@@ -31,9 +31,11 @@ def upgrade() -> None:
             UNIQUE (dep_code, arr_code, travel_date)
         );
     """)
+    # Partial-index predicates must be IMMUTABLE — now() is not allowed, so the
+    # cooldown expiry is filtered at query time; the index covers no-cooldown rows.
     op.execute("""
         CREATE INDEX idx_wg_pollable ON watch_groups (next_poll_at)
-            WHERE (cooldown_until IS NULL OR cooldown_until < now());
+            WHERE cooldown_until IS NULL;
     """)
     op.execute("""
         CREATE INDEX idx_wg_premium ON watch_groups (has_premium DESC, subscriber_count DESC);
