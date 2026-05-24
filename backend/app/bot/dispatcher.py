@@ -44,7 +44,7 @@ def get_dispatcher() -> Dispatcher:
 def _register_routers(dp: Dispatcher) -> None:
     # Imported here to avoid circulars
     from app.bot.handlers import (
-        callbacks, donate, fallback, help_, language, menu,
+        admin, callbacks, donate, fallback, help_, language, menu,
         payments, premium, start,
     )
 
@@ -55,5 +55,6 @@ def _register_routers(dp: Dispatcher) -> None:
     dp.include_router(donate.router)        # /donate + ❤️ Donate label
     dp.include_router(payments.router)      # pre_checkout_query, successful_payment
     dp.include_router(language.router)
+    dp.include_router(admin.router)         # /stats, /refund, /broadcast (admin-only)
     dp.include_router(callbacks.router)     # inline-button generic
     dp.include_router(fallback.router)      # catch-all — must be last
