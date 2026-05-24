@@ -116,7 +116,7 @@ async def _process_group(pool: asyncpg.Pool, g: asyncpg.Record) -> None:
     # Load all active subs for this group + their user info
     subs = await pool.fetch(
         """
-        SELECT s.id, s.user_id, s.train_number, s.car_types, s.berth, s.muted_until,
+        SELECT s.id, s.user_id, s.train_numbers, s.car_types, s.berth, s.muted_until,
                u.tg_user_id, u.lang
         FROM subscriptions s
         JOIN users u ON u.id = s.user_id
@@ -155,7 +155,7 @@ async def _process_group(pool: asyncpg.Pool, g: asyncpg.Record) -> None:
             if sub["muted_until"] and sub["muted_until"] > datetime.now(timezone.utc):
                 continue
             filt = matcher.SubFilter(
-                train_number=sub["train_number"],
+                train_numbers=list(sub["train_numbers"] or []),
                 car_types=list(sub["car_types"] or []),
                 berth=sub["berth"],
             )
@@ -170,7 +170,7 @@ async def _process_group(pool: asyncpg.Pool, g: asyncpg.Record) -> None:
 
 def _any_sub_matches_train(subs: list[asyncpg.Record], train_number: str) -> bool:
     for s in subs:
-        if not s["train_number"] or s["train_number"] == train_number:
+        if not s["train_numbers"] or train_number in s["train_numbers"]:
             return True
     return False
 

@@ -14,7 +14,7 @@ const CAR_TYPES = ["плацкарта", "купе", "люкс", "св", "сид
 const BERTH_TYPES = new Set(["плацкарта", "купе"]);
 
 export function CarTypePicker() {
-  useWizardGuard(["dep_code", "arr_code", "travel_date", "train_number"]);
+  useWizardGuard(["dep_code", "arr_code", "travel_date", "train_numbers"]);
   const navigate = useNavigate();
   const haptic = useHaptic();
   const setField = useWizard(s => s.setField);

@@ -9,8 +9,7 @@ export type WizardState = {
   arr_code?: string;
   arr_name?: string;
   travel_date?: string;     // YYYY-MM-DD
-  train_number?: string;
-  train_brand?: string;
+  train_numbers: string[];  // empty = any train
   car_types: string[];
   berth: Berth;
   setField: <K extends Exclude<keyof WizardState, "setField" | "reset">>(
@@ -20,6 +19,7 @@ export type WizardState = {
 };
 
 const initial = {
+  train_numbers: [] as string[],
   car_types: [] as string[],
   berth: "any" as Berth,
 };
@@ -31,8 +31,7 @@ export const useWizard = create<WizardState>()(
       setField: (k, v) => set({ [k]: v } as any),
       reset:    () => set({ ...initial, dep_code: undefined, dep_name: undefined,
                             arr_code: undefined, arr_name: undefined,
-                            travel_date: undefined, train_number: undefined,
-                            train_brand: undefined }),
+                            travel_date: undefined }),
     }),
     {
       name: "td-wizard",

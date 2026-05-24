@@ -27,7 +27,7 @@ export function TrainPicker() {
   const dep_code = useWizardField("dep_code");
   const arr_code = useWizardField("arr_code");
   const travel_date = useWizardField("travel_date");
-  const train_number = useWizardField("train_number");
+  const train_numbers = useWizardField("train_numbers");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["trains", dep_code, arr_code, travel_date],
@@ -45,7 +45,8 @@ export function TrainPicker() {
       wizard
       title="Poyezd tanlang"
       subtitle={
-        data ? `${data.length} ta poyezd topildi` :
+        train_numbers.length ? `${train_numbers.length} ta tanlandi` :
+        data ? `${data.length} ta poyezd · bir nechtasini tanlash mumkin` :
         isLoading ? "Qidirilmoqda..." :
         undefined
       }
@@ -79,15 +80,20 @@ export function TrainPicker() {
       <div className="space-y-2">
         {data?.map(t => {
           const total = t.car_types.reduce((s, c) => s + c.free_seats, 0);
-          const selected = train_number === t.number;
+          const selected = train_numbers.includes(t.number);
           return (
             <button
               key={t.number}
               type="button"
+              aria-pressed={selected}
               onClick={() => {
                 haptic.selection();
-                setField("train_number", t.number);
-                setField("train_brand", t.brand);
+                setField(
+                  "train_numbers",
+                  selected
+                    ? train_numbers.filter(n => n !== t.number)
+                    : [...train_numbers, t.number],
+                );
               }}
               className={cn(
                 "w-full text-left rounded-lg p-4 transition-colors",
@@ -125,10 +131,10 @@ export function TrainPicker() {
       </div>
 
       {!!data?.length && (
-        <StickyAction hint={!train_number ? "Poyezdni tanlang" : undefined}>
+        <StickyAction hint={train_numbers.length === 0 ? "Kamida bitta poyezd tanlang" : undefined}>
           <Button
             full
-            disabled={!train_number}
+            disabled={train_numbers.length === 0}
             onClick={() => {
               haptic.impact("light");
               navigate("/new/car-type");

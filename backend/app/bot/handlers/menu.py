@@ -40,7 +40,7 @@ async def on_notifs(message: Message) -> None:
 
     rows = await pool.fetch(
         """
-        SELECT s.id, s.dep_code, s.arr_code, s.travel_date, s.train_number,
+        SELECT s.id, s.dep_code, s.arr_code, s.travel_date, s.train_numbers,
                s.car_types, s.berth,
                sd.name_uz AS dep_name, sa.name_uz AS arr_name
         FROM subscriptions s
@@ -65,7 +65,7 @@ async def on_notifs(message: Message) -> None:
             idx=i,
             route=f"{r['dep_name']} → {r['arr_name']}",
             date=r["travel_date"].isoformat(),
-            train=r["train_number"] or "har qanday",
+            train=", ".join(r["train_numbers"]) or "har qanday",
             car_type=car_types,
             berth=berth_label,
         ))

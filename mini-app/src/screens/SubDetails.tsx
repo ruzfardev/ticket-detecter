@@ -87,8 +87,8 @@ export function SubDetails() {
         />
         <ListRow
           before={<TrainFront className="h-5 w-5 text-ink" strokeWidth={1.75} />}
-          title={sub.train_number ?? "Har qanday"}
-          subtitle="Poyezd"
+          title={sub.train_numbers.length ? sub.train_numbers.join(", ") : "Har qanday"}
+          subtitle={sub.train_numbers.length > 1 ? `Poyezdlar · ${sub.train_numbers.length} ta` : "Poyezd"}
         />
         <ListRow
           before={<Armchair className="h-5 w-5 text-ink" strokeWidth={1.75} />}

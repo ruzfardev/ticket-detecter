@@ -19,10 +19,11 @@ const TABS: Tab[] = [
 type Props = { children: ReactNode };
 
 /**
- * Floating, compact active-pill tabbar — the only persistent chrome in the
- * mini-app. A detached rounded panel hovers above the safe-area; the active
- * tab morphs into a coral pill (icon + label) while the rest stay icon-only.
- * Translucent + blurred so content scrolls pleasantly beneath it.
+ * Floating tabbar — the only persistent chrome in the mini-app. A detached
+ * rounded panel hovers above the safe-area; each tab is a vertical column
+ * (icon on top, small label always visible below, TG-Wallet style). The active
+ * tab is coral with a soft tint; the rest stay muted. Translucent + blurred so
+ * content scrolls pleasantly beneath it.
  */
 export function BottomNav({ children }: Props) {
   const navigate = useNavigate();
@@ -48,7 +49,7 @@ export function BottomNav({ children }: Props) {
       >
         <nav
           className={cn(
-            "pointer-events-auto flex items-center gap-1 rounded-pill p-1.5",
+            "pointer-events-auto flex items-stretch gap-1 rounded-3xl p-1.5",
             "border border-hairline bg-canvas/85 backdrop-blur-xl",
             "shadow-[0_8px_30px_-8px_rgba(0,0,0,0.18)] dark:shadow-[0_8px_30px_-6px_rgba(0,0,0,0.6)]",
           )}
@@ -62,27 +63,20 @@ export function BottomNav({ children }: Props) {
                 type="button"
                 onClick={() => handleTab(path, active)}
                 aria-current={active ? "page" : undefined}
-                aria-label={label}
                 className={cn(
-                  "group flex h-11 items-center justify-center rounded-pill",
-                  "transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
+                  "flex min-w-[68px] flex-col items-center justify-center gap-1 rounded-2xl px-2 py-1.5",
+                  "transition-colors duration-200",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral/40",
                   active
-                    ? "bg-coral/12 px-4 text-coral"
-                    : "w-11 px-0 text-muted hover:text-ink active:scale-95",
+                    ? "bg-coral/12 text-coral"
+                    : "text-muted hover:text-ink active:scale-95",
                 )}
               >
                 <Icon
                   className="h-[22px] w-[22px] shrink-0"
                   strokeWidth={active ? 2.25 : 1.75}
                 />
-                <span
-                  className={cn(
-                    "overflow-hidden whitespace-nowrap text-button font-medium",
-                    "transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
-                    active ? "ml-2 max-w-[120px] opacity-100" : "ml-0 max-w-0 opacity-0",
-                  )}
-                >
+                <span className="text-[10px] font-medium leading-none">
                   {label}
                 </span>
               </button>

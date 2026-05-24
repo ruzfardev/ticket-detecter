@@ -25,7 +25,7 @@ const OPTIONS: Option[] = [
 ];
 
 export function BerthPicker() {
-  useWizardGuard(["dep_code", "arr_code", "travel_date", "train_number", "car_types"]);
+  useWizardGuard(["dep_code", "arr_code", "travel_date", "train_numbers", "car_types"]);
   const navigate = useNavigate();
   const haptic = useHaptic();
   const setField = useWizard(s => s.setField);

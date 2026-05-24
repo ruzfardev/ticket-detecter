@@ -16,7 +16,7 @@ import { ListGroup, ListRow } from "@/components/ui/list";
 import { Spinner } from "@/components/ui/spinner";
 
 export function Confirm() {
-  useWizardGuard(["dep_code", "arr_code", "travel_date", "train_number", "car_types"]);
+  useWizardGuard(["dep_code", "arr_code", "travel_date", "train_numbers", "car_types"]);
 
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -33,7 +33,7 @@ export function Confirm() {
         dep_code: w.dep_code,
         arr_code: w.arr_code,
         travel_date: w.travel_date,
-        train_number: w.train_number || null,
+        train_numbers: w.train_numbers,
         car_types: w.car_types,
         berth: w.berth,
       });
@@ -88,8 +88,8 @@ export function Confirm() {
         />
         <ListRow
           before={<TrainFront className="h-5 w-5 text-ink" strokeWidth={1.75} />}
-          title={`${w.train_number}${w.train_brand ? ` · ${w.train_brand}` : ""}`}
-          subtitle="Poyezd"
+          title={w.train_numbers.length ? w.train_numbers.join(", ") : "Har qanday"}
+          subtitle={w.train_numbers.length > 1 ? `Poyezdlar · ${w.train_numbers.length} ta` : "Poyezd"}
           chevron
           onClick={() => navigate("/new/train")}
         />

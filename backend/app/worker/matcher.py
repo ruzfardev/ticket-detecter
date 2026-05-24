@@ -19,14 +19,14 @@ from app.railway.models import BERTH_TYPES, CarDetail
 
 @dataclass(slots=True)
 class SubFilter:
-    train_number: str | None       # None = any
+    train_numbers: list[str]       # empty = any
     car_types: list[str]           # empty = any
     berth: str                     # 'lower' | 'upper' | 'any'
 
 
 def match(filt: SubFilter, train_number: str, cars: list[CarDetail]) -> dict | None:
     """Return snapshot dict, or None if no seats match."""
-    if filt.train_number and filt.train_number != train_number:
+    if filt.train_numbers and train_number not in filt.train_numbers:
         return None
 
     car_type_set = set(filt.car_types) if filt.car_types else None

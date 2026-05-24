@@ -22,7 +22,7 @@ class SubscriptionRow:
     dep_name: str
     arr_name: str
     travel_date: date
-    train_number: str | None
+    train_numbers: list[str]
     car_types: list[str]
     berth: str
     is_active: bool
@@ -42,7 +42,7 @@ class SubscriptionRow:
 
 _SELECT = """
 SELECT s.id, s.user_id, s.dep_code, s.arr_code, s.travel_date,
-       s.train_number, s.car_types, s.berth, s.is_active,
+       s.train_numbers, s.car_types, s.berth, s.is_active,
        s.muted_until, s.created_at,
        sd.name_uz AS dep_name, sa.name_uz AS arr_name,
        (SELECT MAX(sent_at) FROM notification_log WHERE subscription_id = s.id) AS last_notified_at,
@@ -62,7 +62,7 @@ def _row_to_sub(row: asyncpg.Record) -> SubscriptionRow:
         dep_name=row["dep_name"],
         arr_name=row["arr_name"],
         travel_date=row["travel_date"],
-        train_number=row["train_number"],
+        train_numbers=list(row["train_numbers"] or []),
         car_types=list(row["car_types"] or []),
         berth=row["berth"],
         is_active=row["is_active"],
@@ -100,7 +100,7 @@ async def create(
     dep_code: str,
     arr_code: str,
     travel_date: date,
-    train_number: str | None,
+    train_numbers: list[str],
     car_types: list[str],
     berth: str,
 ) -> SubscriptionRow:
@@ -117,12 +117,12 @@ async def create(
             """
             INSERT INTO subscriptions
               (user_id, dep_code, arr_code, travel_date,
-               train_number, car_types, berth, is_active)
+               train_numbers, car_types, berth, is_active)
             VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE)
             RETURNING id
             """,
             user_id, dep_code, arr_code, travel_date,
-            train_number, car_types, berth,
+            train_numbers, car_types, berth,
         )
         # Trigger watch_groups recompute (cheap upsert)
         await _refresh_watch_group(conn, dep_code, arr_code, travel_date)

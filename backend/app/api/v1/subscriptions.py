@@ -19,7 +19,7 @@ class CreateSub(BaseModel):
     dep_code: str = Field(pattern=r"^\d{7}$")
     arr_code: str = Field(pattern=r"^\d{7}$")
     travel_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
-    train_number: str | None = Field(default=None, max_length=20)
+    train_numbers: list[str] = Field(default_factory=list)
     car_types: list[str] = Field(default_factory=list)
     berth: str = Field(default="any", pattern="^(lower|upper|any)$")
 
@@ -56,7 +56,7 @@ async def create_sub(
         dep_code=body.dep_code,
         arr_code=body.arr_code,
         travel_date=date_t.fromisoformat(body.travel_date),
-        train_number=body.train_number,
+        train_numbers=body.train_numbers,
         car_types=body.car_types,
         berth=body.berth,
     )

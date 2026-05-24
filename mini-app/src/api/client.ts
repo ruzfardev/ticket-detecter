@@ -72,7 +72,7 @@ export type Subscription = {
   dep_name: string;
   arr_name: string;
   travel_date: string;
-  train_number: string | null;
+  train_numbers: string[];
   car_types: string[];
   berth: "lower" | "upper" | "any";
   is_active: boolean;
@@ -125,7 +125,7 @@ export const listSubscriptions = () =>
 
 export const createSubscription = (body: {
   dep_code: string; arr_code: string; travel_date: string;
-  train_number?: string | null;
+  train_numbers: string[];
   car_types: string[]; berth: "lower" | "upper" | "any";
 }) =>
   mockApi.isEnabled

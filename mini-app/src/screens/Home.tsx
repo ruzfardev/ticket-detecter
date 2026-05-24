@@ -154,7 +154,7 @@ export function Home() {
               subtitle={
                 <span className="inline-flex items-center gap-1.5">
                   <CalendarDays width={14} height={14} strokeWidth={1.75} />
-                  {s.travel_date} · {s.train_number || "har qanday"}
+                  {s.travel_date} · {s.train_numbers.length ? s.train_numbers.join(", ") : "har qanday"}
                 </span>
               }
               after={

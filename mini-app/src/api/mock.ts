@@ -142,7 +142,7 @@ export const mockApi = {
       dep_name: dep?.name ?? body.dep_code,
       arr_name: arr?.name ?? body.arr_code,
       travel_date: body.travel_date,
-      train_number: body.train_number ?? null,
+      train_numbers: body.train_numbers ?? [],
       car_types: body.car_types,
       berth: body.berth,
       is_active: true,
