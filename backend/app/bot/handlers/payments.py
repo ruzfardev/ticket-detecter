@@ -9,8 +9,14 @@ Telegram calls our bot with two updates during a Stars purchase:
 from __future__ import annotations
 
 from aiogram import F, Router
-from aiogram.types import Message, PreCheckoutQuery
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    PreCheckoutQuery,
+)
 
+from app.bot.admin_notify import notify_admins
 from app.bot.backend_client import precheck_payment, record_payment_success
 from app.core.logging import logger
 
@@ -74,3 +80,33 @@ async def on_successful_payment(msg: Message) -> None:
         )
     else:
         await msg.answer("✅ To'lov qabul qilindi.")
+
+    await _notify_admins_payment(msg, result)
+
+
+async def _notify_admins_payment(msg: Message, result: dict) -> None:
+    """Best-effort admin alert with a one-tap refund button."""
+    payment_id = result.get("payment_id")
+    ptype = result.get("type")
+    if not payment_id or ptype not in ("premium", "donate"):
+        return  # nothing fresh to report (e.g. idempotent replay)
+    try:
+        u = msg.from_user
+        who = f"@{u.username}" if u and u.username else (u.first_name if u else "—")
+        lines = [
+            "💰 <b>Yangi to'lov</b>",
+            f"Kim: {who} (<code>{u.id if u else '?'}</code>)",
+            f"Tur: {ptype} · {result.get('plan')}",
+            f"Miqdor: {result.get('stars')} ⭐",
+        ]
+        if ptype == "premium":
+            lines.append(f"Tugash: {result.get('granted_until', '')[:10]}")
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(
+                text="↩️ Refund qilish",
+                callback_data=f"adm_refund:{payment_id}",
+            ),
+        ]])
+        await notify_admins("\n".join(lines), reply_markup=kb)
+    except Exception as e:
+        logger.warning("admin_payment_notify_failed", error=str(e))

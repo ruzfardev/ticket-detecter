@@ -67,6 +67,8 @@ class Settings(BaseSettings):
 
     # ---- Admin alerts
     admin_chat_id: str = ""
+    # Comma-separated TG user ids with admin rights, e.g. "970956519,123456".
+    admin_ids: str = ""
 
     # ---- Misc
     sentry_dsn: str = ""
@@ -82,6 +84,13 @@ class Settings(BaseSettings):
                 "Generate with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
             )
         return v
+
+    @property
+    def admin_id_set(self) -> set[int]:
+        """TG user ids with admin rights, parsed from ADMIN_IDS."""
+        return {
+            int(x) for x in self.admin_ids.replace(" ", "").split(",") if x.strip()
+        }
 
     @property
     def database_url(self) -> str:
