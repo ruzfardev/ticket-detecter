@@ -162,7 +162,12 @@ async def delete(pool: asyncpg.Pool, sub_id: int, user_id: int) -> None:
 async def _refresh_watch_group(
     conn: asyncpg.Connection, dep_code: str, arr_code: str, travel_date: date,
 ) -> None:
-    """Recompute one watch_group row (cheap targeted refresh)."""
+    """Recompute one watch_group row (cheap targeted refresh).
+
+    Two separate execute() calls: asyncpg uses prepared statements for any
+    parameterized query and rejects multiple semicolon-separated commands in
+    one string ("cannot insert multiple commands into a prepared statement").
+    """
     await conn.execute(
         """
         INSERT INTO watch_groups (dep_code, arr_code, travel_date, has_premium, subscriber_count)
@@ -176,11 +181,15 @@ async def _refresh_watch_group(
         ON CONFLICT (dep_code, arr_code, travel_date) DO UPDATE
         SET has_premium = EXCLUDED.has_premium,
             subscriber_count = EXCLUDED.subscriber_count,
-            updated_at = now();
-
+            updated_at = now()
+        """,
+        dep_code, arr_code, travel_date,
+    )
+    await conn.execute(
+        """
         DELETE FROM watch_groups
         WHERE dep_code = $1 AND arr_code = $2 AND travel_date = $3
-          AND subscriber_count = 0;
+          AND subscriber_count = 0
         """,
         dep_code, arr_code, travel_date,
     )
