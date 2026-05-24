@@ -21,7 +21,6 @@ export function Confirm() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const haptic = useHaptic();
-  const reset = useWizard(s => s.reset);
   const w = useWizard();
 
   const mutation = useMutation({
@@ -43,7 +42,9 @@ export function Confirm() {
       toast.success("Xabarnoma yaratildi");
       qc.invalidateQueries({ queryKey: ["subs"] });
       qc.invalidateQueries({ queryKey: ["me"] });
-      reset();
+      // NOTE: do not reset() here — clearing the wizard while Confirm is still
+      // mounted makes useWizardGuard see empty fields and bounce to step 1.
+      // handleNew() in Home resets on the next wizard entry instead.
       navigate("/home", { replace: true });
     },
     onError: (err: any) => {
