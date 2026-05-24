@@ -34,7 +34,9 @@ def main_menu(lang: str = "uz", mini_app_url: str = "") -> ReplyKeyboardMarkup:
             ],
         ],
         resize_keyboard=True,
-        is_persistent=True,
+        # Not persistent: Telegram shows a keyboard-toggle icon in the input bar
+        # so the user can collapse/expand this menu themselves.
+        is_persistent=False,
     )
 
 
