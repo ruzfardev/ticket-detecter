@@ -33,7 +33,7 @@ async def list_subs(
     user: UserRow = Depends(current_user),
     pool: asyncpg.Pool = Depends(db_pool),
 ) -> dict:
-    subs = await subscription_service.list_for_user(pool, user.id, include_inactive=False)
+    subs = await subscription_service.list_for_user(pool, user.id, include_inactive=True)
     slot = await user_service.get_slot_stats(pool, user.id)
     return {
         "subscriptions": [s.to_dict() for s in subs],
