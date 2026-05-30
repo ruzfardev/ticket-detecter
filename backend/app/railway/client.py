@@ -173,13 +173,17 @@ class RailwayClient:
         cars_out: list[CarDetail] = []
         car_groups = (r.json().get("data", {}).get("train") or {}).get("carGroup") or []
         for g in car_groups:
+            raw_ctype = str(g.get("type") or "")
             ctype = normalize_car_type(g.get("typeShow") or g.get("type") or "")
+            class_service = str((g.get("services") or {}).get("type") or "")
             for car in g.get("cars") or []:
                 places = car.get("places") or []
                 cars_out.append(CarDetail(
                     number=str(car.get("number") or ""),
                     type=ctype,
                     places=[int(p) for p in places if isinstance(p, int)],
+                    class_service=class_service,
+                    raw_car_type=raw_ctype,
                 ))
         return cars_out
 

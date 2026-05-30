@@ -112,6 +112,48 @@ export type Friend = {
   is_self: boolean;
 };
 
+export type SavedCard = {
+  id: number;
+  last4: string;
+  holder_name: string | null;
+  created_at: string;
+  last_used_at: string | null;
+};
+
+export type AutobuyOrderStatus =
+  | "reserving"
+  | "awaiting_otp"
+  | "paying"
+  | "paid"
+  | "failed"
+  | "expired"
+  | "cancelled";
+
+export type AutobuyOrder = {
+  id: number;
+  subscription_id: number;
+  user_id: number;
+  railway_friend_cache_id: number | null;
+  railway_order_id: string | null;
+  payment_type: string | null;
+  train_number: string;
+  car_number: string;
+  seat_number: number;
+  dep_code: string;
+  arr_code: string;
+  travel_date: string;
+  amount_uzs: number | null;
+  status: AutobuyOrderStatus;
+  failure_reason: string | null;
+  hold_until: string | null;
+  trigger_source: "auto" | "manual";
+  created_at: string;
+  updated_at: string;
+  friend_name: string | null;
+  last4: string | null;
+  seconds_until_expiry: number | null;
+};
+
 export type PlansResponse = {
   premium: { id: string; days: number; stars: number; badge: string | null }[];
   donate: { id: string; stars: number; emoji: string; label: string }[];
@@ -231,3 +273,49 @@ export const patchAutobuy = (
           body,
         )
         .then(r => r.data.subscription);
+
+// ---- Cards (Phase C) ----
+
+export const getCard = () =>
+  mockApi.isEnabled
+    ? mockApi.getCard()
+    : api.get<{ card: SavedCard | null }>("/api/v1/cards").then(r => r.data.card);
+
+export const saveCard = (body: { pan: string; exp_mmyy: string; holder_name?: string | null }) =>
+  mockApi.isEnabled
+    ? mockApi.saveCard(body)
+    : api.post<{ card: SavedCard }>("/api/v1/cards", body).then(r => r.data.card);
+
+export const deleteCard = () =>
+  mockApi.isEnabled
+    ? mockApi.deleteCard()
+    : api.delete("/api/v1/cards").then(() => null);
+
+// ---- Orders (Phase B+C) ----
+
+export const listOrders = () =>
+  mockApi.isEnabled
+    ? mockApi.listOrders()
+    : api.get<{ orders: AutobuyOrder[] }>("/api/v1/orders").then(r => r.data.orders);
+
+export const getOrder = (id: number) =>
+  mockApi.isEnabled
+    ? mockApi.getOrder(id)
+    : api.get<{ order: AutobuyOrder }>(`/api/v1/orders/${id}`).then(r => r.data.order);
+
+export const submitOrderOtp = (id: number, otp: string) =>
+  mockApi.isEnabled
+    ? mockApi.submitOrderOtp(id, otp)
+    : api.post<{ order: AutobuyOrder }>(`/api/v1/orders/${id}/otp`, { otp })
+        .then(r => r.data.order);
+
+export const resendOrderOtp = (id: number) =>
+  mockApi.isEnabled
+    ? mockApi.resendOrderOtp(id)
+    : api.post(`/api/v1/orders/${id}/resend-otp`).then(() => null);
+
+export const cancelOrder = (id: number) =>
+  mockApi.isEnabled
+    ? mockApi.cancelOrder(id)
+    : api.post<{ order: AutobuyOrder }>(`/api/v1/orders/${id}/cancel`)
+        .then(r => r.data.order);

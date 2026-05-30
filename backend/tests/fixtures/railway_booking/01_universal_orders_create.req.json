@@ -1,0 +1,48 @@
+{
+  "userId": "USER_UUID",
+  "userName": "google_AUTHPROVIDERID",
+  "hasAdditionalOrder": false,
+  "orderItemRequest": [
+    {
+      "passengers": [
+        {
+          "birthDay": "21.01.1994",
+          "gender": "Male",
+          "children": [],
+          "citizenship": "UZB",
+          "docType": "ПУ",
+          "firstname": "XUDOYSHUKUR",
+          "lastname": "XUDAYBERGANOV",
+          "midname": "",
+          "regionId": "",
+          "docId": "AD0000000",
+          "discount": {
+            "type": "REGULAR",
+            "pinfl": "",
+            "studentId": "",
+            "tariff": "",
+            "prefix": ""
+          }
+        }
+      ],
+      "directionSequence": 1,
+      "itemType": "ExpressItem",
+      "route": {
+        "stationFrom": "2900000",
+        "stationTo": "2900700",
+        "depDate": "05.06.2026",
+        "depTime": "06:10",
+        "trainNumber": "778Ф",
+        "carId": null,
+        "carNumber": "03",
+        "carType": "Сидячий",
+        "seatNumbers": [8],
+        "classService": "2Е",
+        "requirements": {
+          "seatsRange": "8-8"
+        },
+        "selfDepartureAgreed": false
+      }
+    }
+  ]
+}

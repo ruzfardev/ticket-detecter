@@ -63,6 +63,8 @@ class CarDetail:
     number: str
     type: str
     places: list[int]
+    class_service: str = ""        # e.g. '2Е', '3П' — needed by universal-orders/create
+    raw_car_type: str = ""         # original Cyrillic, e.g. 'Сидячий', 'Плацкартный'
 
     @property
     def free_seats(self) -> int:

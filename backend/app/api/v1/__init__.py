@@ -2,8 +2,10 @@ from fastapi import APIRouter
 
 from app.api.v1 import (
     auth,
+    cards,
     friends,
     me,
+    orders,
     payments,
     railway_account,
     stations,
@@ -20,3 +22,5 @@ router.include_router(subscriptions.router)
 router.include_router(payments.router)
 router.include_router(railway_account.router)
 router.include_router(friends.router)
+router.include_router(cards.router)
+router.include_router(orders.router)

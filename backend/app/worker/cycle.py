@@ -117,6 +117,7 @@ async def _process_group(pool: asyncpg.Pool, g: asyncpg.Record) -> None:
     subs = await pool.fetch(
         """
         SELECT s.id, s.user_id, s.train_numbers, s.car_types, s.berth, s.muted_until,
+               s.autobuy_enabled, s.autobuy_friend_id, s.autobuy_payment_method,
                u.tg_user_id, u.lang
         FROM subscriptions s
         JOIN users u ON u.id = s.user_id
@@ -163,7 +164,9 @@ async def _process_group(pool: asyncpg.Pool, g: asyncpg.Record) -> None:
             if not snapshot:
                 continue
 
-            await _maybe_send(pool, sub, train, snapshot)
+            log_id = await _maybe_send(pool, sub, train, snapshot)
+            if log_id is not None and sub["autobuy_enabled"] and sub["autobuy_friend_id"]:
+                await _maybe_autobuy(pool, sub, train, cars, snapshot, log_id, g)
 
     await _mark_polled(pool, g["id"], g["has_premium"])
 
@@ -180,7 +183,7 @@ async def _maybe_send(
     sub: asyncpg.Record,
     train,
     snapshot: dict,
-) -> None:
+) -> int | None:
     snap_hash = matcher.snapshot_hash(snapshot)
 
     # Dedup: same (sub, train, hash) within last N minutes -> skip
@@ -197,7 +200,7 @@ async def _maybe_send(
         timedelta(minutes=settings.watcher_dedup_minutes),
     )
     if dup:
-        return
+        return None
 
     # Compose message
     route_name = await pool.fetchval(
@@ -228,23 +231,96 @@ async def _maybe_send(
     msg_id = await send_alert(sub["tg_user_id"], text, sub_id=sub["id"])
 
     seats = matcher.count_seats(snapshot)
-    await pool.execute(
+    log_id = await pool.fetchval(
         """
         INSERT INTO notification_log
           (subscription_id, user_id, train_number,
            seats_snapshot, snapshot_hash, seats_count, tg_message_id)
         VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7)
+        RETURNING id
         """,
         sub["id"], sub["user_id"], train.number,
         _json(snapshot), snap_hash, seats, msg_id,
     )
     logger.info("worker_notification_sent",
                 sub_id=sub["id"], train=train.number, seats=seats, hash=snap_hash)
+    return log_id
 
 
 def _json(obj) -> str:
     import json
     return json.dumps(obj, ensure_ascii=False)
+
+
+async def _maybe_autobuy(
+    pool: asyncpg.Pool,
+    sub: asyncpg.Record,
+    train,
+    cars: list,
+    snapshot: dict,
+    notification_id: int,
+    g: asyncpg.Record,
+) -> None:
+    """Pick the lowest free seat from the snapshot and fire autobuy."""
+    car_lookup = {c.number: c for c in cars}
+    candidate: tuple[str, int, object] | None = None  # (car_number, seat, CarDetail)
+    for car_number, payload in snapshot.items():
+        car = car_lookup.get(car_number)
+        if not car:
+            continue
+        seats_in_car: list[int] = []
+        seats_in_car.extend(payload.get("lower") or [])
+        seats_in_car.extend(payload.get("upper") or [])
+        seats_in_car.extend(payload.get("places") or [])
+        if not seats_in_car:
+            continue
+        seat = min(seats_in_car)
+        if candidate is None or seat < candidate[1]:
+            candidate = (car_number, seat, car)
+    if candidate is None:
+        return
+
+    car_number, seat, car = candidate
+    dep_time = _extract_hhmm(train.departure)
+    from app.services import autobuy_service
+    try:
+        await autobuy_service.try_start_autobuy(
+            pool,
+            autobuy_service.StartArgs(
+                user_id=sub["user_id"],
+                subscription_id=sub["id"],
+                train_number=train.number,
+                car_number=car_number,
+                seat_number=seat,
+                car_type=car.raw_car_type or car.type,
+                class_service=car.class_service,
+                dep_code=g["dep_code"],
+                arr_code=g["arr_code"],
+                dep_date=g["travel_date"],
+                dep_time=dep_time,
+                trigger_source="auto",
+                notification_id=notification_id,
+            ),
+        )
+    except Exception as exc:
+        logger.warning(
+            "autobuy_trigger_failed",
+            sub_id=sub["id"], train=train.number, seat=seat,
+            error=str(exc)[:200],
+        )
+
+
+def _extract_hhmm(departure: str) -> str:
+    """Parse '06.06.2026 16:00' or ISO into 'HH:MM'."""
+    if not departure:
+        return "00:00"
+    s = departure.strip()
+    # 'DD.MM.YYYY HH:MM' or 'YYYY-MM-DDTHH:MM[:SS]'
+    if " " in s and ":" in s:
+        return s.split(" ")[1][:5]
+    if "T" in s:
+        return s.split("T", 1)[1][:5]
+    return "00:00"
 
 
 async def _mark_polled(pool: asyncpg.Pool, group_id: int, has_premium: bool) -> None:

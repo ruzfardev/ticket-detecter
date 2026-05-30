@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     # ---- Per-user friend list sync (eticket /users/friend/list)
     friend_sync_min_interval_s: int = 30
 
+    # ---- Mini-app URL (Telegram WebApp deep-link target for autobuy OTP)
+    miniapp_url: str = "https://ticket-detector-mini.vercel.app"
+
     # ---- Admin alerts
     admin_chat_id: str = ""
     # Comma-separated TG user ids with admin rights, e.g. "970956519,123456".

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { CreditCard, Users, Zap } from "lucide-react";
 
 import {
+  getCard,
   getFriends,
   getRailwayStatus,
   listSubscriptions,
@@ -38,6 +39,7 @@ export function AutobuyConfig() {
     queryFn: getFriends,
     enabled: accountQ.data?.linked === true,
   });
+  const cardQ = useQuery({ queryKey: ["card"], queryFn: getCard });
 
   const sub = subsQ.data?.subscriptions.find(s => s.id === subId);
 
@@ -105,7 +107,10 @@ export function AutobuyConfig() {
   const friends = friendsQ.data ?? [];
   const canSave =
     !save.isPending &&
-    (!enabled || (friendId !== null && friends.some(f => f.id === friendId)));
+    (!enabled ||
+      (friendId !== null &&
+       friends.some(f => f.id === friendId) &&
+       cardQ.data !== null));
 
   return (
     <Screen
@@ -134,6 +139,16 @@ export function AutobuyConfig() {
 
       {enabled && (
         <>
+          <ListGroup label="To'lov kartasi" footer="Karta auto-buy paytida avtomatik yuboriladi">
+            <ListRow
+              before={<CreditCard className={`h-5 w-5 ${cardQ.data ? "text-coral" : "text-muted-soft"}`} strokeWidth={1.75} />}
+              title={cardQ.data ? `•••• ${cardQ.data.last4}` : "Karta saqlanmagan"}
+              subtitle={cardQ.data ? "Saqlangan" : "Avval kartani saqlash kerak"}
+              onClick={() => navigate("/cards/add")}
+              chevron
+            />
+          </ListGroup>
+
           <ListGroup label="Hamroh">
             {friends.length === 0 ? (
               <ListRow
@@ -199,9 +214,11 @@ export function AutobuyConfig() {
 
       <StickyAction
         hint={
-          enabled && !friendId
-            ? "Avval hamroh tanlang"
-            : undefined
+          enabled && !cardQ.data
+            ? "Avval karta saqlang"
+            : enabled && !friendId
+              ? "Avval hamroh tanlang"
+              : undefined
         }
       >
         <Button full disabled={!canSave} onClick={() => save.mutate()}>

@@ -2,10 +2,10 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   Plus, Sparkles, Heart, Settings, Bell, TrainFront, CalendarDays, ChevronRight,
-  Train, CheckCircle2, AlertCircle,
+  Train, CheckCircle2, AlertCircle, Clock,
 } from "lucide-react";
 
-import { getMe, getRailwayStatus, listSubscriptions } from "@/api/client";
+import { getMe, getRailwayStatus, listOrders, listSubscriptions } from "@/api/client";
 import { useWizard } from "@/store/wizard";
 import { useHaptic } from "@/hooks/useHaptic";
 import { useTelegram } from "@/hooks/useTelegram";
@@ -63,6 +63,12 @@ export function Home() {
   const me = useQuery({ queryKey: ["me"], queryFn: getMe });
   const subs = useQuery({ queryKey: ["subs"], queryFn: listSubscriptions });
   const railway = useQuery({ queryKey: ["railwayAccount"], queryFn: getRailwayStatus });
+  const orders = useQuery({
+    queryKey: ["orders"], queryFn: listOrders,
+    enabled: railway.data?.linked === true,
+    refetchInterval: 8000,
+  });
+  const awaitingOtp = (orders.data ?? []).find(o => o.status === "awaiting_otp");
 
   if (me.isLoading || subs.isLoading) return <StatusView kind="loading" />;
   if (!me.data || !subs.data) {
@@ -140,6 +146,29 @@ export function Home() {
         <QuickAction Icon={Heart}     label="Donate"   onClick={go("/donate")} />
         <QuickAction Icon={Settings}  label="Sozlama"  onClick={go("/settings")} />
       </div>
+
+      {/* Awaiting-OTP banner — top priority */}
+      {awaitingOtp && (
+        <button
+          type="button"
+          onClick={() => navigate(`/order/${awaitingOtp.id}`)}
+          className="flex w-full items-center gap-3 rounded-lg border border-coral/40 bg-coral/8 p-4 text-left transition-colors hover:bg-coral/12 active:scale-[0.99]"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-coral/15">
+            <Clock className="text-coral" width={20} height={20} strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-title-sm text-ink">OTP kiriting</div>
+            <div className="text-caption text-muted">
+              {awaitingOtp.train_number} · Joy {awaitingOtp.seat_number}
+              {awaitingOtp.seconds_until_expiry !== null
+                ? ` · ${Math.floor(awaitingOtp.seconds_until_expiry/60)}:${String(awaitingOtp.seconds_until_expiry%60).padStart(2,"0")}`
+                : ""}
+            </div>
+          </div>
+          <ChevronRight className="shrink-0 text-coral" width={20} height={20} strokeWidth={1.75} />
+        </button>
+      )}
 
       {/* Railway account link block */}
       {railway.data && !railway.data.linked && (

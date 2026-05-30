@@ -6,11 +6,13 @@
  */
 
 import type {
+  AutobuyOrder,
   Friend,
   Me,
   PaymentMethod,
   PlansResponse,
   RailwayAccountStatus,
+  SavedCard,
   Station,
   Subscription,
   Train,
@@ -41,6 +43,9 @@ let railwayAccount: RailwayAccountStatus = {
 };
 
 let friends: Friend[] = [];
+
+let savedCard: SavedCard | null = null;
+let mockOrders: AutobuyOrder[] = [];
 
 const FAKE_FRIENDS_SEED: Friend[] = [
   {
@@ -320,5 +325,41 @@ export const mockApi = {
       };
     });
     return subscriptions.find(s => s.id === id)!;
+  },
+
+  // ---- Cards (Phase C) ----
+  async getCard(): Promise<SavedCard | null> { await wait(120); return savedCard; },
+  async saveCard(body: { pan: string; exp_mmyy: string; holder_name?: string | null }): Promise<SavedCard> {
+    await wait(300);
+    const pan = body.pan.replace(/\D/g, "");
+    savedCard = {
+      id: 1,
+      last4: pan.slice(-4),
+      holder_name: body.holder_name ?? null,
+      created_at: new Date().toISOString(),
+      last_used_at: null,
+    };
+    return savedCard;
+  },
+  async deleteCard(): Promise<null> { await wait(150); savedCard = null; return null; },
+
+  // ---- Orders (Phase B+C) ----
+  async listOrders(): Promise<AutobuyOrder[]> { await wait(150); return mockOrders; },
+  async getOrder(id: number): Promise<AutobuyOrder> {
+    await wait(120);
+    const o = mockOrders.find(x => x.id === id);
+    if (!o) throw new Error("order not found");
+    return { ...o, seconds_until_expiry: Math.max(0, (o.seconds_until_expiry ?? 600) - 1) };
+  },
+  async submitOrderOtp(id: number, _otp: string): Promise<AutobuyOrder> {
+    await wait(400);
+    mockOrders = mockOrders.map(o => o.id === id ? { ...o, status: "paid" } : o);
+    return mockOrders.find(o => o.id === id)!;
+  },
+  async resendOrderOtp(_id: number): Promise<null> { await wait(200); return null; },
+  async cancelOrder(id: number): Promise<AutobuyOrder> {
+    await wait(200);
+    mockOrders = mockOrders.map(o => o.id === id ? { ...o, status: "cancelled" } : o);
+    return mockOrders.find(o => o.id === id)!;
   },
 };

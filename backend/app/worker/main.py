@@ -23,11 +23,20 @@ _stop = asyncio.Event()
 
 
 async def _main_loop() -> None:
+    from app.db import get_pool
+    from app.services import autobuy_service
+
     while not _stop.is_set():
         try:
             await run_cycle()
         except Exception as e:
             logger.exception("worker_cycle_unhandled", error=str(e))
+        try:
+            n = await autobuy_service.expire_stale(get_pool())
+            if n:
+                logger.info("autobuy_expirer_swept", count=n)
+        except Exception as e:
+            logger.exception("autobuy_expirer_unhandled", error=str(e))
         try:
             await asyncio.wait_for(_stop.wait(), timeout=settings.watcher_tick_seconds)
         except asyncio.TimeoutError:

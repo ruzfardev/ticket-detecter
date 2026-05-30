@@ -16,6 +16,9 @@ import { Settings } from "./screens/Settings";
 import { RailwayLink } from "./screens/RailwayLink";
 import { Friends } from "./screens/Friends";
 import { AutobuyConfig } from "./screens/AutobuyConfig";
+import { CardAdd } from "./screens/CardAdd";
+import { Orders } from "./screens/Orders";
+import { OrderDetail } from "./screens/OrderDetail";
 import { BottomNav } from "./components/BottomNav";
 import { useBackButton } from "./hooks/useBackButton";
 import { useThemeSync } from "./hooks/useThemeSync";
@@ -50,6 +53,9 @@ export function App() {
       <Route path="/sub/:id/autobuy"  element={<AutobuyConfig />} />
       <Route path="/railway-link"     element={<RailwayLink />} />
       <Route path="/friends"          element={<Friends />} />
+      <Route path="/cards/add"        element={<CardAdd />} />
+      <Route path="/orders"           element={<Orders />} />
+      <Route path="/order/:id"        element={<OrderDetail />} />
       <Route path="/donate"         element={<Donate />} />
       <Route path="/donate/custom"  element={<DonateCustom />} />
 

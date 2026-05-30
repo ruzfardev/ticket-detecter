@@ -1,0 +1,68 @@
+{
+  "response": {
+    "sorbonItemData": null,
+    "expressItemData": [
+      {
+        "itemId": "ItemId-FAKE-UUID",
+        "directionSequence": 1,
+        "itemType": "ExpressItem",
+        "systemId": "17571533",
+        "tickets": [
+          {
+            "id": "73915437356632",
+            "seatNumber": "008",
+            "seatType": "Н",
+            "passenger": {
+              "firstname": "XUDOYSHUKUR",
+              "lastname": "XUDAYBERGANOV",
+              "midname": "-",
+              "gender": "Male",
+              "docId": "AD0000000",
+              "docType": "ПУ",
+              "citizenship": "UZB",
+              "birthDay": "21.01.1994",
+              "regionId": "",
+              "discount": {
+                "type": "REGULAR",
+                "pinfl": "",
+                "prefix": "",
+                "tariffCode": ""
+              },
+              "children": []
+            },
+            "tariff": {
+              "type": "ПОЛНЫЙ",
+              "amount": 311000,
+              "calculatedTariffInfo": {
+                "ticket": null,
+                "platskarta": null,
+                "ticketPrice": 212250,
+                "platskartaPrice": 98750,
+                "commissionFeeAmount": 0,
+                "serviceAmount": 0,
+                "totalTicketCost": 311000,
+                "isPrivilege": false,
+                "realTariffInfo": null,
+                "calculatedPrivilegeCoefficientInfo": null,
+                "calculatedCoefficientInfo": null
+              }
+            }
+          }
+        ],
+        "departure": {
+          "station": "ТОШКЕНТ-ЙУЛОВЧИ",
+          "stationCode": "2900001",
+          "dateTime": "2026-06-05T06:10:00",
+          "localDateTime": "2026-06-05T06:10:00"
+        },
+        "arrival": {
+          "station": "САМАРКАНД",
+          "stationCode": "2900700",
+          "dateTime": "2026-06-05T08:23:00",
+          "localDateTime": "2026-06-05T08:23:00"
+        }
+      }
+    ]
+  },
+  "error": []
+}

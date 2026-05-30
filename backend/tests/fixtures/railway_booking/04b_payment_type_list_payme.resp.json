@@ -1,0 +1,12 @@
+[
+  {
+    "cardType": "FOREIGN_CURRENCY",
+    "showType": "OPTIONAL",
+    "paymentTypes": ["StripeIntegration"]
+  },
+  {
+    "cardType": "NATIONAL_CURRENCY",
+    "showType": "PRIORITIZED",
+    "paymentTypes": ["Payme"]
+  }
+]
