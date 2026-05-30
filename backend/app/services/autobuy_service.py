@@ -347,27 +347,34 @@ async def _execute_pipeline(
     preferred = sub["autobuy_payment_method"] or None
     payment_id = f"PaymentId-{_uuid4()}"
 
-    # Eticket can briefly return [] right after universal-orders/create — the
-    # order needs a moment to be picked up by their payment-routing service.
-    # Mirror the browser's behaviour (which polls /get + /end-time several
-    # times AND calls /universal-orders/invoice-generate before opening the
-    # payment modal).
+    # Eticket needs ~15-20 seconds and several get_order/end_time polls
+    # before payment-type/list returns anything — the browser does ~10 polls
+    # over 19 seconds (confirmed via the network capture spike). Mirror that.
+    # Poll every 2s for up to 30s, calling payment-type/list every 4s so
+    # we don't hammer it.
     groups: list = []
-    for attempt in range(5):
-        if attempt > 0:
-            await asyncio.sleep(1.0 + attempt * 0.8)  # 1s, 1.8s, 2.6s, 3.4s
-        # Re-prime the order in eticket — the browser polls get + end-time
-        # right before opening the payment modal.
+    started = asyncio.get_event_loop().time()
+    DEADLINE = 30.0
+    attempt = 0
+    while asyncio.get_event_loop().time() - started < DEADLINE:
+        attempt += 1
         try:
             await client.get_order(created.order_id)
             await client.get_end_time(created.order_id)
-            if attempt == 1:
-                await client.generate_invoice(created.order_id)
         except Exception:
             pass
+        # Try payment-type/list every other tick.
+        if attempt % 2 == 0:
+            groups = await client.list_payment_types(payment_id)
+            if groups:
+                logger.info("autobuy_payment_types_ready",
+                            id=autobuy_id, attempt=attempt,
+                            elapsed=round(asyncio.get_event_loop().time() - started, 1))
+                break
+        await asyncio.sleep(2.0)
+    if not groups:
+        # One more try after the deadline (in case the last sleep skipped it).
         groups = await client.list_payment_types(payment_id)
-        if groups:
-            break
 
     available = {g.card_type: g.payment_types for g in groups}
     logger.info("autobuy_payment_types", id=autobuy_id, available=available,
