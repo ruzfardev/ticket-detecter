@@ -19,6 +19,7 @@ State machine:
 
 from __future__ import annotations
 
+import json
 from dataclasses import asdict, dataclass
 from datetime import date as date_t
 from datetime import datetime, timedelta, timezone
@@ -318,10 +319,13 @@ async def _execute_pipeline(
     await pool.execute(
         """
         UPDATE autobuy_orders SET
-          railway_order_id = $1, updated_at = now(), raw_create_resp = $2
+          railway_order_id = $1, updated_at = now(),
+          raw_create_resp = $2::jsonb
         WHERE id = $3
         """,
-        created.order_id, {"order_id": created.order_id}, autobuy_id,
+        created.order_id,
+        _jsonb({"order_id": created.order_id}),
+        autobuy_id,
     )
 
     # Capture hold_until as soon as available.
@@ -362,11 +366,12 @@ async def _execute_pipeline(
           payment_subid = $2,
           amount_uzs = $3,
           status = 'awaiting_otp',
-          raw_payment_resp = $4,
+          raw_payment_resp = $4::jsonb,
           updated_at = now()
         WHERE id = $5
         """,
-        chosen, pay.payment_subid, pay.amount_uzs, pay.raw, autobuy_id,
+        chosen, pay.payment_subid, pay.amount_uzs,
+        _jsonb(pay.raw), autobuy_id,
     )
     logger.info("autobuy_awaiting_otp", id=autobuy_id, payment_type=chosen,
                 amount=pay.amount_uzs)
@@ -396,6 +401,11 @@ def _pick_payment_type(groups, preferred: str | None) -> str | None:
 def _uuid4() -> str:
     import uuid
     return str(uuid.uuid4())
+
+
+def _jsonb(obj: Any) -> str:
+    """Serialize a Python object for asyncpg JSONB columns."""
+    return json.dumps(obj, ensure_ascii=False, default=str)
 
 
 # --- OTP / cancel / expiry ---
@@ -480,6 +490,24 @@ async def cancel(
 
 
 async def _mark_failed(pool: asyncpg.Pool, autobuy_id: int, reason: str) -> None:
+    # Free the eticket reservation if we created one but couldn't finish.
+    row = await pool.fetchrow(
+        "SELECT user_id, railway_order_id FROM autobuy_orders WHERE id=$1",
+        autobuy_id,
+    )
+    if row and row["railway_order_id"]:
+        try:
+            account = await user_auth.get_account(pool, row["user_id"])
+            railway_user_id = (account.railway_user_id if account else None) \
+                or await user_auth.resolve_railway_user_id(pool, row["user_id"]) \
+                or ""
+            client = RailwayUserClient(pool, row["user_id"])
+            await client.cancel_order(row["railway_order_id"], railway_user_id)
+            logger.info("autobuy_remote_cancelled_on_failure",
+                        id=autobuy_id, railway_order_id=row["railway_order_id"])
+        except Exception as exc:
+            logger.warning("autobuy_remote_cancel_on_failure_error",
+                           id=autobuy_id, error=str(exc)[:200])
     await pool.execute(
         """
         UPDATE autobuy_orders
