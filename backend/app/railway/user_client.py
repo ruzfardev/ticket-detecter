@@ -151,7 +151,7 @@ class RailwayUserClient:
                 r = await http.post(url, json=payload, headers=headers)
             except httpx.HTTPError as e:
                 raise RailwayUnavailable(f"{url} network error: {e}")
-        await self._handle_status(r)
+        await self._handle_status(r, url)
         # 204 No Content / empty body — return empty dict to keep callers simple.
         body = (r.text or "").strip()
         if not body:
@@ -161,7 +161,8 @@ class RailwayUserClient:
         except ValueError:
             raise RailwayUnavailable(f"{url} returned non-JSON body")
 
-    async def _handle_status(self, r: httpx.Response) -> None:
+    async def _handle_status(self, r: httpx.Response, url: str = "") -> None:
+        short_url = url.replace("https://eticket.railway.uz", "") if url else ""
         if r.status_code == 429:
             raise RateLimited("railway.uz returned 429")
         if r.status_code == 401:
@@ -177,16 +178,17 @@ class RailwayUserClient:
             )
             raise RailwayLoginFailed("eticket session invalid; will retry")
         if r.status_code >= 500:
-            raise RailwayUnavailable(f"railway.uz {r.status_code}")
+            raise RailwayUnavailable(f"railway.uz {r.status_code} {short_url}")
         # Accept any 2xx (200 OK, 204 No Content). Reject everything else.
         if not (200 <= r.status_code < 300):
             logger.warning(
                 "railway_user_unexpected_status",
                 user_id=self._user_id,
+                url=short_url,
                 status=r.status_code,
                 body=r.text[:200],
             )
-            raise RailwayUnavailable(f"railway.uz {r.status_code}")
+            raise RailwayUnavailable(f"railway.uz {r.status_code} {short_url}")
 
     async def _post_text(self, url: str, payload: dict[str, Any]) -> str:
         """Same as `_post` but used when eticket returns a bare JSON string."""
@@ -197,7 +199,7 @@ class RailwayUserClient:
                 r = await http.post(url, json=payload, headers=headers)
             except httpx.HTTPError as e:
                 raise RailwayUnavailable(f"{url} network error: {e}")
-        await self._handle_status(r)
+        await self._handle_status(r, url)
         return r.text
 
     async def _get(self, url: str) -> dict[str, Any]:
@@ -208,7 +210,7 @@ class RailwayUserClient:
                 r = await http.get(url, headers=headers)
             except httpx.HTTPError as e:
                 raise RailwayUnavailable(f"{url} network error: {e}")
-        await self._handle_status(r)
+        await self._handle_status(r, url)
         try:
             return r.json()
         except ValueError:
