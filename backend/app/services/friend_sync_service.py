@@ -114,13 +114,15 @@ async def sync_friends(
             )
 
     railway_user_id = account.railway_user_id
-    client = RailwayUserClient(pool, user_id)
     if not railway_user_id:
-        profile = await client.get_user_profile()
-        railway_user_id = profile.identifier
+        # Lazy-resolve from the cached JWT 'id' claim. No HTTP call —
+        # /api/v1/users/get returns 404 for ordinary users.
+        railway_user_id = await user_auth.resolve_railway_user_id(pool, user_id)
         if not railway_user_id:
-            raise user_auth.RailwayLoginFailed("Could not resolve eticket userId")
-        await user_auth.store_railway_user_id(pool, user_id, railway_user_id)
+            raise user_auth.RailwayLoginFailed(
+                "Could not resolve eticket userId from JWT; please re-link",
+            )
+    client = RailwayUserClient(pool, user_id)
 
     friends: list[FriendRecord] = await client.list_friends(railway_user_id)
 

@@ -20,6 +20,7 @@ from app.railway._auth_common import (
     LoginResult,
     decrypt,
     encrypt,
+    extract_railway_user_id,
     is_jwt_expiring,
     login_flow,
 )
@@ -110,28 +111,30 @@ async def login_for_user(
         row = await conn.fetchrow(
             """
             INSERT INTO user_railway_accounts
-              (user_id, username, password_enc,
+              (user_id, username, password_enc, railway_user_id,
                access_token, refresh_token, csrf_token, cookie_str,
                token_exp_at, last_login_at, link_status)
             VALUES
-              ($1, $2, $3, $4, $5, $6, $7, $8, now(), 'active')
+              ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), 'active')
             ON CONFLICT (user_id) DO UPDATE SET
-              username       = EXCLUDED.username,
-              password_enc   = EXCLUDED.password_enc,
-              access_token   = EXCLUDED.access_token,
-              refresh_token  = EXCLUDED.refresh_token,
-              csrf_token     = EXCLUDED.csrf_token,
-              cookie_str     = EXCLUDED.cookie_str,
-              token_exp_at   = EXCLUDED.token_exp_at,
-              last_login_at  = now(),
-              cooldown_until = NULL,
-              link_status    = 'active'
+              username        = EXCLUDED.username,
+              password_enc    = EXCLUDED.password_enc,
+              railway_user_id = COALESCE(EXCLUDED.railway_user_id,
+                                         user_railway_accounts.railway_user_id),
+              access_token    = EXCLUDED.access_token,
+              refresh_token   = EXCLUDED.refresh_token,
+              csrf_token      = EXCLUDED.csrf_token,
+              cookie_str      = EXCLUDED.cookie_str,
+              token_exp_at    = EXCLUDED.token_exp_at,
+              last_login_at   = now(),
+              cooldown_until  = NULL,
+              link_status     = 'active'
             RETURNING id, user_id, username, password_enc, railway_user_id,
                       access_token, refresh_token, csrf_token, cookie_str,
                       token_exp_at, last_login_at, last_sync_at, cooldown_until,
                       link_status
             """,
-            user_id, username, pwd_enc,
+            user_id, username, pwd_enc, result.railway_user_id,
             result.access_token, result.refresh_token, result.csrf_token,
             result.cookie_str, result.exp_at,
         )
@@ -226,6 +229,21 @@ async def store_railway_user_id(pool: asyncpg.Pool, user_id: int, railway_user_i
         "UPDATE user_railway_accounts SET railway_user_id = $1 WHERE user_id = $2",
         railway_user_id, user_id,
     )
+
+
+async def resolve_railway_user_id(pool: asyncpg.Pool, user_id: int) -> str | None:
+    """Lazy resolve eticket userId from the cached JWT 'id' claim.
+
+    Use this for accounts linked before the JWT-decoding path existed
+    (they have railway_user_id=NULL but a valid access_token).
+    """
+    row = await _fetch_account(pool, user_id)
+    if not row or not row["access_token"]:
+        return None
+    uid = extract_railway_user_id(row["access_token"])
+    if uid:
+        await store_railway_user_id(pool, user_id, uid)
+    return uid
 
 
 async def mark_sync(pool: asyncpg.Pool, user_id: int) -> None:

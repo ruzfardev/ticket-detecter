@@ -66,6 +66,17 @@ class LoginResult:
     csrf_token: str
     cookie_str: str
     exp_at: datetime
+    railway_user_id: str | None = None
+
+
+def extract_railway_user_id(access_token: str) -> str | None:
+    """Pull eticket's user UUID from the JWT 'id' claim."""
+    try:
+        payload = jwt.decode(access_token, options={"verify_signature": False})
+        uid = payload.get("id")
+        return str(uid) if uid else None
+    except Exception:
+        return None
 
 
 def fernet() -> Fernet:
@@ -155,4 +166,5 @@ async def login_flow(username: str, password: str) -> LoginResult:
             csrf_token=csrf_value,
             cookie_str=cookie_str,
             exp_at=exp_at,
+            railway_user_id=extract_railway_user_id(access),
         )

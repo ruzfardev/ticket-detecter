@@ -1,9 +1,12 @@
 """
 Per-user HTTP client for eticket.railway.uz.
 
-Phase A only needs two endpoints:
-  - POST /api/v1/users/get          -> profile (incl. railway userId)
+Phase A only needs one endpoint:
   - POST /api/v1/users/friend/list  -> companions/hamrohlar
+
+The eticket userId needed by `friend/list` is decoded locally from the
+JWT 'id' claim (see `_auth_common.extract_railway_user_id`) — `/users/get`
+returns 404 for regular accounts.
 
 Phase B/C will extend this with universal-orders/create + payment flow.
 """
@@ -27,18 +30,7 @@ from app.railway.user_auth import (
 )
 
 
-USERS_GET_URL = f"{BASE_URL}/api/v1/users/get"
 FRIEND_LIST_URL = f"{BASE_URL}/api/v1/users/friend/list"
-
-
-@dataclass(slots=True)
-class RailwayUserProfile:
-    identifier: str            # the eticket UUID, used as userId in friend/list
-    username: str
-    email: str | None
-    firstname: str | None
-    lastname: str | None
-    phone: str | None
 
 
 @dataclass(slots=True)
@@ -102,18 +94,6 @@ class RailwayUserClient:
                 body=r.text[:200],
             )
             raise RailwayUnavailable(f"railway.uz {r.status_code}")
-
-    async def get_user_profile(self) -> RailwayUserProfile:
-        data = await self._post(USERS_GET_URL, {})
-        body = data.get("data") if isinstance(data.get("data"), dict) else data
-        return RailwayUserProfile(
-            identifier=str(body.get("identifier") or ""),
-            username=str(body.get("username") or ""),
-            email=body.get("email") or None,
-            firstname=body.get("firstname") or None,
-            lastname=body.get("lastname") or None,
-            phone=body.get("phone") or None,
-        )
 
     async def list_friends(self, railway_user_id: str) -> list[FriendRecord]:
         data = await self._post(FRIEND_LIST_URL, {"userId": railway_user_id})

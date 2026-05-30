@@ -2,9 +2,10 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   Plus, Sparkles, Heart, Settings, Bell, TrainFront, CalendarDays, ChevronRight,
+  Train, CheckCircle2, AlertCircle,
 } from "lucide-react";
 
-import { getMe, listSubscriptions } from "@/api/client";
+import { getMe, getRailwayStatus, listSubscriptions } from "@/api/client";
 import { useWizard } from "@/store/wizard";
 import { useHaptic } from "@/hooks/useHaptic";
 import { useTelegram } from "@/hooks/useTelegram";
@@ -61,6 +62,7 @@ export function Home() {
   const reset = useWizard(s => s.reset);
   const me = useQuery({ queryKey: ["me"], queryFn: getMe });
   const subs = useQuery({ queryKey: ["subs"], queryFn: listSubscriptions });
+  const railway = useQuery({ queryKey: ["railwayAccount"], queryFn: getRailwayStatus });
 
   if (me.isLoading || subs.isLoading) return <StatusView kind="loading" />;
   if (!me.data || !subs.data) {
@@ -138,6 +140,62 @@ export function Home() {
         <QuickAction Icon={Heart}     label="Donate"   onClick={go("/donate")} />
         <QuickAction Icon={Settings}  label="Sozlama"  onClick={go("/settings")} />
       </div>
+
+      {/* Railway account link block */}
+      {railway.data && !railway.data.linked && (
+        <button
+          type="button"
+          onClick={go("/railway-link")}
+          className="flex w-full items-center gap-3 rounded-lg border border-hairline bg-canvas p-4 text-left transition-colors hover:bg-surface-soft active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-coral/12">
+            <Train className="text-coral" width={20} height={20} strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-title-sm text-ink">eticket akkauntni ulang</div>
+            <div className="text-caption text-muted">
+              Hamrohlar va auto-buy uchun
+            </div>
+          </div>
+          <ChevronRight className="shrink-0 text-muted-soft" width={20} height={20} strokeWidth={1.75} />
+        </button>
+      )}
+
+      {railway.data?.link_status === "login_failed" && (
+        <button
+          type="button"
+          onClick={go("/railway-link")}
+          className="flex w-full items-center gap-3 rounded-lg border border-error/40 bg-error/5 p-4 text-left transition-colors hover:bg-error/10 active:scale-[0.99]"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-error/15">
+            <AlertCircle className="text-error" width={20} height={20} strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-title-sm text-ink">Parol eskirgan</div>
+            <div className="text-caption text-muted">eticket akkauntni qayta ulang</div>
+          </div>
+          <ChevronRight className="shrink-0 text-muted-soft" width={20} height={20} strokeWidth={1.75} />
+        </button>
+      )}
+
+      {railway.data?.linked && (
+        <button
+          type="button"
+          onClick={go("/friends")}
+          className="flex w-full items-center gap-3 rounded-lg bg-surface-card p-4 text-left transition-colors hover:bg-surface-soft active:scale-[0.99]"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-canvas">
+            <CheckCircle2 className="text-coral" width={20} height={20} strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-title-sm text-ink">eticket ulangan</div>
+            <div className="truncate text-caption text-muted">
+              {railway.data.masked_username ?? "Hamrohlarni ko'rish"}
+            </div>
+          </div>
+          <ChevronRight className="shrink-0 text-muted-soft" width={20} height={20} strokeWidth={1.75} />
+        </button>
+      )}
 
       {/* Slot "balance" card */}
       <div className="flex items-center gap-3 rounded-lg bg-surface-card p-4">

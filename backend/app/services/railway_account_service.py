@@ -12,7 +12,6 @@ import asyncpg
 from app.core.errors import InvalidPayload
 from app.core.logging import logger
 from app.railway import user_auth
-from app.railway.user_client import RailwayUserClient
 
 _EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 _PHONE_RE = re.compile(r"^\+998\d{9}$")
@@ -75,23 +74,16 @@ async def link(
     if not password or len(password) < 4:
         raise InvalidPayload("password is required")
 
+    # login_for_user already decodes the JWT and persists railway_user_id.
     await user_auth.login_for_user(pool, user_id, username, password)
 
-    # Fetch the eticket profile so we know the userId to pass to friend/list.
-    try:
-        profile = await RailwayUserClient(pool, user_id).get_user_profile()
-        if profile.identifier:
-            await user_auth.store_railway_user_id(pool, user_id, profile.identifier)
-    except Exception:
-        # Don't fail the whole link if /users/get briefly hiccups — caller can sync later.
-        logger.warning("railway_account_profile_failed_at_link", user_id=user_id)
-
-    # Best-effort first sync; failure here also doesn't roll back the link.
+    # Best-effort first sync; failure here doesn't roll back the link.
     try:
         from app.services import friend_sync_service
         await friend_sync_service.sync_friends(pool, user_id, force=True)
-    except Exception:
-        logger.warning("railway_account_first_sync_failed", user_id=user_id)
+    except Exception as exc:
+        logger.warning("railway_account_first_sync_failed",
+                       user_id=user_id, error=str(exc)[:200])
 
     return await get_status(pool, user_id)
 
