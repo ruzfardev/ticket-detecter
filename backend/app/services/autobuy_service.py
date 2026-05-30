@@ -19,6 +19,7 @@ State machine:
 
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import asdict, dataclass
 from datetime import date as date_t
@@ -345,7 +346,25 @@ async def _execute_pipeline(
     # Optional preferred payment method from the subscription.
     preferred = sub["autobuy_payment_method"] or None
     payment_id = f"PaymentId-{_uuid4()}"
-    groups = await client.list_payment_types(payment_id)
+
+    # Eticket can briefly return [] right after universal-orders/create — the
+    # order needs a moment to be picked up by their payment-routing service.
+    # Mirror the browser's behaviour (which polls /get + /end-time first).
+    groups = []
+    for attempt in range(3):
+        if attempt > 0:
+            await asyncio.sleep(0.7 * attempt)
+        # Re-prime the order in eticket — the browser polls get + end-time
+        # right before opening the payment modal.
+        try:
+            await client.get_order(created.order_id)
+            await client.get_end_time(created.order_id)
+        except Exception:
+            pass
+        groups = await client.list_payment_types(payment_id)
+        if groups:
+            break
+
     available = {g.card_type: g.payment_types for g in groups}
     logger.info("autobuy_payment_types", id=autobuy_id, available=available,
                 preferred=preferred)

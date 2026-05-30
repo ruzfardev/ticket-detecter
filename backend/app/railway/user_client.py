@@ -300,10 +300,25 @@ class RailwayUserClient:
     # ---- payment selection ----
 
     async def list_payment_types(self, payment_id: str) -> list[PaymentTypeGroup]:
-        data = await self._post(PAYMENT_TYPE_LIST_URL, {"paymentId": payment_id})
-        arr = data if isinstance(data, list) else (data.get("data") or [])
+        # `_post_text` gives us the raw body so we can log it on empty results.
+        raw = await self._post_text(PAYMENT_TYPE_LIST_URL, {"paymentId": payment_id})
+        try:
+            import json
+            data: Any = json.loads(raw) if raw.strip() else []
+        except ValueError:
+            logger.warning("railway_payment_type_list_bad_json",
+                           user_id=self._user_id, raw=raw[:300])
+            return []
+        arr = data if isinstance(data, list) else (
+            data.get("data") if isinstance(data, dict) else None
+        ) or []
+        if not arr:
+            logger.warning("railway_payment_type_list_empty",
+                           user_id=self._user_id, raw=raw[:300])
         out: list[PaymentTypeGroup] = []
         for g in arr:
+            if not isinstance(g, dict):
+                continue
             out.append(PaymentTypeGroup(
                 card_type=str(g.get("cardType") or ""),
                 show_type=str(g.get("showType") or ""),
