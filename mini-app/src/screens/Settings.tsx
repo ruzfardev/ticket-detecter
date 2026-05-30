@@ -1,6 +1,12 @@
 import { useNavigate } from "react-router-dom";
-import { MessageCircle, Megaphone, Heart, Monitor, Sun, Moon } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import {
+  MessageCircle, Megaphone, Heart, Monitor, Sun, Moon,
+  Train, LinkIcon, Users, Unlink,
+} from "lucide-react";
 
+import { getRailwayStatus, unlinkRailway } from "@/api/client";
 import { useTelegram } from "@/hooks/useTelegram";
 import { useTheme, type ThemeMode } from "@/store/theme";
 import { Screen } from "@/components/Screen";
@@ -15,9 +21,22 @@ const THEME_OPTS: { value: ThemeMode; label: string; Icon: typeof Monitor }[] = 
 
 export function Settings() {
   const navigate = useNavigate();
-  const { openLink, haptic } = useTelegram();
+  const qc = useQueryClient();
+  const { openLink, haptic, showConfirm } = useTelegram();
   const mode = useTheme(s => s.mode);
   const setMode = useTheme(s => s.setMode);
+
+  const accountQ = useQuery({ queryKey: ["railwayAccount"], queryFn: getRailwayStatus });
+  const unlink = useMutation({
+    mutationFn: unlinkRailway,
+    onSuccess: () => {
+      toast.success("Akkount uzildi");
+      qc.invalidateQueries({ queryKey: ["railwayAccount"] });
+      qc.invalidateQueries({ queryKey: ["friends"] });
+      qc.invalidateQueries({ queryKey: ["subs"] });
+    },
+    onError: () => toast.error("Uzishda xato"),
+  });
 
   return (
     <Screen tabbed padded title="Sozlamalar">
@@ -51,6 +70,52 @@ export function Settings() {
           })}
         </div>
       </div>
+
+      <ListGroup
+        label="Railway akkauntim"
+        footer={
+          accountQ.data?.link_status === "login_failed"
+            ? "Parol o'zgargan ko'rinadi — qaytadan ulang"
+            : accountQ.data?.last_sync_at
+              ? `Oxirgi yangilash: ${new Date(accountQ.data.last_sync_at).toLocaleString()}`
+              : undefined
+        }
+      >
+        {!accountQ.data?.linked ? (
+          <ListRow
+            before={<Train className="h-5 w-5 text-coral" strokeWidth={1.75} />}
+            title="eticket.railway.uz'ni ulash"
+            subtitle="Hamrohlar va auto-buy uchun"
+            onClick={() => navigate("/railway-link")}
+            chevron
+          />
+        ) : (
+          <>
+            <ListRow
+              before={<LinkIcon className="h-5 w-5 text-ink" strokeWidth={1.75} />}
+              title={accountQ.data.masked_username ?? "Ulangan"}
+              subtitle="eticket akkounti"
+            />
+            <ListRow
+              before={<Users className="h-5 w-5 text-ink" strokeWidth={1.75} />}
+              title="Hamrohlarim"
+              onClick={() => navigate("/friends")}
+              chevron
+            />
+            <ListRow
+              before={<Unlink className="h-5 w-5 text-error" strokeWidth={1.75} />}
+              title="Ulashni bekor qilish"
+              destructive
+              disabled={unlink.isPending}
+              onClick={async () => {
+                if (await showConfirm("Akkountni uzishni xohlaysizmi? Auto-buy o'chiriladi.")) {
+                  unlink.mutate();
+                }
+              }}
+            />
+          </>
+        )}
+      </ListGroup>
 
       <ListGroup label="Aloqa">
         <ListRow

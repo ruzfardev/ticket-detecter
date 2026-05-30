@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     notif_log_retention_days: int = 30
     watch_groups_refresh_seconds: int = 60
 
+    # ---- Per-user friend list sync (eticket /users/friend/list)
+    friend_sync_min_interval_s: int = 30
+
     # ---- Admin alerts
     admin_chat_id: str = ""
     # Comma-separated TG user ids with admin rights, e.g. "970956519,123456".

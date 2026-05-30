@@ -28,6 +28,12 @@ class PatchSub(BaseModel):
     is_active: bool | None = None
 
 
+class PatchAutobuy(BaseModel):
+    enabled: bool
+    friend_id: int | None = None
+    payment_method: str | None = None
+
+
 @router.get("")
 async def list_subs(
     user: UserRow = Depends(current_user),
@@ -78,6 +84,24 @@ async def patch_sub(
         sub = await subscription_service.get_by_id(pool, sub_id, user.id)
     else:
         sub = await subscription_service.update_active(pool, sub_id, user.id, body.is_active)
+    return {"subscription": sub.to_dict()}
+
+
+@router.patch("/{sub_id}/autobuy")
+async def patch_autobuy(
+    sub_id: int,
+    body: PatchAutobuy = Body(...),
+    user: UserRow = Depends(current_user),
+    pool: asyncpg.Pool = Depends(db_pool),
+) -> dict:
+    sub = await subscription_service.update_autobuy(
+        pool=pool,
+        sub_id=sub_id,
+        user_id=user.id,
+        enabled=body.enabled,
+        friend_id=body.friend_id,
+        payment_method=body.payment_method,
+    )
     return {"subscription": sub.to_dict()}
 
 

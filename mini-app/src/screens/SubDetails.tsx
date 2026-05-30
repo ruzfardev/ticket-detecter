@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   CalendarDays, TrainFront, Armchair, Activity,
   Pause, Play, Trash2, ArrowDownToLine, ArrowUpToLine, Minus,
+  Zap,
 } from "lucide-react";
 
 import {
@@ -104,6 +105,34 @@ export function SubDetails() {
           before={<Activity className="h-5 w-5 text-ink" strokeWidth={1.75} />}
           title={sub.is_active ? "Aktiv" : "Pauzada"}
           subtitle="Holat"
+        />
+      </ListGroup>
+
+      <ListGroup
+        label="Avto sotib olish"
+        footer={
+          sub.autobuy_enabled
+            ? "Chipta topilganda avtomatik bron qilinadi"
+            : "Yoqilsa, chipta topilgan paytda avtomatik bron qilinadi"
+        }
+      >
+        <ListRow
+          before={
+            <Zap
+              className={`h-5 w-5 ${sub.autobuy_enabled ? "text-coral" : "text-muted-soft"}`}
+              strokeWidth={1.75}
+            />
+          }
+          title={sub.autobuy_enabled ? "Yoqilgan" : "O'chirilgan"}
+          subtitle={
+            sub.autobuy_enabled
+              ? sub.autobuy_friend_name
+                ? `Hamroh: ${sub.autobuy_friend_name}`
+                : "Hamroh tanlanmagan"
+              : "Sozlash uchun bosing"
+          }
+          onClick={() => navigate(`/sub/${subId}/autobuy`)}
+          chevron
         />
       </ListGroup>
 

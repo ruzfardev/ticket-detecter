@@ -64,6 +64,8 @@ export type Train = {
   train_id: string | null;
 };
 
+export type PaymentMethod = "payme" | "click" | "hamkorbank" | "kapitalbank";
+
 export type Subscription = {
   id: number;
   user_id: number;
@@ -80,6 +82,34 @@ export type Subscription = {
   created_at: string;
   last_notified_at: string | null;
   notif_count: number;
+  autobuy_enabled: boolean;
+  autobuy_friend_id: number | null;
+  autobuy_friend_name: string | null;
+  autobuy_payment_method: PaymentMethod | null;
+};
+
+export type RailwayAccountStatus = {
+  linked: boolean;
+  link_status: "active" | "login_failed" | "revoked" | null;
+  last_sync_at: string | null;
+  last_login_at: string | null;
+  masked_username: string | null;
+  railway_user_id: string | null;
+};
+
+export type Friend = {
+  id: number;
+  railway_friend_id: string;
+  firstname: string;
+  lastname: string;
+  midname: string | null;
+  sex: "M" | "F" | null;
+  birth_day: string;            // yyyy-mm-dd
+  doc_type: string | null;
+  doc_masked: string | null;
+  citizenship: string | null;
+  region_id: string | null;
+  is_self: boolean;
 };
 
 export type PlansResponse = {
@@ -156,3 +186,48 @@ export const getInvoice = (plan: string, amount?: number) =>
         "/api/v1/payments/invoice",
         { params: { plan, amount } },
       ).then(r => r.data);
+
+// ---- Railway account & hamrohlar (Phase A) ----
+
+export const getRailwayStatus = () =>
+  mockApi.isEnabled
+    ? mockApi.getRailwayStatus()
+    : api.get<{ account: RailwayAccountStatus }>("/api/v1/railway-account/status")
+        .then(r => r.data.account);
+
+export const linkRailway = (username: string, password: string) =>
+  mockApi.isEnabled
+    ? mockApi.linkRailway(username, password)
+    : api.post<{ account: RailwayAccountStatus }>(
+        "/api/v1/railway-account/link",
+        { username, password },
+      ).then(r => r.data.account);
+
+export const unlinkRailway = () =>
+  mockApi.isEnabled
+    ? mockApi.unlinkRailway()
+    : api.post<{ account: RailwayAccountStatus }>("/api/v1/railway-account/unlink")
+        .then(r => r.data.account);
+
+export const getFriends = () =>
+  mockApi.isEnabled
+    ? mockApi.getFriends()
+    : api.get<{ friends: Friend[] }>("/api/v1/friends").then(r => r.data.friends);
+
+export const syncFriends = () =>
+  mockApi.isEnabled
+    ? mockApi.syncFriends()
+    : api.post<{ friends: Friend[] }>("/api/v1/friends/sync").then(r => r.data.friends);
+
+export const patchAutobuy = (
+  subId: number,
+  body: { enabled: boolean; friend_id?: number | null; payment_method?: PaymentMethod | null },
+) =>
+  mockApi.isEnabled
+    ? mockApi.patchAutobuy(subId, body)
+    : api
+        .patch<{ subscription: Subscription }>(
+          `/api/v1/subscriptions/${subId}/autobuy`,
+          body,
+        )
+        .then(r => r.data.subscription);

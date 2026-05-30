@@ -5,7 +5,16 @@
  * kept in-memory so creating a subscription updates the list.
  */
 
-import type { Me, PlansResponse, Station, Subscription, Train } from "./client";
+import type {
+  Friend,
+  Me,
+  PaymentMethod,
+  PlansResponse,
+  RailwayAccountStatus,
+  Station,
+  Subscription,
+  Train,
+} from "./client";
 
 let nextId = 100;
 
@@ -21,6 +30,48 @@ let me: Me = {
 };
 
 let subscriptions: Subscription[] = [];
+
+let railwayAccount: RailwayAccountStatus = {
+  linked: false,
+  link_status: null,
+  last_sync_at: null,
+  last_login_at: null,
+  masked_username: null,
+  railway_user_id: null,
+};
+
+let friends: Friend[] = [];
+
+const FAKE_FRIENDS_SEED: Friend[] = [
+  {
+    id: 1,
+    railway_friend_id: "mock-self",
+    firstname: "Farrukh",
+    lastname: "Ruzmetov",
+    midname: null,
+    sex: "M",
+    birth_day: "1995-03-12",
+    doc_type: "ПУ",
+    doc_masked: "••••1234",
+    citizenship: "UZB",
+    region_id: "10",
+    is_self: true,
+  },
+  {
+    id: 2,
+    railway_friend_id: "mock-friend-1",
+    firstname: "Yasmina",
+    lastname: "Quvondiqova",
+    midname: "Farrux qizi",
+    sex: "F",
+    birth_day: "2025-05-12",
+    doc_type: "СР",
+    doc_masked: "••••6191",
+    citizenship: "UZB",
+    region_id: "03",
+    is_self: false,
+  },
+];
 
 const stations: Station[] = [
   { code: "2900000", name: "Toshkent",        name_uz: "Toshkent",        name_ru: "Ташкент",   city: "Toshkent" },
@@ -150,6 +201,10 @@ export const mockApi = {
       created_at: new Date().toISOString(),
       last_notified_at: null,
       notif_count: 0,
+      autobuy_enabled: false,
+      autobuy_friend_id: null,
+      autobuy_friend_name: null,
+      autobuy_payment_method: null,
     };
     subscriptions = [...subscriptions, sub];
     return sub;
@@ -191,5 +246,79 @@ export const mockApi = {
       }
     }, 1500);
     return { invoice_link: "https://example.com/fake-invoice", type, plan, stars_amount: stars };
+  },
+
+  // ---- Railway account & hamrohlar ----
+
+  async getRailwayStatus(): Promise<RailwayAccountStatus> {
+    await wait(120);
+    return railwayAccount;
+  },
+
+  async linkRailway(username: string, _password: string): Promise<RailwayAccountStatus> {
+    await wait(500);
+    railwayAccount = {
+      linked: true,
+      link_status: "active",
+      last_sync_at: new Date().toISOString(),
+      last_login_at: new Date().toISOString(),
+      masked_username:
+        username.includes("@")
+          ? username[0] + "••••@" + username.split("@")[1]
+          : username.slice(0, 5) + "••" + username.slice(-2),
+      railway_user_id: "mock-user-id",
+    };
+    friends = [...FAKE_FRIENDS_SEED];
+    return railwayAccount;
+  },
+
+  async unlinkRailway(): Promise<RailwayAccountStatus> {
+    await wait(200);
+    railwayAccount = {
+      linked: false, link_status: null,
+      last_sync_at: null, last_login_at: null,
+      masked_username: null, railway_user_id: null,
+    };
+    friends = [];
+    subscriptions = subscriptions.map(s => ({
+      ...s,
+      autobuy_enabled: false,
+      autobuy_friend_id: null,
+      autobuy_friend_name: null,
+      autobuy_payment_method: null,
+    }));
+    return railwayAccount;
+  },
+
+  async getFriends(): Promise<Friend[]> {
+    await wait(150);
+    return friends;
+  },
+
+  async syncFriends(): Promise<Friend[]> {
+    await wait(400);
+    railwayAccount = { ...railwayAccount, last_sync_at: new Date().toISOString() };
+    return friends;
+  },
+
+  async patchAutobuy(
+    id: number,
+    body: { enabled: boolean; friend_id?: number | null; payment_method?: PaymentMethod | null },
+  ): Promise<Subscription> {
+    await wait(200);
+    subscriptions = subscriptions.map(s => {
+      if (s.id !== id) return s;
+      const friend = body.friend_id ? friends.find(f => f.id === body.friend_id) ?? null : null;
+      return {
+        ...s,
+        autobuy_enabled: body.enabled,
+        autobuy_friend_id: body.enabled ? body.friend_id ?? null : null,
+        autobuy_friend_name: body.enabled && friend
+          ? `${friend.firstname} ${friend.lastname}`.trim()
+          : null,
+        autobuy_payment_method: body.enabled ? body.payment_method ?? null : null,
+      };
+    });
+    return subscriptions.find(s => s.id === id)!;
   },
 };

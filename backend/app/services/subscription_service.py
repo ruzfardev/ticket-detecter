@@ -7,10 +7,13 @@ from datetime import date, datetime
 
 import asyncpg
 
-from app.core.errors import Forbidden, NotFound, SlotLimitReached
+from app.core.errors import Forbidden, InvalidPayload, NotFound, SlotLimitReached
 from app.core.logging import logger
+from app.railway import user_auth
 from app.railway.models import BERTH_TYPES
 from app.services import user_service
+
+ALLOWED_PAYMENT_METHODS = {"payme", "click", "hamkorbank", "kapitalbank"}
 
 
 @dataclass(slots=True)
@@ -30,6 +33,10 @@ class SubscriptionRow:
     created_at: datetime
     last_notified_at: datetime | None
     notif_count: int
+    autobuy_enabled: bool = False
+    autobuy_friend_id: int | None = None
+    autobuy_friend_name: str | None = None
+    autobuy_payment_method: str | None = None
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -44,16 +51,25 @@ _SELECT = """
 SELECT s.id, s.user_id, s.dep_code, s.arr_code, s.travel_date,
        s.train_numbers, s.car_types, s.berth, s.is_active,
        s.muted_until, s.created_at,
+       s.autobuy_enabled, s.autobuy_friend_id, s.autobuy_payment_method,
        sd.name_uz AS dep_name, sa.name_uz AS arr_name,
+       fc.firstname AS autobuy_friend_firstname,
+       fc.lastname  AS autobuy_friend_lastname,
        (SELECT MAX(sent_at) FROM notification_log WHERE subscription_id = s.id) AS last_notified_at,
        (SELECT COUNT(*) FROM notification_log WHERE subscription_id = s.id) AS notif_count
 FROM subscriptions s
 JOIN stations sd ON sd.code = s.dep_code
 JOIN stations sa ON sa.code = s.arr_code
+LEFT JOIN railway_friends_cache fc ON fc.id = s.autobuy_friend_id
 """
 
 
 def _row_to_sub(row: asyncpg.Record) -> SubscriptionRow:
+    friend_name = None
+    if row.get("autobuy_friend_firstname") or row.get("autobuy_friend_lastname"):
+        friend_name = " ".join(
+            x for x in (row.get("autobuy_friend_firstname"), row.get("autobuy_friend_lastname")) if x
+        ).strip() or None
     return SubscriptionRow(
         id=row["id"],
         user_id=row["user_id"],
@@ -70,6 +86,10 @@ def _row_to_sub(row: asyncpg.Record) -> SubscriptionRow:
         created_at=row["created_at"],
         last_notified_at=row["last_notified_at"],
         notif_count=int(row["notif_count"] or 0),
+        autobuy_enabled=bool(row.get("autobuy_enabled")),
+        autobuy_friend_id=row.get("autobuy_friend_id"),
+        autobuy_friend_name=friend_name,
+        autobuy_payment_method=row.get("autobuy_payment_method"),
     )
 
 
@@ -148,6 +168,70 @@ async def update_active(
             is_active, sub_id,
         )
         await _refresh_watch_group(conn, sub.dep_code, sub.arr_code, sub.travel_date)
+    return await get_by_id(pool, sub_id, user_id)
+
+
+async def update_autobuy(
+    pool: asyncpg.Pool,
+    sub_id: int,
+    user_id: int,
+    enabled: bool,
+    friend_id: int | None,
+    payment_method: str | None,
+) -> SubscriptionRow:
+    """Toggle/configure auto-buy on a subscription.
+
+    Enforces:
+      - subscription ownership
+      - friend ownership (friend must belong to same user)
+      - active linked railway account when enabling
+      - payment_method ∈ ALLOWED_PAYMENT_METHODS or None
+    """
+    sub = await get_by_id(pool, sub_id, user_id)
+
+    if payment_method is not None and payment_method not in ALLOWED_PAYMENT_METHODS:
+        raise InvalidPayload(
+            f"Invalid payment_method: {payment_method}",
+            {"allowed": sorted(ALLOWED_PAYMENT_METHODS)},
+        )
+
+    if enabled:
+        if friend_id is None:
+            raise InvalidPayload("friend_id is required when enabling auto-buy")
+        account = await user_auth.get_account(pool, user_id)
+        if account is None or account.link_status != "active":
+            raise user_auth.RailwayAccountRequired(
+                "Link your eticket.railway.uz account before enabling auto-buy"
+            )
+        friend_row = await pool.fetchrow(
+            "SELECT id FROM railway_friends_cache WHERE id = $1 AND user_id = $2",
+            friend_id, user_id,
+        )
+        if friend_row is None:
+            raise InvalidPayload("friend_id not found for this user",
+                                 {"code": "friend_not_owned"})
+
+    await pool.execute(
+        """
+        UPDATE subscriptions
+        SET autobuy_enabled = $1,
+            autobuy_friend_id = $2,
+            autobuy_payment_method = $3,
+            updated_at = now()
+        WHERE id = $4
+        """,
+        bool(enabled),
+        friend_id if enabled else None,
+        payment_method if enabled else None,
+        sub_id,
+    )
+    logger.info(
+        "autobuy_config_changed",
+        sub_id=sub_id, user_id=user_id,
+        enabled=bool(enabled),
+        friend_id=friend_id if enabled else None,
+        payment_method=payment_method if enabled else None,
+    )
     return await get_by_id(pool, sub_id, user_id)
 
 

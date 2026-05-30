@@ -13,6 +13,9 @@ import { Premium } from "./screens/Premium";
 import { Donate } from "./screens/Donate";
 import { DonateCustom } from "./screens/DonateCustom";
 import { Settings } from "./screens/Settings";
+import { RailwayLink } from "./screens/RailwayLink";
+import { Friends } from "./screens/Friends";
+import { AutobuyConfig } from "./screens/AutobuyConfig";
 import { BottomNav } from "./components/BottomNav";
 import { useBackButton } from "./hooks/useBackButton";
 import { useThemeSync } from "./hooks/useThemeSync";
@@ -43,7 +46,10 @@ export function App() {
       <Route path="/new/car-type"   element={<CarTypePicker />} />
       <Route path="/new/berth"      element={<BerthPicker />} />
       <Route path="/new/confirm"    element={<Confirm />} />
-      <Route path="/sub/:id"        element={<SubDetails />} />
+      <Route path="/sub/:id"          element={<SubDetails />} />
+      <Route path="/sub/:id/autobuy"  element={<AutobuyConfig />} />
+      <Route path="/railway-link"     element={<RailwayLink />} />
+      <Route path="/friends"          element={<Friends />} />
       <Route path="/donate"         element={<Donate />} />
       <Route path="/donate/custom"  element={<DonateCustom />} />
 
