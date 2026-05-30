@@ -152,6 +152,10 @@ class RailwayUserClient:
             except httpx.HTTPError as e:
                 raise RailwayUnavailable(f"{url} network error: {e}")
         await self._handle_status(r)
+        # 204 No Content / empty body — return empty dict to keep callers simple.
+        body = (r.text or "").strip()
+        if not body:
+            return {}
         try:
             return r.json()
         except ValueError:
@@ -174,7 +178,8 @@ class RailwayUserClient:
             raise RailwayLoginFailed("eticket session invalid; will retry")
         if r.status_code >= 500:
             raise RailwayUnavailable(f"railway.uz {r.status_code}")
-        if r.status_code != 200:
+        # Accept any 2xx (200 OK, 204 No Content). Reject everything else.
+        if not (200 <= r.status_code < 300):
             logger.warning(
                 "railway_user_unexpected_status",
                 user_id=self._user_id,
