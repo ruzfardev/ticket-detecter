@@ -33,7 +33,10 @@ ORDERS_GET_URL = f"{BASE_URL}/api/v1/universal-orders/get"
 ORDERS_END_TIME_URL = f"{BASE_URL}/api/v1/universal-orders/process/end-time"
 ORDERS_CANCEL_URL = f"{BASE_URL}/api/v1/universal-orders/cancel"
 PAYMENT_TYPE_LIST_URL = f"{BASE_URL}/api/v3/payment-type/list"
+PAYMENT_TYPE_LIST_V1_URL = f"{BASE_URL}/api/v1/payment-type/list"
+PAYMENT_TYPE_LIST_V1_ALT_URL = f"{BASE_URL}/api/v1/payment/type/list"
 PAYMENT_SELECT_URL = f"{BASE_URL}/api/v1/payment/select-payment-type"
+INVOICE_GENERATE_URL = f"{BASE_URL}/api/v1/universal-orders/invoice-generate"
 
 # Gateway-specific. Phase C captures show these two are the live national-
 # currency gateways (route-dependent — Afrosiyob → HamkorbankHold, Plaskart → Payme).
@@ -300,21 +303,33 @@ class RailwayUserClient:
     # ---- payment selection ----
 
     async def list_payment_types(self, payment_id: str) -> list[PaymentTypeGroup]:
-        # `_post_text` gives us the raw body so we can log it on empty results.
-        raw = await self._post_text(PAYMENT_TYPE_LIST_URL, {"paymentId": payment_id})
+        """Try the v3 endpoint first (browser default), fall back to v1 variants."""
+        for url in (PAYMENT_TYPE_LIST_URL, PAYMENT_TYPE_LIST_V1_URL,
+                    PAYMENT_TYPE_LIST_V1_ALT_URL):
+            out = await self._list_payment_types_one(url, payment_id)
+            if out:
+                return out
+        return []
+
+    async def _list_payment_types_one(
+        self, url: str, payment_id: str,
+    ) -> list[PaymentTypeGroup]:
+        raw = await self._post_text(url, {"paymentId": payment_id})
         try:
             import json
             data: Any = json.loads(raw) if raw.strip() else []
         except ValueError:
             logger.warning("railway_payment_type_list_bad_json",
-                           user_id=self._user_id, raw=raw[:300])
+                           user_id=self._user_id, url=url.split("/api/", 1)[-1],
+                           raw=raw[:300])
             return []
         arr = data if isinstance(data, list) else (
             data.get("data") if isinstance(data, dict) else None
         ) or []
         if not arr:
             logger.warning("railway_payment_type_list_empty",
-                           user_id=self._user_id, raw=raw[:300])
+                           user_id=self._user_id, url=url.split("/api/", 1)[-1],
+                           raw=raw[:300])
         out: list[PaymentTypeGroup] = []
         for g in arr:
             if not isinstance(g, dict):
@@ -325,6 +340,15 @@ class RailwayUserClient:
                 payment_types=[str(x) for x in (g.get("paymentTypes") or [])],
             ))
         return out
+
+    async def generate_invoice(self, order_id: str) -> None:
+        """Best-effort precondition before payment-type/list — JS bundle places
+        this call right before payment routing. Tolerant of 4xx/204."""
+        try:
+            await self._post(INVOICE_GENERATE_URL, {"orderId": order_id})
+        except Exception as exc:
+            logger.info("railway_invoice_generate_skipped",
+                        user_id=self._user_id, error=str(exc)[:120])
 
     async def select_payment_type(
         self, order_id: str, payment_id: str, payment_type: str,

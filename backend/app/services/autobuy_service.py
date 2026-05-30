@@ -349,16 +349,20 @@ async def _execute_pipeline(
 
     # Eticket can briefly return [] right after universal-orders/create — the
     # order needs a moment to be picked up by their payment-routing service.
-    # Mirror the browser's behaviour (which polls /get + /end-time first).
-    groups = []
-    for attempt in range(3):
+    # Mirror the browser's behaviour (which polls /get + /end-time several
+    # times AND calls /universal-orders/invoice-generate before opening the
+    # payment modal).
+    groups: list = []
+    for attempt in range(5):
         if attempt > 0:
-            await asyncio.sleep(0.7 * attempt)
+            await asyncio.sleep(1.0 + attempt * 0.8)  # 1s, 1.8s, 2.6s, 3.4s
         # Re-prime the order in eticket — the browser polls get + end-time
         # right before opening the payment modal.
         try:
             await client.get_order(created.order_id)
             await client.get_end_time(created.order_id)
+            if attempt == 1:
+                await client.generate_invoice(created.order_id)
         except Exception:
             pass
         groups = await client.list_payment_types(payment_id)
