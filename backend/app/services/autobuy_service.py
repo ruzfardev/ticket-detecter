@@ -346,9 +346,18 @@ async def _execute_pipeline(
     preferred = sub["autobuy_payment_method"] or None
     payment_id = f"PaymentId-{_uuid4()}"
     groups = await client.list_payment_types(payment_id)
+    available = {g.card_type: g.payment_types for g in groups}
+    logger.info("autobuy_payment_types", id=autobuy_id, available=available,
+                preferred=preferred)
     chosen = _pick_payment_type(groups, preferred)
     if chosen is None:
-        raise PaymentFailed("No supported NATIONAL_CURRENCY payment type available")
+        available_str = ", ".join(
+            f"{ct}:[{','.join(pts)}]" for ct, pts in available.items()
+        ) or "(none)"
+        raise PaymentFailed(
+            f"No supported NATIONAL_CURRENCY type. Eticket returned: {available_str}",
+            {"available": available},
+        )
 
     await client.select_payment_type(created.order_id, payment_id, chosen)
     pay = await client.do_payment(chosen, created.order_id)
