@@ -3,10 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   MessageCircle, Megaphone, Heart, Monitor, Sun, Moon,
-  Train, LinkIcon, Users, Unlink, CreditCard, Receipt,
+  Train, LinkIcon, Users, Unlink,
 } from "lucide-react";
 
-import { getCard, getRailwayStatus, unlinkRailway } from "@/api/client";
+import { getRailwayStatus, unlinkRailway } from "@/api/client";
 import { useTelegram } from "@/hooks/useTelegram";
 import { useTheme, type ThemeMode } from "@/store/theme";
 import { Screen } from "@/components/Screen";
@@ -27,7 +27,6 @@ export function Settings() {
   const setMode = useTheme(s => s.setMode);
 
   const accountQ = useQuery({ queryKey: ["railwayAccount"], queryFn: getRailwayStatus });
-  const cardQ = useQuery({ queryKey: ["card"], queryFn: getCard });
   const unlink = useMutation({
     mutationFn: unlinkRailway,
     onSuccess: () => {
@@ -116,22 +115,6 @@ export function Settings() {
             />
           </>
         )}
-      </ListGroup>
-
-      <ListGroup label="To'lov va buyurtmalar">
-        <ListRow
-          before={<CreditCard className={`h-5 w-5 ${cardQ.data ? "text-coral" : "text-muted-soft"}`} strokeWidth={1.75} />}
-          title={cardQ.data ? `Karta •••• ${cardQ.data.last4}` : "Karta saqlanmagan"}
-          subtitle={cardQ.data ? "Auto-buy uchun" : "Auto-buy uchun saqlash kerak"}
-          onClick={() => navigate("/cards/add")}
-          chevron
-        />
-        <ListRow
-          before={<Receipt className="h-5 w-5 text-ink" strokeWidth={1.75} />}
-          title="Buyurtmalar"
-          onClick={() => navigate("/orders")}
-          chevron
-        />
       </ListGroup>
 
       <ListGroup label="Aloqa">
