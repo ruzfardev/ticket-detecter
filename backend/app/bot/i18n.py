@@ -23,9 +23,10 @@ _DICT: dict[str, dict[str, str]] = {
 
         # Reply keyboard labels
         "menu.search": "🔍 Poyezd qidirish",
-        "menu.notifs": "🔔 Xabarnomalar",
+        "menu.notifs": "🔔 Xabarnomalarim",
         "menu.premium": "⭐ Premium",
-        "menu.donate": "❤️ Donate",
+        "menu.donate": "❤️ Qo'llab-quvvatlash",
+        "menu.channel": "📢 Kanal",
         "menu.help": "ℹ️ Yordam",
         "menu.contact": "📞 Aloqa",
 
@@ -41,18 +42,26 @@ _DICT: dict[str, dict[str, str]] = {
             "🔍 <b>Poyezd qidirish</b> — Mini App orqali marshrut, sana, poyezd, "
             "vagon turi va joy turini tanlang. Bo'sh joy paydo bo'lganda darhol "
             "xabar olasiz.\n\n"
-            "🔔 <b>Xabarnomalar</b> — aktiv qidiruvlaringiz ro'yxati.\n"
+            "🔔 <b>Xabarnomalarim</b> — aktiv qidiruvlaringiz ro'yxati.\n"
             "⭐ <b>Premium</b> — 3 ta xabarnoma + 3x tezroq tekshirish.\n"
-            "❤️ <b>Donate</b> — botni qo'llab-quvvatlash.\n"
+            "❤️ <b>Qo'llab-quvvatlash</b> — botni qo'llab-quvvatlash.\n"
+            "📢 <b>Kanal</b> — yangiliklar va maslahatlar (@railwayuzz).\n"
             "📞 <b>Aloqa</b> — savol/muammo bo'lsa."
+        ),
+
+        # Channel
+        "channel.title": "📢 <b>Chiptachi kanali</b>",
+        "channel.body": (
+            "Temir yo'l chiptalari bo'yicha yangiliklar, maslahatlar va bo'sh "
+            "joy e'lonlari.\n\n👉 @railwayuzz"
         ),
 
         # /contact
         "contact.title": "📞 <b>Aloqa</b>",
         "contact.body": (
-            "Texnik yordam: @TicketDetectorSupport\n"
-            "Telegram kanal: @TicketTips\n\n"
-            "Yoki shu chat'ga xabar yozing — admin 24 soat ichida javob beradi."
+            "💬 Savol yoki muammo bo'lsa, shu yerga — botga yozing. "
+            "Admin imkon qadar tez javob beradi.\n\n"
+            "📢 Yangiliklar va maslahatlar: @railwayuzz"
         ),
 
         # Language picker
@@ -71,9 +80,10 @@ _DICT: dict[str, dict[str, str]] = {
             "Чтобы начать, нажмите <b>🔍 Найти поезд</b>."
         ),
         "menu.search": "🔍 Найти поезд",
-        "menu.notifs": "🔔 Уведомления",
+        "menu.notifs": "🔔 Мои уведомления",
         "menu.premium": "⭐ Premium",
-        "menu.donate": "❤️ Donate",
+        "menu.donate": "❤️ Поддержать",
+        "menu.channel": "📢 Канал",
         "menu.help": "ℹ️ Помощь",
         "menu.contact": "📞 Контакты",
         "my.title": "🔔 Ваши уведомления ({used}/{max}):",
@@ -84,16 +94,22 @@ _DICT: dict[str, dict[str, str]] = {
         "help.body": (
             "🔍 <b>Найти поезд</b> — через Mini App выберите маршрут, дату, поезд, тип "
             "вагона и места.\n"
-            "🔔 <b>Уведомления</b> — список активных поисков.\n"
+            "🔔 <b>Мои уведомления</b> — список активных поисков.\n"
             "⭐ <b>Premium</b> — 3 уведомления + 3x быстрее.\n"
-            "❤️ <b>Donate</b> — поддержать проект.\n"
+            "❤️ <b>Поддержать</b> — поддержать проект.\n"
+            "📢 <b>Канал</b> — новости и советы (@railwayuzz).\n"
             "📞 <b>Контакты</b> — связь с поддержкой."
+        ),
+        "channel.title": "📢 <b>Канал Chiptachi</b>",
+        "channel.body": (
+            "Новости, советы и объявления о свободных местах на ж/д билеты.\n\n"
+            "👉 @railwayuzz"
         ),
         "contact.title": "📞 <b>Контакты</b>",
         "contact.body": (
-            "Поддержка: @TicketDetectorSupport\n"
-            "Канал: @TicketTips\n\n"
-            "Или напишите в этот чат — ответим в течение 24 часов."
+            "💬 Есть вопрос или проблема? Напишите прямо сюда, в бот — "
+            "админ ответит как можно скорее.\n\n"
+            "📢 Новости и советы: @railwayuzz"
         ),
         "lang.choose": "🌐 Выберите язык:",
         "lang.changed": "✅ Язык изменён.",
@@ -108,9 +124,10 @@ _DICT: dict[str, dict[str, str]] = {
             "Tap <b>🔍 Search train</b> below to start."
         ),
         "menu.search": "🔍 Search train",
-        "menu.notifs": "🔔 Notifications",
+        "menu.notifs": "🔔 My notifications",
         "menu.premium": "⭐ Premium",
-        "menu.donate": "❤️ Donate",
+        "menu.donate": "❤️ Support",
+        "menu.channel": "📢 Channel",
         "menu.help": "ℹ️ Help",
         "menu.contact": "📞 Contact",
         "my.title": "🔔 Your notifications ({used}/{max}):",
@@ -121,16 +138,22 @@ _DICT: dict[str, dict[str, str]] = {
         "help.body": (
             "🔍 <b>Search train</b> — via Mini App pick route, date, train, car type, "
             "and berth.\n"
-            "🔔 <b>Notifications</b> — your active searches.\n"
+            "🔔 <b>My notifications</b> — your active searches.\n"
             "⭐ <b>Premium</b> — 3 slots + 3x faster checking.\n"
-            "❤️ <b>Donate</b> — support the project.\n"
+            "❤️ <b>Support</b> — support the project.\n"
+            "📢 <b>Channel</b> — news and tips (@railwayuzz).\n"
             "📞 <b>Contact</b> — support."
+        ),
+        "channel.title": "📢 <b>Chiptachi channel</b>",
+        "channel.body": (
+            "News, tips and free-seat alerts for railway tickets.\n\n"
+            "👉 @railwayuzz"
         ),
         "contact.title": "📞 <b>Contact</b>",
         "contact.body": (
-            "Support: @TicketDetectorSupport\n"
-            "Channel: @TicketTips\n\n"
-            "Or message this chat — admin replies within 24 hours."
+            "💬 Questions or issues? Just message this bot — the admin "
+            "will reply as soon as possible.\n\n"
+            "📢 News & tips: @railwayuzz"
         ),
         "lang.choose": "🌐 Choose language:",
         "lang.changed": "✅ Language updated.",

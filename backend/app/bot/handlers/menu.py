@@ -13,7 +13,7 @@ from aiogram.types import Message
 
 from app.bot.handlers._helpers import ensure_user
 from app.bot.i18n import t
-from app.bot.keyboards import main_menu
+from app.bot.keyboards import channel_link, main_menu
 from app.db import get_pool
 from app.services import user_service
 
@@ -28,6 +28,7 @@ def _label_set(key: str) -> set[str]:
 _LABELS_NOTIFS  = _label_set("menu.notifs")
 _LABELS_PREMIUM = _label_set("menu.premium")
 _LABELS_DONATE  = _label_set("menu.donate")
+_LABELS_CHANNEL = _label_set("menu.channel")
 _LABELS_HELP    = _label_set("menu.help")
 _LABELS_CONTACT = _label_set("menu.contact")
 
@@ -80,6 +81,13 @@ async def on_help(message: Message) -> None:
     user = await ensure_user(message.from_user)
     text = f"{t('help.title', user.lang)}\n\n{t('help.body', user.lang)}"
     await message.answer(text, reply_markup=main_menu(user.lang))
+
+
+@router.message(F.text.in_(_LABELS_CHANNEL))
+async def on_channel(message: Message) -> None:
+    user = await ensure_user(message.from_user)
+    text = f"{t('channel.title', user.lang)}\n\n{t('channel.body', user.lang)}"
+    await message.answer(text, reply_markup=channel_link(user.lang))
 
 
 @router.message(F.text.in_(_LABELS_CONTACT))

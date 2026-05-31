@@ -60,7 +60,7 @@ async def on_successful_payment(msg: Message) -> None:
     except Exception as e:
         logger.exception("payment_record_failed", error=str(e))
         await msg.answer("✅ To'lov qabul qilindi, lekin xabar yuborishda xato. "
-                         "Iltimos, qayta urinib ko'ring yoki @TicketDetectorSupport.")
+                         "Iltimos, shu yerga — botga yozing, admin yordam beradi.")
         return
 
     if result.get("type") == "premium":

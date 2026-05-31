@@ -13,9 +13,13 @@ from aiogram.types import (
 from app.bot.i18n import t
 from app.core.config import settings
 
+# Public Telegram channel for news, tips and free-seat alerts.
+CHANNEL_USERNAME = "railwayuzz"
+CHANNEL_URL = f"https://t.me/{CHANNEL_USERNAME}"
+
 
 def main_menu(lang: str = "uz", mini_app_url: str = "") -> ReplyKeyboardMarkup:
-    """Bottom reply keyboard — persistent, three rows of two."""
+    """Bottom reply keyboard — persistent menu with a dedicated channel row."""
     url = mini_app_url or _default_mini_app_url()
     return ReplyKeyboardMarkup(
         keyboard=[
@@ -32,12 +36,24 @@ def main_menu(lang: str = "uz", mini_app_url: str = "") -> ReplyKeyboardMarkup:
                 KeyboardButton(text=t("menu.help", lang)),
                 KeyboardButton(text=t("menu.contact", lang)),
             ],
+            [
+                KeyboardButton(text=t("menu.channel", lang)),
+            ],
         ],
         resize_keyboard=True,
         # Not persistent: Telegram shows a keyboard-toggle icon in the input bar
         # so the user can collapse/expand this menu themselves.
         is_persistent=False,
     )
+
+
+def channel_link(lang: str = "uz") -> InlineKeyboardMarkup:
+    """Inline keyboard with a single button opening the public channel."""
+    label = {"ru": "📢 Открыть канал", "en": "📢 Open channel"}.get(
+        lang, "📢 Kanalga o'tish")
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=label, url=CHANNEL_URL),
+    ]])
 
 
 def language_picker() -> InlineKeyboardMarkup:
