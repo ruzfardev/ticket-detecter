@@ -139,11 +139,11 @@ Bot:  ⚡ <b>Premium obuna afzalliklari:</b>
 
       <b>Premium obuna narxlari:</b>
 
-      [⭐ 1 kun  - 20 Stars]
-      [⭐ 3 kun  - 50 Stars]
-      [⭐ 5 kun  - 80 Stars]
-      [⭐ 10 kun - 150 Stars]
-      [⭐ 30 kun - 350 Stars]
+      [⭐ 1 kun  - 15 Stars]
+      [⭐ 3 kun  - 40 Stars]
+      [⭐ 5 kun  - 65 Stars]
+      [⭐ 10 kun - 120 Stars]
+      [⭐ 30 kun - 300 Stars]
       [❌ Bekor qilish]
 ```
 
@@ -157,11 +157,11 @@ async def cmd_premium(msg, backend):
     text = render_premium_intro(lang=user.lang, current_tier=user.tier)
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⭐ 1 kun  - 20 Stars",  callback_data="pay_premium:premium_1d")],
-        [InlineKeyboardButton(text="⭐ 3 kun  - 50 Stars",  callback_data="pay_premium:premium_3d")],
-        [InlineKeyboardButton(text="⭐ 5 kun  - 80 Stars",  callback_data="pay_premium:premium_5d")],
-        [InlineKeyboardButton(text="⭐ 10 kun - 150 Stars", callback_data="pay_premium:premium_10d")],
-        [InlineKeyboardButton(text="⭐ 30 kun - 350 Stars", callback_data="pay_premium:premium_30d")],
+        [InlineKeyboardButton(text="⭐ 1 kun  - 15 Stars",  callback_data="pay_premium:premium_1d")],
+        [InlineKeyboardButton(text="⭐ 3 kun  - 40 Stars",  callback_data="pay_premium:premium_3d")],
+        [InlineKeyboardButton(text="⭐ 5 kun  - 65 Stars",  callback_data="pay_premium:premium_5d")],
+        [InlineKeyboardButton(text="⭐ 10 kun - 120 Stars", callback_data="pay_premium:premium_10d")],
+        [InlineKeyboardButton(text="⭐ 30 kun - 300 Stars", callback_data="pay_premium:premium_30d")],
         [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel")],
     ])
     await msg.answer(text, reply_markup=kb, parse_mode="HTML")

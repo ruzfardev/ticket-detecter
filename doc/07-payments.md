@@ -44,22 +44,22 @@ Foydalanuvchi 5 ta plandan birini tanlaydi:
 
 | Plan ID | Davomiylik | Narx ⭐ | ⭐/kun | Taxminiy USD | Tavsiya |
 |---------|-----------|--------|--------|--------------|---------|
-| `premium_1d`   | 1 kun   | 20  ⭐ | 20.0 | ~$0.26 | Test uchun |
-| `premium_3d`   | 3 kun   | 50  ⭐ | 16.7 | ~$0.65 | Qisqa safar |
-| `premium_5d`   | 5 kun   | 80  ⭐ | 16.0 | ~$1.05 | Hafta oxiri |
-| `premium_10d`  | 10 kun  | 150 ⭐ | 15.0 | ~$1.95 | Standard |
-| `premium_30d`  | 30 kun  | 350 ⭐ | 11.7 | ~$4.55 | 💎 Eng tejamli |
+| `premium_1d`   | 1 kun   | 15  ⭐ | 15.0 | ~$0.20 | Test uchun |
+| `premium_3d`   | 3 kun   | 40  ⭐ | 13.3 | ~$0.52 | Qisqa safar |
+| `premium_5d`   | 5 kun   | 65  ⭐ | 13.0 | ~$0.85 | Hafta oxiri |
+| `premium_10d`  | 10 kun  | 120 ⭐ | 12.0 | ~$1.56 | Standard |
+| `premium_30d`  | 30 kun  | 300 ⭐ | 10.0 | ~$3.90 | 💎 Eng tejamli |
 
 **Narx logikasi:** uzunroq plan = arzonroq kun/⭐. 30 kun planda 1 kun planga nisbatan ~42% tejash.
 
 ```python
 # backend/app/services/plans.py
 PLANS = {
-    "premium_1d":  {"stars": 20,  "days": 1,  "label_uz": "1 kun",  "label_ru": "1 день",   "label_en": "1 day"},
-    "premium_3d":  {"stars": 50,  "days": 3,  "label_uz": "3 kun",  "label_ru": "3 дня",    "label_en": "3 days"},
-    "premium_5d":  {"stars": 80,  "days": 5,  "label_uz": "5 kun",  "label_ru": "5 дней",   "label_en": "5 days"},
-    "premium_10d": {"stars": 150, "days": 10, "label_uz": "10 kun", "label_ru": "10 дней",  "label_en": "10 days"},
-    "premium_30d": {"stars": 350, "days": 30, "label_uz": "30 kun", "label_ru": "30 дней",  "label_en": "30 days", "badge": "💎"},
+    "premium_1d":  {"stars": 15,  "days": 1,  "label_uz": "1 kun",  "label_ru": "1 день",   "label_en": "1 day"},
+    "premium_3d":  {"stars": 40,  "days": 3,  "label_uz": "3 kun",  "label_ru": "3 дня",    "label_en": "3 days"},
+    "premium_5d":  {"stars": 65,  "days": 5,  "label_uz": "5 kun",  "label_ru": "5 дней",   "label_en": "5 days"},
+    "premium_10d": {"stars": 120, "days": 10, "label_uz": "10 kun", "label_ru": "10 дней",  "label_en": "10 days"},
+    "premium_30d": {"stars": 300, "days": 30, "label_uz": "30 kun", "label_ru": "30 дней",  "label_en": "30 days", "badge": "💎"},
 }
 ```
 
@@ -262,7 +262,7 @@ granted_until = granted_from + timedelta(days=plan.days)
 
 **Misol:**
 - Hozir: 2026-05-18, `premium_until = 2026-06-17` (30 kun qoldi)
-- User 10d sotib oladi (150⭐)
+- User 10d sotib oladi (120⭐)
 - Yangi `premium_until = 2026-06-27`
 
 ---

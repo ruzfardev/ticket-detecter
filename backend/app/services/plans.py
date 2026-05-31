@@ -25,11 +25,11 @@ class DonateOption:
 
 PREMIUM_PLANS: dict[str, PremiumPlan] = {
     p.id: p for p in [
-        PremiumPlan("premium_1d",  1,  20),
-        PremiumPlan("premium_3d",  3,  50),
-        PremiumPlan("premium_5d",  5,  80),
-        PremiumPlan("premium_10d", 10, 150),
-        PremiumPlan("premium_30d", 30, 350, badge="💎"),
+        PremiumPlan("premium_1d",  1,  15),
+        PremiumPlan("premium_3d",  3,  40),
+        PremiumPlan("premium_5d",  5,  65),
+        PremiumPlan("premium_10d", 10, 120),
+        PremiumPlan("premium_30d", 30, 300, badge="💎"),
     ]
 }
 

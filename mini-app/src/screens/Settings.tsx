@@ -138,12 +138,12 @@ export function Settings() {
         <ListRow
           before={<MessageCircle className="h-5 w-5 text-ink" strokeWidth={1.75} />}
           title="Support"
-          onClick={() => openLink("https://t.me/TicketDetectorSupport")}
+          onClick={() => openLink("https://t.me/railwayuzz_bot")}
         />
         <ListRow
           before={<Megaphone className="h-5 w-5 text-ink" strokeWidth={1.75} />}
           title="Yangiliklar kanali"
-          onClick={() => openLink("https://t.me/TicketTips")}
+          onClick={() => openLink("https://t.me/railwayuzz")}
         />
       </ListGroup>
 

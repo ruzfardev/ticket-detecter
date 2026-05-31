@@ -193,7 +193,7 @@ Loyihani bosqichma-bosqich bajarish rejasi. Har bir milestone tugagandan keyin t
 - [ ] DB transaction with `tg_payment_charge_id` UNIQUE idempotency
 - [ ] Premium expire kunlik cron (`tasks/expire_premium.py`) + tekshirish 30s→10s cadence yangilanishini
 - [ ] `watch_groups` refresh trigger (yoki cron har 60s) — `has_premium` to'g'ri bo'lishi uchun
-- [ ] Test: real Stars to'lov (1 kun 20⭐ — minimal)
+- [ ] Test: real Stars to'lov (1 kun 15⭐ — minimal)
 - [ ] Test: Donate 25⭐ — tier o'zgarmasligi
 - [ ] Test: Refund flow admin scripti
 
@@ -286,7 +286,7 @@ Tartibsiz priority bo'yicha:
 
 Quyidagi savollarga kerakli paytda qaror qabul qilinadi:
 
-1. ~~**Premium narxi**~~ ✅ **Tasdiqlandi**: 1d=20⭐, 3d=50⭐, 5d=80⭐, 10d=150⭐, 30d=350⭐
+1. ~~**Premium narxi**~~ ✅ **Tasdiqlandi**: 1d=15⭐, 3d=40⭐, 5d=65⭐, 10d=120⭐, 30d=300⭐
 2. **Hosting** — M6 boshlanishi oldidan VPS provayder + region tanlanadi.
 3. **Domen** — `tdbot.example` o'rniga real domen.
 4. **Brending** — bot nomi, logosi.

@@ -38,11 +38,11 @@ Bu hujjat boshqa barcha hujjatlarning kirish nuqtasi. Loyihaga yangi qo'shilgan 
 
 | Davomiylik | Narx | ⭐/kun |
 |-----------|------|--------|
-| 1 kun  | 20 ⭐  | 20.0 |
-| 3 kun  | 50 ⭐  | 16.7 |
-| 5 kun  | 80 ⭐  | 16.0 |
-| 10 kun | 150 ⭐ | 15.0 |
-| 30 kun | 350 ⭐ | 11.7 (💎 eng tejamli) |
+| 1 kun  | 15 ⭐  | 15.0 |
+| 3 kun  | 40 ⭐  | 13.3 |
+| 5 kun  | 65 ⭐  | 13.0 |
+| 10 kun | 120 ⭐ | 12.0 |
+| 30 kun | 300 ⭐ | 10.0 (💎 eng tejamli) |
 
 **Donate** — Premium emas, faqat bot'ni qo'llab-quvvatlash (25/50/100/500 ⭐ yoki custom). Tafsilot [07-payments.md](07-payments.md).
 

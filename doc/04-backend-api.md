@@ -376,11 +376,11 @@ Mavjud Premium va Donate variantlarini qaytaradi (Mini App hardcode'siz olishi u
 ```json
 {
   "premium": [
-    {"id": "premium_1d",  "days": 1,  "stars": 20},
-    {"id": "premium_3d",  "days": 3,  "stars": 50},
-    {"id": "premium_5d",  "days": 5,  "stars": 80},
-    {"id": "premium_10d", "days": 10, "stars": 150},
-    {"id": "premium_30d", "days": 30, "stars": 350, "badge": "💎"}
+    {"id": "premium_1d",  "days": 1,  "stars": 15},
+    {"id": "premium_3d",  "days": 3,  "stars": 40},
+    {"id": "premium_5d",  "days": 5,  "stars": 65},
+    {"id": "premium_10d", "days": 10, "stars": 120},
+    {"id": "premium_30d", "days": 30, "stars": 300, "badge": "💎"}
   ],
   "donate": [
     {"id": "donate_25",  "stars": 25,  "label": "☕ Kichik rahmat"},

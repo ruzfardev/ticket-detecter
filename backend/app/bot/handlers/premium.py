@@ -34,7 +34,8 @@ _PREMIUM_INTRO = (
     "⚡ <b>Premium obuna afzalliklari:</b>\n\n"
     "✅ Har 10 sekundda tekshirish (oddiy: 30 sekund)\n"
     "✅ 3 tagacha faol xabarnoma (oddiy: faqat 1 ta)\n"
-    "✅ Yangi funksiyalarga dastlab kirish\n"
+    "✅ Yangi funksiyalarga birinchilardan bo'lib kirish\n"
+    "✅ Tezroq (ustuvor) support\n"
     "✅ Boshqalardan 3 baravar tezroq bilet topish\n\n"
     "<b>Premium obuna narxlari:</b>"
 )
