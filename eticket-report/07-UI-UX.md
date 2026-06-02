@@ -82,16 +82,12 @@ Eng e'tiborli muammo: til sozlamasida "O'zbek (lotin)" tanlangan bo'lsa-da, stan
 
 **Baho:** Bu juda yaxshi yechim — foydalanuvchi qayerda turganini va nechta qadam qolganini biladi, bu kognitiv yukni kamaytiradi va jarayonni shaffof qiladi. Saqlanishi tavsiya etiladi.
 
-## 1.9 Seat-map (joy xaritasi) — kuchli, lekin rang-kodlash noaniq
+## 1.9 Seat-map (joy xaritasi) — kuchli (ijobiy)
 
-**Ijobiy (dalil):** Vagonning vizual sxemasi, raqamlangan joylar, konduktor belgisi, "Xaritada 4 tagacha joyni tanlang" cheklovi va "Ovqat tanlash" imkoniyati mavjud — umuman olganda kuchli va intuitiv.
+**Ijobiy (dalil):** Vagonning vizual sxemasi, raqamlangan joylar, konduktor belgisi, "Xaritada 4 tagacha joyni tanlang" cheklovi va "Ovqat tanlash" imkoniyati mavjud. Rang-kodlash aniq va intuitiv: **ko'k = bo'sh, yashil = tanlangan joy, kulrang = tanlab bo'lmaydigan (band)**. Umuman olganda kuchli va tushunarli komponent — saqlanishi tavsiya etiladi.
 
-**Kamchilik (dalil):** Bo'sh joylar kulrang rangda ko'rsatiladi — kulrang odatda "band" yoki "mavjud emas" degan ma'noni anglatadi, shu sababli rang-kodlash noaniq. Bundan tashqari, xarita pastki qismdan kesilgan (to'liq ko'rinmaydi).
-
-**Tavsiya:**
-- Holat ranglarini intuitiv mantiqqa moslashtirish: bo'sh joy — neytral/yashil yoki ochiq rang, band joy — kulrang/o'chirilgan, tanlangan joy — urg'uli (accent) rang. Rang bilan birga ikona yoki belgi qo'shish (rang ko'rmaydiganlar uchun accessibility).
-- Seat-map konteynerini to'liq ko'rinadigan qilish (scroll yoki moslashuvchan balandlik) — joriy holatda xarita pastdan kesilmasligi kerak.
+**Kichik yaxshilanish (ixtiyoriy):** Holat faqat rang orqali bildiriladi; qisqa **rang legendasi** (□ bo'sh / ▣ tanlangan / ▣ band) yoki ikonalar qo'shish rang ko'rmaydigan (colorblind) foydalanuvchilar uchun foydali (WCAG: faqat rangga tayanmaslik tavsiyasi). Ayrim hollarda xarita pastdan kesilib, scroll talab qiladi.
 
 ## Xulosa
 
-Tizimning asosiy oqimi — modal shahar tanlash, avtomatik fokus o'tishi, ikki oylik kalendar, axborotga boy natijalar ro'yxati, 5-bosqichli wizard va vizual seat-map — zamonaviy va yaxshi o'ylangan. Asosiy ustuvor tuzatish — **kirill/lotin lokalizatsiya qatlami (1.1)**, chunki u butun oqim bo'ylab ko'rinadi va ishonchga eng ko'p ta'sir qiladi. Undan keyin maxfiylik (to'liq email), prod tizimdagi "BETA" yorlig'i, kontrast/ALL-CAPS o'qilishi va seat-map rang-kodlashi nisbatan kichik, ammo tez hal qilinadigan yaxshilanishlardir.
+Tizimning asosiy oqimi — modal shahar tanlash, avtomatik fokus o'tishi, ikki oylik kalendar, axborotga boy natijalar ro'yxati, 5-bosqichli wizard va vizual seat-map — zamonaviy va yaxshi o'ylangan. Asosiy ustuvor tuzatish — **kirill/lotin lokalizatsiya qatlami (1.1)**, chunki u butun oqim bo'ylab ko'rinadi va ishonchga eng ko'p ta'sir qiladi. Undan keyin maxfiylik (to'liq email), prod tizimdagi "BETA" yorlig'i va kontrast/ALL-CAPS o'qilishi nisbatan kichik, ammo tez hal qilinadigan yaxshilanishlardir. Seat-map esa allaqachon kuchli — uni saqlash kifoya.

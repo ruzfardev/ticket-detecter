@@ -10,10 +10,12 @@ Bu bo'lim buyurtma (bron) va to'lov oqimidagi ikkita o'zaro bog'liq kamchilikni 
 
 **Muammo.** Foydalanuvchi joyni band qilib, lekin to'lovni yakunlamasa (masalan, brauzer yopildi, to'lov uzilib qoldi, internet o'chdi, yoki bilib turib keyinroq to'lamoqchi bo'ldi), u **"Faol buyurtmalar" ro'yxatidan turib to'lov formasini qayta ocholmaydi** — to'lovni davom ettirishning hech qanday yo'li yo'q.
 
-**Alomat / dalil (jonli kuzatuv).**
+**Alomat / dalil (jonli tasdiqlangan, 2026-06-03).**
 - Yo'l: foydalanuvchi menyusi → "Mening yangi buyurtmalarim" → sahifa `/uz/cabinet/orders` ("**Faol buyurtmalar**").
-- Bu — bron qilingan, to'lovi tugallanmagan buyurtmalar ko'rinishi kerak bo'lgan yagona joy.
-- Bu sahifada buyurtma uchun **"To'lovni davom ettirish"** yoki to'lov formasini ochuvchi hech qanday tugma/amal mavjud emas. (Nazoratli testda bron "shakllanmoqda" holatida, to'lov amalisiz ko'rinadi.)
+- Test bronidan (Sharq 712Ф, joy 016, vagon 19) so'ng bu sahifada buyurtma ko'rindi, holati:
+  > "Sizning chiptangiz poyezdda 712ФЦ ... shakllanmoqda" — "**Sizning chiptangiz shakllanmoqda. Iltimos, kuting...**"
+- Bu kartochkada **na "To'lovni davom ettirish" (to'lov) tugmasi, na "Bekor qilish" tugmasi** bor — faqat "shakllanmoqda, kuting" holati. Ya'ni foydalanuvchi bu yerdan **to'lay ham, bekor ham qila olmaydi**.
+- Bronni bekor qilishning yagona yo'li — **tasdiqlash sahifasiga (`confirm-page`) qaytib**, hold taymeri tugamasdan "Bekor qilish" bosish edi. Lekin tab'ni yopgan yoki oqimni yo'qotgan foydalanuvchi u sahifaga qaytib bora olmaydi → bron faqat **avtomatik muddati tuganda** (~10 daqiqa) bo'shaydi.
 
 **Sabab (texnik).** To'lov formasi `orderId` bo'yicha qayta tiklanmaydi — to'lov sessiyasi dastlabki brauzer navigatsiyasiga bog'langan. Foydalanuvchi o'sha oqimdan chiqib ketsa, buyurtma serverda "ochiq" tursa-da, unga ulanib to'lash imkoni qolmaydi.
 
