@@ -20,10 +20,8 @@ import { ListGroup, ListRow } from "@/components/ui/list";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const PAYMENT_OPTIONS: { value: PaymentMethod; label: string; hint: string }[] = [
-  { value: "payme",      label: "Payme",      hint: "Karta yoki balans" },
-  { value: "click",      label: "Click",      hint: "Karta yoki Click hisobi" },
-  { value: "hamkorbank", label: "Hamkorbank", hint: "Karta orqali" },
-  { value: "kapitalbank",label: "Kapitalbank",hint: "Karta orqali" },
+  { value: "hamkorbank", label: "Humo / Uzcard", hint: "Saqlangan karta orqali (tavsiya etiladi)" },
+  { value: "payme",      label: "Payme",         hint: "Payme karta yoki balans" },
 ];
 
 export function AutobuyConfig() {

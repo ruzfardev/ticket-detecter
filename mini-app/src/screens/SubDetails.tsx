@@ -110,18 +110,34 @@ export function SubDetails() {
 
       <ListGroup
         label="Avto sotib olish"
-        footer="Tez orada — chipta topilganda avtomatik band qilish ustida ishlayapmiz."
+        footer={
+          sub.autobuy_enabled
+            ? "Chipta topilganda avtomatik bron qilinadi — sizga faqat SMS kod kerak bo'ladi"
+            : "Yoqilsa, chipta topilgan paytda avtomatik bron qilinadi"
+        }
       >
         <ListRow
-          before={<Zap className="h-5 w-5 text-muted-soft" strokeWidth={1.75} />}
-          title="Avto sotib olish"
-          subtitle="Hozircha mavjud emas"
-          after={
-            <span className="rounded-pill bg-surface-soft px-2 py-0.5 text-caption text-muted">
-              Tez kunda
-            </span>
+          before={
+            <Zap
+              className={`h-5 w-5 ${sub.autobuy_enabled ? "text-coral" : "text-muted-soft"}`}
+              strokeWidth={1.75}
+            />
           }
-          disabled
+          title={sub.autobuy_enabled ? "Yoqilgan" : "O'chirilgan"}
+          subtitle={
+            sub.autobuy_enabled
+              ? sub.autobuy_friend_name
+                ? `Hamroh: ${sub.autobuy_friend_name}`
+                : "Hamroh tanlanmagan"
+              : "Sozlash uchun bosing"
+          }
+          after={
+            sub.autobuy_enabled ? (
+              <Badge variant="coral">Faol</Badge>
+            ) : undefined
+          }
+          onClick={() => navigate(`/sub/${subId}/autobuy`)}
+          chevron
         />
       </ListGroup>
 
