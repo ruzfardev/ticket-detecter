@@ -65,6 +65,7 @@ class AutobuyOrderDTO:
     railway_friend_cache_id: int | None
     railway_order_id: str | None
     payment_type: str | None
+    payment_subid: str | None
     train_number: str
     car_number: str
     seat_number: int
@@ -94,7 +95,7 @@ class AutobuyOrderDTO:
 _SELECT_ORDER = """
 SELECT
   ao.id, ao.subscription_id, ao.user_id, ao.railway_friend_cache_id,
-  ao.railway_order_id, ao.payment_type, ao.train_number, ao.car_number,
+  ao.railway_order_id, ao.payment_type, ao.payment_subid, ao.train_number, ao.car_number,
   ao.seat_number, ao.dep_code, ao.arr_code, ao.travel_date, ao.amount_uzs,
   ao.status, ao.failure_reason, ao.hold_until, ao.trigger_source,
   ao.created_at, ao.updated_at,
@@ -118,6 +119,7 @@ def _row_to_order(row: asyncpg.Record) -> AutobuyOrderDTO:
         railway_friend_cache_id=row["railway_friend_cache_id"],
         railway_order_id=row["railway_order_id"],
         payment_type=row["payment_type"],
+        payment_subid=row["payment_subid"],
         train_number=row["train_number"],
         car_number=row["car_number"],
         seat_number=row["seat_number"],
