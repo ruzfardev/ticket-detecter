@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { CreditCard, Users, Zap } from "lucide-react";
+import { Check, CreditCard, Users, Zap } from "lucide-react";
 
 import {
   getCard,
@@ -18,6 +18,8 @@ import { StickyAction } from "@/components/StickyAction";
 import { Button } from "@/components/ui/button";
 import { ListGroup, ListRow } from "@/components/ui/list";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+
+const MAX_PASSENGERS = 4;
 
 const PAYMENT_OPTIONS: { value: PaymentMethod; label: string; hint: string }[] = [
   { value: "hamkorbank", label: "Humo / Uzcard", hint: "Saqlangan karta orqali (tavsiya etiladi)" },
@@ -42,23 +44,38 @@ export function AutobuyConfig() {
   const sub = subsQ.data?.subscriptions.find(s => s.id === subId);
 
   const [enabled, setEnabled] = useState<boolean>(false);
-  const [friendId, setFriendId] = useState<number | null>(null);
+  const [friendIds, setFriendIds] = useState<number[]>([]);
   const [payMethod, setPayMethod] = useState<PaymentMethod | null>(null);
 
   // Seed local state when the subscription loads.
   useEffect(() => {
     if (sub) {
       setEnabled(sub.autobuy_enabled);
-      setFriendId(sub.autobuy_friend_id);
+      setFriendIds(
+        sub.autobuy_friend_ids?.length
+          ? sub.autobuy_friend_ids
+          : sub.autobuy_friend_id != null
+            ? [sub.autobuy_friend_id]
+            : [],
+      );
       setPayMethod(sub.autobuy_payment_method);
     }
   }, [sub?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleFriend = (id: number) =>
+    setFriendIds(prev =>
+      prev.includes(id)
+        ? prev.filter(x => x !== id)
+        : prev.length >= MAX_PASSENGERS
+          ? prev
+          : [...prev, id],
+    );
 
   const save = useMutation({
     mutationFn: () =>
       patchAutobuy(subId, {
         enabled,
-        friend_id: enabled ? friendId : null,
+        friend_ids: enabled ? friendIds : null,
         payment_method: enabled ? payMethod : null,
       }),
     onSuccess: () => {
@@ -103,12 +120,11 @@ export function AutobuyConfig() {
   }
 
   const friends = friendsQ.data ?? [];
+  const validCount = friendIds.filter(id => friends.some(f => f.id === id)).length;
   const canSave =
     !save.isPending &&
     (!enabled ||
-      (friendId !== null &&
-       friends.some(f => f.id === friendId) &&
-       cardQ.data !== null));
+      (validCount >= 1 && validCount <= MAX_PASSENGERS && cardQ.data !== null));
 
   return (
     <Screen
@@ -147,7 +163,10 @@ export function AutobuyConfig() {
             />
           </ListGroup>
 
-          <ListGroup label="Hamroh">
+          <ListGroup
+            label={`Yo'lovchilar${validCount ? ` · ${validCount}/${MAX_PASSENGERS}` : ""}`}
+            footer={`Bir vagondan ${MAX_PASSENGERS} tagacha yonma-yon joy izlanadi. Hammasi topilganda birga bron qilinadi.`}
+          >
             {friends.length === 0 ? (
               <ListRow
                 before={<Users className="h-5 w-5 text-muted-soft" strokeWidth={1.75} />}
@@ -157,31 +176,40 @@ export function AutobuyConfig() {
                 chevron
               />
             ) : (
-              <RadioGroup
-                value={friendId ? String(friendId) : ""}
-                onValueChange={v => setFriendId(Number(v))}
-                className="gap-0"
-              >
-                {friends.map(f => (
-                  <label
-                    key={f.id}
-                    htmlFor={`friend-${f.id}`}
-                    className="flex items-center gap-3 px-4 py-3 cursor-pointer active:bg-hairline-soft transition-colors min-h-[56px] border-b border-hairline-soft last:border-b-0"
-                  >
-                    <RadioGroupItem id={`friend-${f.id}`} value={String(f.id)} />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-body-md font-medium truncate text-ink">
-                        {`${f.firstname} ${f.lastname}`.trim()}
+              <div className="flex flex-col">
+                {friends.map(f => {
+                  const checked = friendIds.includes(f.id);
+                  const atMax = !checked && friendIds.length >= MAX_PASSENGERS;
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      disabled={atMax}
+                      onClick={() => toggleFriend(f.id)}
+                      className="flex items-center gap-3 px-4 py-3 text-left active:bg-hairline-soft transition-colors min-h-[56px] border-b border-hairline-soft last:border-b-0 disabled:opacity-40"
+                    >
+                      <span
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border ${
+                          checked ? "border-coral bg-coral text-on-primary" : "border-muted-soft"
+                        }`}
+                        aria-hidden
+                      >
+                        {checked && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-body-md font-medium truncate text-ink">
+                          {`${f.firstname} ${f.lastname}`.trim()}
+                        </div>
+                        <div className="text-body-sm text-muted truncate">
+                          {f.is_self ? "Men · " : ""}
+                          {f.doc_type ?? ""}
+                          {f.doc_masked ? ` ${f.doc_masked}` : ""}
+                        </div>
                       </div>
-                      <div className="text-body-sm text-muted truncate">
-                        {f.is_self ? "Men · " : ""}
-                        {f.doc_type ?? ""}
-                        {f.doc_masked ? ` ${f.doc_masked}` : ""}
-                      </div>
-                    </div>
-                  </label>
-                ))}
-              </RadioGroup>
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </ListGroup>
 
@@ -214,8 +242,8 @@ export function AutobuyConfig() {
         hint={
           enabled && !cardQ.data
             ? "Avval karta saqlang"
-            : enabled && !friendId
-              ? "Avval hamroh tanlang"
+            : enabled && validCount < 1
+              ? "Kamida bitta yo'lovchi tanlang"
               : undefined
         }
       >

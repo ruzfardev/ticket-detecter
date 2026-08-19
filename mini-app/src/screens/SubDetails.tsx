@@ -126,9 +126,11 @@ export function SubDetails() {
           title={sub.autobuy_enabled ? "Yoqilgan" : "O'chirilgan"}
           subtitle={
             sub.autobuy_enabled
-              ? sub.autobuy_friend_name
-                ? `Hamroh: ${sub.autobuy_friend_name}`
-                : "Hamroh tanlanmagan"
+              ? sub.autobuy_friend_names?.length
+                ? `${sub.autobuy_friend_names.length} yo'lovchi: ${sub.autobuy_friend_names.join(", ")}`
+                : sub.autobuy_friend_name
+                  ? `Yo'lovchi: ${sub.autobuy_friend_name}`
+                  : "Yo'lovchi tanlanmagan"
               : "Sozlash uchun bosing"
           }
           after={

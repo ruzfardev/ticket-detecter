@@ -65,7 +65,7 @@ async def start_manual(
             subscription_id=body.subscription_id,
             train_number=body.train_number,
             car_number=body.car_number,
-            seat_number=body.seat_number,
+            seat_numbers=[body.seat_number],
             car_type=body.car_type,
             class_service=body.class_service,
             dep_code=body.dep_code,

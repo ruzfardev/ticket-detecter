@@ -117,7 +117,8 @@ async def _process_group(pool: asyncpg.Pool, g: asyncpg.Record) -> None:
     subs = await pool.fetch(
         """
         SELECT s.id, s.user_id, s.train_numbers, s.car_types, s.berth, s.muted_until,
-               s.autobuy_enabled, s.autobuy_friend_id, s.autobuy_payment_method,
+               s.autobuy_enabled, s.autobuy_friend_id, s.autobuy_friend_ids,
+               s.autobuy_payment_method,
                u.tg_user_id, u.lang
         FROM subscriptions s
         JOIN users u ON u.id = s.user_id
@@ -165,7 +166,8 @@ async def _process_group(pool: asyncpg.Pool, g: asyncpg.Record) -> None:
                 continue
 
             log_id = await _maybe_send(pool, sub, train, snapshot)
-            if log_id is not None and sub["autobuy_enabled"] and sub["autobuy_friend_id"]:
+            has_passengers = bool(sub["autobuy_friend_ids"]) or bool(sub["autobuy_friend_id"])
+            if log_id is not None and sub["autobuy_enabled"] and has_passengers:
                 await _maybe_autobuy(pool, sub, train, cars, snapshot, log_id, g)
 
     await _mark_polled(pool, g["id"], g["has_premium"])
@@ -261,9 +263,18 @@ async def _maybe_autobuy(
     notification_id: int,
     g: asyncpg.Record,
 ) -> None:
-    """Pick the lowest free seat from the snapshot and fire autobuy."""
+    """Pick N lowest free seats (N = passengers) from one car and fire autobuy.
+
+    All passengers must fit in a single car (one order); if no car has enough
+    free seats yet, wait for the next tick (all-or-nothing).
+    """
+    friend_ids = list(sub["autobuy_friend_ids"] or [])
+    if not friend_ids and sub["autobuy_friend_id"]:
+        friend_ids = [sub["autobuy_friend_id"]]
+    n = max(1, len(friend_ids))
+
     car_lookup = {c.number: c for c in cars}
-    candidate: tuple[str, int, object] | None = None  # (car_number, seat, CarDetail)
+    candidate: tuple[str, list[int], object] | None = None  # (car_number, seats, CarDetail)
     for car_number, payload in snapshot.items():
         car = car_lookup.get(car_number)
         if not car:
@@ -272,15 +283,15 @@ async def _maybe_autobuy(
         seats_in_car.extend(payload.get("lower") or [])
         seats_in_car.extend(payload.get("upper") or [])
         seats_in_car.extend(payload.get("places") or [])
-        if not seats_in_car:
+        if len(seats_in_car) < n:
             continue
-        seat = min(seats_in_car)
-        if candidate is None or seat < candidate[1]:
-            candidate = (car_number, seat, car)
+        chosen = sorted(seats_in_car)[:n]
+        if candidate is None or chosen[0] < candidate[1][0]:
+            candidate = (car_number, chosen, car)
     if candidate is None:
         return
 
-    car_number, seat, car = candidate
+    car_number, seats, car = candidate
     dep_time = _extract_hhmm(train.departure)
     from app.services import autobuy_service
     try:
@@ -291,7 +302,7 @@ async def _maybe_autobuy(
                 subscription_id=sub["id"],
                 train_number=train.number,
                 car_number=car_number,
-                seat_number=seat,
+                seat_numbers=seats,
                 car_type=car.raw_car_type or car.type,
                 class_service=car.class_service,
                 dep_code=g["dep_code"],
@@ -305,7 +316,7 @@ async def _maybe_autobuy(
     except Exception as exc:
         logger.warning(
             "autobuy_trigger_failed",
-            sub_id=sub["id"], train=train.number, seat=seat,
+            sub_id=sub["id"], train=train.number, seats=seats,
             error=str(exc)[:200],
         )
 

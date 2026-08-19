@@ -30,6 +30,8 @@ class PatchSub(BaseModel):
 
 class PatchAutobuy(BaseModel):
     enabled: bool
+    friend_ids: list[int] | None = None
+    # back-compat: accept a single friend_id too
     friend_id: int | None = None
     payment_method: str | None = None
 
@@ -94,12 +96,15 @@ async def patch_autobuy(
     user: UserRow = Depends(current_user),
     pool: asyncpg.Pool = Depends(db_pool),
 ) -> dict:
+    friend_ids = body.friend_ids
+    if not friend_ids and body.friend_id is not None:
+        friend_ids = [body.friend_id]   # back-compat with single-friend clients
     sub = await subscription_service.update_autobuy(
         pool=pool,
         sub_id=sub_id,
         user_id=user.id,
         enabled=body.enabled,
-        friend_id=body.friend_id,
+        friend_ids=friend_ids,
         payment_method=body.payment_method,
     )
     return {"subscription": sub.to_dict()}

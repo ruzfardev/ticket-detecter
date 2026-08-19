@@ -72,19 +72,24 @@ SUPPORTED_PAYMENT_TYPES = {PAYMENT_TYPE_HAMKORBANK_HOLD, PAYMENT_TYPE_PAYME}
 
 
 @dataclass(slots=True)
+class PassengerArg:
+    firstname: str
+    lastname: str
+    midname: str
+    birth_day: str            # 'DD.MM.YYYY'
+    gender: str               # 'Male' | 'Female'
+    citizenship: str          # 'UZB'
+    doc_type: str             # 'ПУ' | 'СР' | ...
+    doc_id: str
+    region_id: str
+
+
+@dataclass(slots=True)
 class CreateOrderArgs:
     railway_user_id: str
     railway_username: str
-    # passenger
-    p_firstname: str
-    p_lastname: str
-    p_midname: str
-    p_birth_day: str          # 'DD.MM.YYYY'
-    p_gender: str             # 'Male' | 'Female'
-    p_citizenship: str        # 'UZB'
-    p_doc_type: str           # 'ПУ' | 'СР' | ...
-    p_doc_id: str
-    p_region_id: str
+    # passengers (1..N, all in the same car — one order, one payment, one OTP)
+    passengers: list[PassengerArg]
     # route
     dep_code: str
     arr_code: str
@@ -94,7 +99,7 @@ class CreateOrderArgs:
     car_number: str
     car_type: str             # Cyrillic, e.g. 'Сидячий', 'Плацкартный'
     class_service: str        # e.g. '2Е', '3П'
-    seat_number: int
+    seat_numbers: list[int]   # one per passenger, same order
 
 
 @dataclass(slots=True)
@@ -222,27 +227,30 @@ class RailwayUserClient:
     # ---- universal-orders ----
 
     async def create_order(self, args: CreateOrderArgs) -> CreatedOrder:
+        passengers_body = [{
+            "birthDay": p.birth_day,
+            "gender": p.gender,
+            "children": [],
+            "citizenship": p.citizenship,
+            "docType": p.doc_type,
+            "firstname": p.firstname,
+            "lastname": p.lastname,
+            "midname": p.midname,
+            "regionId": p.region_id,
+            "docId": p.doc_id,
+            "discount": {
+                "type": "REGULAR", "pinfl": "",
+                "studentId": "", "tariff": "", "prefix": "",
+            },
+        } for p in args.passengers]
+        seats = list(args.seat_numbers or [])
+        seats_range = f"{min(seats)}-{max(seats)}" if seats else "0-0"
         body = {
             "userId": args.railway_user_id,
             "userName": args.railway_username,
             "hasAdditionalOrder": False,
             "orderItemRequest": [{
-                "passengers": [{
-                    "birthDay": args.p_birth_day,
-                    "gender": args.p_gender,
-                    "children": [],
-                    "citizenship": args.p_citizenship,
-                    "docType": args.p_doc_type,
-                    "firstname": args.p_firstname,
-                    "lastname": args.p_lastname,
-                    "midname": args.p_midname,
-                    "regionId": args.p_region_id,
-                    "docId": args.p_doc_id,
-                    "discount": {
-                        "type": "REGULAR", "pinfl": "",
-                        "studentId": "", "tariff": "", "prefix": "",
-                    },
-                }],
+                "passengers": passengers_body,
                 "directionSequence": 1,
                 "itemType": "ExpressItem",
                 "route": {
@@ -254,9 +262,9 @@ class RailwayUserClient:
                     "carId": None,
                     "carNumber": args.car_number,
                     "carType": args.car_type,
-                    "seatNumbers": [args.seat_number],
+                    "seatNumbers": seats,
                     "classService": args.class_service,
-                    "requirements": {"seatsRange": f"{args.seat_number}-{args.seat_number}"},
+                    "requirements": {"seatsRange": seats_range},
                     "selfDepartureAgreed": False,
                 },
             }],

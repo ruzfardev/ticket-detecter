@@ -85,6 +85,8 @@ export type Subscription = {
   autobuy_enabled: boolean;
   autobuy_friend_id: number | null;
   autobuy_friend_name: string | null;
+  autobuy_friend_ids?: number[] | null;
+  autobuy_friend_names?: string[] | null;
   autobuy_payment_method: PaymentMethod | null;
 };
 
@@ -139,6 +141,8 @@ export type AutobuyOrder = {
   train_number: string;
   car_number: string;
   seat_number: number;
+  seat_numbers?: number[] | null;
+  passenger_names?: string[] | null;
   dep_code: string;
   arr_code: string;
   travel_date: string;
@@ -263,7 +267,7 @@ export const syncFriends = () =>
 
 export const patchAutobuy = (
   subId: number,
-  body: { enabled: boolean; friend_id?: number | null; payment_method?: PaymentMethod | null },
+  body: { enabled: boolean; friend_ids?: number[] | null; payment_method?: PaymentMethod | null },
 ) =>
   mockApi.isEnabled
     ? mockApi.patchAutobuy(subId, body)

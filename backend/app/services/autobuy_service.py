@@ -35,6 +35,7 @@ from app.railway._auth_common import decrypt
 from app.railway.user_client import (
     CreateOrderArgs,
     OrderConflict,
+    PassengerArg,
     PAYMENT_TYPE_HAMKORBANK_HOLD,
     PAYMENT_TYPE_PAYME,
     PaymentFailed,
@@ -82,6 +83,8 @@ class AutobuyOrderDTO:
     friend_name: str | None = None
     last4: str | None = None
     seconds_until_expiry: int | None = None
+    seat_numbers: list[int] | None = None
+    passenger_names: list[str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -96,10 +99,12 @@ _SELECT_ORDER = """
 SELECT
   ao.id, ao.subscription_id, ao.user_id, ao.railway_friend_cache_id,
   ao.railway_order_id, ao.payment_type, ao.payment_subid, ao.train_number, ao.car_number,
-  ao.seat_number, ao.dep_code, ao.arr_code, ao.travel_date, ao.amount_uzs,
+  ao.seat_number, ao.seat_numbers, ao.dep_code, ao.arr_code, ao.travel_date, ao.amount_uzs,
   ao.status, ao.failure_reason, ao.hold_until, ao.trigger_source,
   ao.created_at, ao.updated_at,
   TRIM(BOTH ' ' FROM (fc.firstname || ' ' || fc.lastname)) AS friend_name,
+  (SELECT array_agg(TRIM(BOTH ' ' FROM (fc2.firstname || ' ' || fc2.lastname)))
+     FROM railway_friends_cache fc2 WHERE fc2.id = ANY(ao.passenger_cache_ids)) AS passenger_names,
   c.last4 AS card_last4
 FROM autobuy_orders ao
 LEFT JOIN railway_friends_cache fc ON fc.id = ao.railway_friend_cache_id
@@ -136,6 +141,8 @@ def _row_to_order(row: asyncpg.Record) -> AutobuyOrderDTO:
         friend_name=row.get("friend_name") or None,
         last4=row.get("card_last4"),
         seconds_until_expiry=secs,
+        seat_numbers=list(row["seat_numbers"]) if row.get("seat_numbers") else None,
+        passenger_names=list(row["passenger_names"]) if row.get("passenger_names") else None,
     )
 
 
@@ -164,7 +171,7 @@ class StartArgs:
     subscription_id: int
     train_number: str
     car_number: str
-    seat_number: int
+    seat_numbers: list[int]   # one per passenger, all in this car
     car_type: str        # e.g. 'Сидячий'
     class_service: str   # e.g. '2Е'
     dep_code: str
@@ -191,7 +198,8 @@ async def try_start_autobuy(
     sub = await pool.fetchrow(
         """
         SELECT s.id, s.user_id, s.dep_code, s.arr_code, s.travel_date,
-               s.autobuy_enabled, s.autobuy_friend_id, s.autobuy_payment_method
+               s.autobuy_enabled, s.autobuy_friend_id, s.autobuy_friend_ids,
+               s.autobuy_payment_method
         FROM subscriptions s
         WHERE s.id = $1
         """,
@@ -201,9 +209,17 @@ async def try_start_autobuy(
         raise NotFound("subscription not found")
     if args.trigger_source == "auto" and not sub["autobuy_enabled"]:
         return None
-    friend_id = sub["autobuy_friend_id"]
-    if not friend_id:
-        raise InvalidPayload("subscription has no friend selected")
+    friend_ids = [int(f) for f in (sub["autobuy_friend_ids"] or []) if f]
+    if not friend_ids and sub["autobuy_friend_id"]:
+        friend_ids = [int(sub["autobuy_friend_id"])]   # back-compat (pre-multi)
+    if not friend_ids:
+        raise InvalidPayload("subscription has no passengers selected")
+    # Pair each passenger with one seat, 1:1 (all-or-nothing on availability).
+    seat_numbers = [int(s) for s in (args.seat_numbers or [])]
+    if len(seat_numbers) < len(friend_ids):
+        # Not enough seats for every passenger yet — watcher retries next tick.
+        return None
+    seat_numbers = seat_numbers[:len(friend_ids)]
 
     card = await card_service.get_card(pool, args.user_id)
     if card is None:
@@ -219,31 +235,31 @@ async def try_start_autobuy(
         row = await pool.fetchrow(
             """
             INSERT INTO autobuy_orders
-              (subscription_id, user_id, railway_friend_cache_id,
-               train_number, car_number, seat_number,
+              (subscription_id, user_id, railway_friend_cache_id, passenger_cache_ids,
+               train_number, car_number, seat_number, seat_numbers,
                dep_code, arr_code, travel_date,
                status, trigger_source, notification_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
-                    'reserving', $10, $11)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+                    'reserving', $12, $13)
             RETURNING id
             """,
-            args.subscription_id, args.user_id, friend_id,
-            args.train_number, args.car_number, args.seat_number,
+            args.subscription_id, args.user_id, friend_ids[0], friend_ids,
+            args.train_number, args.car_number, seat_numbers[0], seat_numbers,
             args.dep_code, args.arr_code, args.dep_date,
             args.trigger_source, args.notification_id,
         )
     except asyncpg.UniqueViolationError:
         logger.info("autobuy_seat_race",
-                    sub_id=args.subscription_id, seat=args.seat_number)
+                    sub_id=args.subscription_id, seat=seat_numbers[0])
         return None
 
     autobuy_id = row["id"]
     logger.info("autobuy_started", id=autobuy_id, user_id=args.user_id,
                 source=args.trigger_source, sub_id=args.subscription_id,
-                train=args.train_number, seat=args.seat_number)
+                train=args.train_number, seats=seat_numbers)
 
     try:
-        await _execute_pipeline(pool, autobuy_id, args, sub, friend_id, card)
+        await _execute_pipeline(pool, autobuy_id, args, sub, friend_ids, seat_numbers, card)
     except Exception as exc:
         await _mark_failed(pool, autobuy_id, str(exc)[:200])
         raise
@@ -255,29 +271,48 @@ async def _execute_pipeline(
     autobuy_id: int,
     args: StartArgs,
     sub: asyncpg.Record,
-    friend_id: int,
+    friend_ids: list[int],
+    seat_numbers: list[int],
     card: card_service.CardDTO,
 ) -> None:
-    """Drives create_order → list_payment_types → select → do_payment → submit_card."""
-    # Load the friend (with decrypted doc, in-memory only).
-    friend = await pool.fetchrow(
+    """Drives create_order → list_payment_types → select → do_payment → submit_card.
+
+    Books all `friend_ids` passengers on `seat_numbers` (paired 1:1) in one
+    eticket order — a single payment + single OTP covers the whole group.
+    """
+    # Load every passenger (with decrypted doc, in-memory only), preserving order.
+    rows = await pool.fetch(
         """
-        SELECT firstname, lastname, midname, sex, birth_day,
+        SELECT id, firstname, lastname, midname, sex, birth_day,
                doc_type, doc_enc, citizenship, region_id
         FROM railway_friends_cache
-        WHERE id = $1 AND user_id = $2
+        WHERE id = ANY($1::bigint[]) AND user_id = $2
         """,
-        friend_id, args.user_id,
+        friend_ids, args.user_id,
     )
-    if not friend:
-        raise InvalidPayload("friend not found", {"code": "friend_not_owned"})
-
-    if not friend["doc_enc"]:
-        raise InvalidPayload(
-            "friend has no document; refresh /friends/sync",
-            {"code": "friend_doc_missing"},
-        )
-    doc_id = decrypt(friend["doc_enc"])
+    by_id = {r["id"]: r for r in rows}
+    passengers: list[PassengerArg] = []
+    for fid in friend_ids:
+        fr = by_id.get(fid)
+        if not fr:
+            raise InvalidPayload("passenger not found", {"code": "friend_not_owned"})
+        if not fr["doc_enc"]:
+            raise InvalidPayload(
+                "passenger has no document; refresh /friends/sync",
+                {"code": "friend_doc_missing"},
+            )
+        bd = fr["birth_day"]
+        passengers.append(PassengerArg(
+            firstname=fr["firstname"] or "",
+            lastname=fr["lastname"] or "",
+            midname=fr["midname"] or "",
+            birth_day=f"{bd.day:02d}.{bd.month:02d}.{bd.year:04d}",
+            gender="Male" if (fr["sex"] or "M").upper() == "M" else "Female",
+            citizenship=fr["citizenship"] or "UZB",
+            doc_type=fr["doc_type"] or "ПУ",
+            doc_id=decrypt(fr["doc_enc"]),
+            region_id=fr["region_id"] or "",
+        ))
 
     account = await user_auth.get_account(pool, args.user_id)
     railway_user_id = account.railway_user_id if account else None
@@ -288,22 +323,11 @@ async def _execute_pipeline(
 
     client = RailwayUserClient(pool, args.user_id)
 
-    gender = "Male" if (friend["sex"] or "M").upper() == "M" else "Female"
-    bd = friend["birth_day"]
-    bd_dot = f"{bd.day:02d}.{bd.month:02d}.{bd.year:04d}"
     dep_dot = f"{args.dep_date.day:02d}.{args.dep_date.month:02d}.{args.dep_date.year:04d}"
     create_args = CreateOrderArgs(
         railway_user_id=railway_user_id,
         railway_username=account.username if account else "",
-        p_firstname=friend["firstname"] or "",
-        p_lastname=friend["lastname"] or "",
-        p_midname=friend["midname"] or "",
-        p_birth_day=bd_dot,
-        p_gender=gender,
-        p_citizenship=friend["citizenship"] or "UZB",
-        p_doc_type=friend["doc_type"] or "ПУ",
-        p_doc_id=doc_id,
-        p_region_id=friend["region_id"] or "",
+        passengers=passengers,
         dep_code=args.dep_code,
         arr_code=args.arr_code,
         dep_date_dot=dep_dot,
@@ -312,7 +336,7 @@ async def _execute_pipeline(
         car_number=args.car_number,
         car_type=args.car_type,
         class_service=args.class_service,
-        seat_number=args.seat_number,
+        seat_numbers=seat_numbers,
     )
     try:
         created = await client.create_order(create_args)

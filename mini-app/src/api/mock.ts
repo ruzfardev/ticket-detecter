@@ -308,18 +308,25 @@ export const mockApi = {
 
   async patchAutobuy(
     id: number,
-    body: { enabled: boolean; friend_id?: number | null; payment_method?: PaymentMethod | null },
+    body: { enabled: boolean; friend_ids?: number[] | null; payment_method?: PaymentMethod | null },
   ): Promise<Subscription> {
     await wait(200);
+    const ids = body.enabled ? (body.friend_ids ?? []) : [];
+    const picked = ids
+      .map(fid => friends.find(f => f.id === fid))
+      .filter((f): f is NonNullable<typeof f> => !!f);
     subscriptions = subscriptions.map(s => {
       if (s.id !== id) return s;
-      const friend = body.friend_id ? friends.find(f => f.id === body.friend_id) ?? null : null;
       return {
         ...s,
         autobuy_enabled: body.enabled,
-        autobuy_friend_id: body.enabled ? body.friend_id ?? null : null,
-        autobuy_friend_name: body.enabled && friend
-          ? `${friend.firstname} ${friend.lastname}`.trim()
+        autobuy_friend_id: ids[0] ?? null,
+        autobuy_friend_name: picked[0]
+          ? `${picked[0].firstname} ${picked[0].lastname}`.trim()
+          : null,
+        autobuy_friend_ids: ids.length ? ids : null,
+        autobuy_friend_names: picked.length
+          ? picked.map(f => `${f.firstname} ${f.lastname}`.trim())
           : null,
         autobuy_payment_method: body.enabled ? body.payment_method ?? null : null,
       };
