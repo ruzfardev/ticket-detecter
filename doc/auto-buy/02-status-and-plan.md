@@ -21,13 +21,13 @@ OTP**, which needs you present (real card + the SMS on your phone).
   supported (Humo/Uzcard→HamkorbankHold, Payme). Fix `tsconfig` `ignoreDeprecations`
   `6.0`→`5.0` (was breaking every build on this branch). → deployed to
   `ticket-detector-mini.vercel.app`.
-- **Prod connectivity fix (was fully broken):** the cloudflared quick tunnel had died
-  (DNS NXDOMAIN), so the mini-app couldn't reach the backend at all. Restarted it, wired
-  the new URL into Vercel `VITE_API_URL`, redeployed, synced `.tunnel-url`. Verified:
-  tunnel `/health`=200, CORS ok for the vercel origin, prod bundle baked with the URL.
-  ⚠️ **This tunnel is a Cloudflare _quick_ tunnel — ephemeral.** If it dies again the app
-  breaks; recovery steps are in the `prod-tunnel-connectivity` memory. **Recommend a
-  stable backend URL** (named cloudflare tunnel on a subdomain, or an nginx vhost).
+- **Prod connectivity fix (was fully broken):** the mini-app couldn't reach the backend —
+  the cloudflared quick tunnel it depended on kept dying (URL rotates on every restart).
+  **Replaced it with a stable URL:** the existing nginx vhost `project.ruzfardev.uz`
+  already proxies `/ -> 127.0.0.1:8000` with SSL, so set `VITE_API_URL =
+  https://project.ruzfardev.uz` and redeployed; **stopped + disabled the quick tunnel**.
+  Verified: `project.ruzfardev.uz/health`=200, CORS ok for the vercel origin, prod bundle
+  baked with the stable URL. See the `prod-tunnel-connectivity` memory.
 - **Docs:** `doc/auto-buy/01-eticket-payment-flow.md` (the captured API),
   `doc/research/uzticket-teardown.md` (+ artifact).
 
