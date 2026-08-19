@@ -8,8 +8,8 @@ The eticket **card-payment flow was already implemented correctly** in the backe
 bound to the browser" conclusion was wrong. A **live capture** of a real purchase
 (2026-08-18) confirmed every request/response matches our client exactly. The only real
 defect was a runtime bug (missing `payment_subid` on the order DTO) which is now fixed.
-Backend + mini-app are **deployed to production** and the (previously dead) public tunnel
-is restored. **One step remains for full sign-off: a real end-to-end run with a live bank
+Backend + mini-app are **deployed to production**, now served over a **stable URL**
+(`https://project.ruzfardev.uz`, nginx→:8000) after the flaky quick tunnel was retired. **One step remains for full sign-off: a real end-to-end run with a live bank
 OTP**, which needs you present (real card + the SMS on your phone).
 
 ## What shipped tonight (branch `feat/auto-buy`, merged to `main`, deployed)
@@ -48,8 +48,8 @@ intercepted-URL list); resend uses `resend-code {id}`. eticket's Angular service
 call on the first live run and adjust `HAMKORBANK_HOLD_PAY_URL` if needed.**
 
 ## Morning test procedure (≈10 min, with you present)
-1. Open the bot → mini-app. Confirm it loads data (proves the tunnel/API is alive). If it
-   doesn't load, the tunnel likely died overnight — recover per the memory note.
+1. Open the bot → mini-app. Confirm it loads data (API base is `https://project.ruzfardev.uz`).
+   If it fails, check `project.ruzfardev.uz/health` + `nginx`/`ticketbot-backend` on the server.
 2. **Settings → Kartalarim →** save a Humo/Uzcard card (you enter it; it's encrypted
    server-side, we never see it).
 3. **Settings → eticket** — confirm it shows linked/active (it is:
