@@ -34,7 +34,6 @@ ORDERS_END_TIME_URL = f"{BASE_URL}/api/v1/universal-orders/process/end-time"
 ORDERS_CANCEL_URL = f"{BASE_URL}/api/v1/universal-orders/cancel"
 PAYMENT_TYPE_LIST_URL = f"{BASE_URL}/api/v3/payment-type/list"
 PAYMENT_TYPE_LIST_V1_URL = f"{BASE_URL}/api/v1/payment-type/list"
-PAYMENT_TYPE_LIST_V1_ALT_URL = f"{BASE_URL}/api/v1/payment/type/list"
 PAYMENT_SELECT_URL = f"{BASE_URL}/api/v1/payment/select-payment-type"
 INVOICE_GENERATE_URL = f"{BASE_URL}/api/v1/universal-orders/invoice-generate"
 
@@ -311,10 +310,21 @@ class RailwayUserClient:
     # ---- payment selection ----
 
     async def list_payment_types(self, payment_id: str) -> list[PaymentTypeGroup]:
-        """Try the v3 endpoint first (browser default), fall back to v1 variants."""
-        for url in (PAYMENT_TYPE_LIST_URL, PAYMENT_TYPE_LIST_V1_URL,
-                    PAYMENT_TYPE_LIST_V1_ALT_URL):
-            out = await self._list_payment_types_one(url, payment_id)
+        """Try the v3 endpoint first (browser default), fall back to v1.
+
+        A failing variant (404, 5xx, network) must not abort the purchase —
+        callers poll this until eticket has the order ready, so any per-URL
+        error just means "no data from this variant, try the next".
+        """
+        for url in (PAYMENT_TYPE_LIST_URL, PAYMENT_TYPE_LIST_V1_URL):
+            try:
+                out = await self._list_payment_types_one(url, payment_id)
+            except (RailwayUnavailable, RateLimited) as exc:
+                logger.warning("railway_payment_type_list_failed",
+                               user_id=self._user_id,
+                               url=url.split("/api/", 1)[-1],
+                               error=str(exc)[:200])
+                continue
             if out:
                 return out
         return []

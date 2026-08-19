@@ -389,9 +389,16 @@ async def _execute_pipeline(
             await client.get_end_time(created.order_id)
         except Exception:
             pass
-        # Try payment-type/list every other tick.
+        # Try payment-type/list every other tick. Transient failures (429,
+        # 5xx, blips) must not kill the pipeline — keep polling to deadline.
         if attempt % 2 == 0:
-            groups = await client.list_payment_types(payment_id)
+            try:
+                groups = await client.list_payment_types(payment_id)
+            except Exception as exc:
+                logger.warning("autobuy_payment_types_poll_error",
+                               id=autobuy_id, attempt=attempt,
+                               error=str(exc)[:200])
+                groups = []
             if groups:
                 logger.info("autobuy_payment_types_ready",
                             id=autobuy_id, attempt=attempt,
@@ -400,7 +407,12 @@ async def _execute_pipeline(
         await asyncio.sleep(2.0)
     if not groups:
         # One more try after the deadline (in case the last sleep skipped it).
-        groups = await client.list_payment_types(payment_id)
+        try:
+            groups = await client.list_payment_types(payment_id)
+        except Exception as exc:
+            logger.warning("autobuy_payment_types_final_error",
+                           id=autobuy_id, error=str(exc)[:200])
+            groups = []
 
     available = {g.card_type: g.payment_types for g in groups}
     logger.info("autobuy_payment_types", id=autobuy_id, available=available,
