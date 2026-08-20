@@ -450,7 +450,8 @@ async def _execute_pipeline(
     # Submit the stored card. Card is decrypted ONLY here, in-memory.
     decrypted = await card_service.get_decrypted(pool, args.user_id)
     await client.submit_card(chosen, pay.payment_subid,
-                             decrypted.pan, decrypted.exp_mmyy)
+                             decrypted.pan, decrypted.exp_mmyy,
+                             order_id=created.order_id)
     await card_service.mark_used(pool, args.user_id)
 
     await pool.execute(
@@ -519,6 +520,7 @@ async def submit_otp(
     try:
         confirm_resp = await client.confirm_otp(
             order.payment_type, order.payment_subid, otp,
+            order_id=order.railway_order_id,
         )
         # eticket answers 200 for a rejected code too, so keep the body: it is
         # the only record of what the gateway actually said.

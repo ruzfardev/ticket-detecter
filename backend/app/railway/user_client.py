@@ -51,7 +51,9 @@ PAYME_DO_URL = f"{BASE_URL}/api/v1/payme/do-payment"
 PAYME_CREATE_CARD_URL = f"{BASE_URL}/api/v1/payme/create-card"
 PAYME_VERIFY_CARD_URL = f"{BASE_URL}/api/v1/payme/verify-card"
 PAYME_PAY_URL = f"{BASE_URL}/api/v1/payme/pay-receipt"
-PAYME_RESEND_URL = f"{BASE_URL}/api/v1/payme/resend-code"
+# Payme's resend goes through the generic paysys-sum endpoint, not
+# /api/v1/payme/resend-code (which only appears in a loader-config list).
+PAYSYS_SUM_RESEND_URL = f"{BASE_URL}/api/v1/paysys-sum/resend-code"
 
 
 # --- Exceptions ---
@@ -489,8 +491,15 @@ class RailwayUserClient:
         payment_subid: str,
         card_number: str,
         card_expiry_mmyy: str,
+        *,
+        order_id: str,
     ) -> None:
-        """Submit card details. eticket dispatches SMS-OTP after this call."""
+        """Submit card details. eticket dispatches SMS-OTP after this call.
+
+        The two gateways take different bodies — Payme wants the orderId and its
+        own `paymeId`, Hamkorbank-Hold only the hold `id`. Sending Hamkorbank's
+        shape to Payme is a flat 400.
+        """
         # Strip any spaces / dashes from PAN before sending.
         pan = "".join(ch for ch in card_number if ch.isdigit())
         exp = "".join(ch for ch in card_expiry_mmyy if ch.isdigit())[:4]
@@ -501,19 +510,23 @@ class RailwayUserClient:
                 "id": payment_subid,
                 "cardNumber": pan,
                 "cardExpiry": exp,
-            })
+            }, payment_errors=True)
             return
         if payment_type == PAYMENT_TYPE_PAYME:
+            # Verbatim from the site's `pay()`:
+            # createReceiptPayme({orderId, paymeId, cardNumber, cardExpiry})
             await self._post(PAYME_CREATE_CARD_URL, {
-                "id": payment_subid,
+                "orderId": order_id,
+                "paymeId": payment_subid,
                 "cardNumber": pan,
                 "cardExpiry": exp,
-            })
+            }, payment_errors=True)
             return
         raise PaymentFailed(f"Unsupported payment type: {payment_type}")
 
     async def confirm_otp(
         self, payment_type: str, payment_subid: str, otp: str,
+        *, order_id: str,
     ) -> dict[str, Any]:
         """Submit the SMS-OTP and return eticket's raw response.
 
@@ -534,9 +547,13 @@ class RailwayUserClient:
                 "confirmationCode": otp,
             }, payment_errors=True)
         if payment_type == PAYMENT_TYPE_PAYME:
+            # Verbatim from the site's `sendSMS()`:
+            # payReceiptPayme({orderId, paymeId, smsCode}) — note `smsCode`,
+            # which differs from Hamkorbank's `confirmationCode`.
             return await self._post(PAYME_VERIFY_CARD_URL, {
-                "id": payment_subid,
-                "confirmationCode": otp,
+                "orderId": order_id,
+                "paymeId": payment_subid,
+                "smsCode": otp,
             }, payment_errors=True)
         raise PaymentFailed(f"Unsupported payment type: {payment_type}")
 
@@ -545,7 +562,7 @@ class RailwayUserClient:
             await self._post(HAMKORBANK_HOLD_RESEND_URL, {"id": payment_subid})
             return
         if payment_type == PAYMENT_TYPE_PAYME:
-            await self._post(PAYME_RESEND_URL, {"id": payment_subid})
+            await self._post(PAYSYS_SUM_RESEND_URL, {"paySysSumId": payment_subid})
             return
         raise PaymentFailed(f"Unsupported payment type: {payment_type}")
 
