@@ -517,7 +517,13 @@ async def submit_otp(
     )
     client = RailwayUserClient(pool, user_id)
     try:
-        await client.confirm_otp(order.payment_type, order.payment_subid, otp)
+        confirm_resp = await client.confirm_otp(
+            order.payment_type, order.payment_subid, otp,
+        )
+        # eticket answers 200 for a rejected code too, so keep the body: it is
+        # the only record of what the gateway actually said.
+        logger.info("autobuy_otp_submitted", id=autobuy_id,
+                    response=str(confirm_resp)[:400])
     except Exception as exc:
         # Any failure here leaves the hold intact, so return the order to
         # `awaiting_otp` and let the user re-enter the code. Reverting only on
@@ -532,6 +538,31 @@ async def submit_otp(
             str(exc)[:200], autobuy_id,
         )
         raise
+
+    # A 2xx from confirm-payment means "code accepted for processing", NOT
+    # "ticket bought" — eticket settles the order asynchronously (its own web UI
+    # opens a websocket to learn the outcome). Trusting the 2xx reported a
+    # successful purchase to users who had typed a WRONG code. Ask eticket what
+    # actually happened to the order before claiming anything.
+    settled, order_state = await _await_order_settled(
+        client, order.railway_order_id,
+    )
+    if not settled:
+        reason = _UNSETTLED_REASON.get(
+            order_state, "To'lov tasdiqlanmadi. Kodni qayta kiriting.",
+        )
+        await pool.execute(
+            """
+            UPDATE autobuy_orders SET status='awaiting_otp',
+              failure_reason=$1, updated_at=now()
+            WHERE id=$2
+            """,
+            reason[:200], autobuy_id,
+        )
+        logger.warning("autobuy_otp_not_settled", id=autobuy_id,
+                       order_state=order_state)
+        raise PaymentFailed(reason, {"order_state": order_state})
+
     await pool.execute(
         """
         UPDATE autobuy_orders SET status='paid', failure_reason=NULL,
@@ -556,6 +587,51 @@ async def submit_otp(
                 subscription_deactivated=deactivated)
     await _notify_terminal(pool, autobuy_id, "paid")
     return await get_by_id(pool, autobuy_id, user_id)
+
+
+# eticket's own `orderState` vocabulary (from its Angular bundle + live capture).
+# An unpaid, still-held order sits at ORDER_IN_PROCESS.
+ORDER_STATE_PAID = {
+    "ORDER_COMPLETED_SUCCESSFULLY",
+    "ORDER_FINISHED_WITH_CORPORATE_CONFIRMATION_SUCCEEDED",
+}
+ORDER_STATE_IN_PROGRESS = {"ORDER_IN_PROCESS"}
+
+_UNSETTLED_REASON = {
+    "ORDER_FINISHED_WITH_ORDER_LIFECYCLE_DEADLINE_TIME_EXPIRED":
+        "Bron muddati tugadi — to'lov amalga oshmadi.",
+    "ORDER_IN_PROCESS":
+        "Kod qabul qilinmadi. Qaytadan kiriting.",
+}
+
+
+async def _await_order_settled(
+    client: RailwayUserClient, railway_order_id: str,
+    deadline_s: float = 25.0,
+) -> tuple[bool, str | None]:
+    """Poll eticket until the order leaves ORDER_IN_PROCESS.
+
+    Returns `(paid, last_order_state)`. Anything other than a confirmed paid
+    state counts as not paid — we would rather make the user retype a code than
+    tell them they own a ticket they do not.
+    """
+    started = asyncio.get_event_loop().time()
+    state: str | None = None
+    while asyncio.get_event_loop().time() - started < deadline_s:
+        try:
+            snapshot = await client.get_order(railway_order_id)
+            state = snapshot.order_state
+        except Exception as exc:
+            logger.warning("autobuy_settle_poll_error",
+                           order=railway_order_id, error=str(exc)[:200])
+            state = None
+        if state in ORDER_STATE_PAID:
+            return True, state
+        if state and state not in ORDER_STATE_IN_PROGRESS:
+            # A terminal state that is not a paid one — stop early.
+            return False, state
+        await asyncio.sleep(2.0)
+    return False, state
 
 
 async def resend_otp(

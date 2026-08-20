@@ -514,29 +514,30 @@ class RailwayUserClient:
 
     async def confirm_otp(
         self, payment_type: str, payment_subid: str, otp: str,
-    ) -> None:
-        """Submit the SMS-OTP. On 200 the payment is captured by eticket.
+    ) -> dict[str, Any]:
+        """Submit the SMS-OTP and return eticket's raw response.
 
         Body field is `confirmationCode` (not `code`) — taken verbatim from the
         site's own `sendSMS()`: `payReceiptHamkorHold({id, confirmationCode})`.
-        A rejected code comes back as a 4xx, which `payment_errors=True` turns
-        into PaymentFailed so the caller can let the user retry.
+
+        ⚠️ A 2xx here does NOT mean the ticket was bought. eticket settles the
+        order asynchronously (its web UI opens a websocket to learn the
+        outcome), and a wrong code still came back 200. Callers MUST confirm the
+        order reached a paid `orderState` before reporting success.
         """
         otp = "".join(ch for ch in (otp or "") if ch.isdigit())
         if not otp:
             raise PaymentFailed("OTP is empty")
         if payment_type == PAYMENT_TYPE_HAMKORBANK_HOLD:
-            await self._post(HAMKORBANK_HOLD_CONFIRM_URL, {
+            return await self._post(HAMKORBANK_HOLD_CONFIRM_URL, {
                 "id": payment_subid,
                 "confirmationCode": otp,
             }, payment_errors=True)
-            return
         if payment_type == PAYMENT_TYPE_PAYME:
-            await self._post(PAYME_VERIFY_CARD_URL, {
+            return await self._post(PAYME_VERIFY_CARD_URL, {
                 "id": payment_subid,
                 "confirmationCode": otp,
             }, payment_errors=True)
-            return
         raise PaymentFailed(f"Unsupported payment type: {payment_type}")
 
     async def resend_otp(self, payment_type: str, payment_subid: str) -> None:
