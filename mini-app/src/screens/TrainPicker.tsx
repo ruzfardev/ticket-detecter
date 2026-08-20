@@ -1,3 +1,4 @@
+import { Fragment, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Inbox } from "lucide-react";
@@ -36,6 +37,18 @@ export function TrainPicker() {
     enabled: !!(dep_code && arr_code && travel_date),
   });
 
+  // railway.uz returns trains whose tickets have not been released yet: both
+  // its list and detail endpoints report nothing for them (detail answers 204).
+  // eticket's own site leaves them out, which is why our list looked different.
+  // They stay here — being notified the moment they go on sale is the point of
+  // the app — but grouped last and clearly labelled, never silently mixed in.
+  const { onSale, notOnSale, ordered } = useMemo(() => {
+    const all = data ?? [];
+    const a = all.filter(t => t.car_types.length > 0);
+    const b = all.filter(t => t.car_types.length === 0);
+    return { onSale: a, notOnSale: b, ordered: [...a, ...b] };
+  }, [data]);
+
   return (
     <Screen
       padded
@@ -43,7 +56,7 @@ export function TrainPicker() {
       title="Poyezd tanlang"
       subtitle={
         train_numbers.length ? `${train_numbers.length} ta tanlandi` :
-        data ? `${data.length} ta poyezd · bir nechtasini tanlash mumkin` :
+        data ? `${onSale.length} ta poyezdda joy bor · bir nechtasini tanlash mumkin` :
         isLoading ? "Qidirilmoqda..." :
         undefined
       }
@@ -74,13 +87,33 @@ export function TrainPicker() {
         </div>
       )}
 
+      {onSale.length > 0 && notOnSale.length > 0 && (
+        <p className="px-1 text-caption-upper uppercase text-muted">
+          Sotuvda · {onSale.length} ta
+        </p>
+      )}
+
       <div className="space-y-2">
-        {data?.map(t => {
+        {ordered.map((t, i) => {
           const total = t.car_types.reduce((s, c) => s + c.free_seats, 0);
           const selected = train_numbers.includes(t.number);
+          const firstUnavailable =
+            total === 0 && i > 0 && ordered[i - 1].car_types.length > 0;
           return (
+            <Fragment key={t.number}>
+            {firstUnavailable && (
+              <div className="px-1 pt-4">
+                <p className="text-caption-upper uppercase text-muted">
+                  Hozircha sotuvda yo'q · {notOnSale.length} ta
+                </p>
+                <p className="mt-1 text-body-sm text-muted">
+                  Bu poyezdlarga chiptalar hali ochilmagan — shuning uchun
+                  eticket'da ko'rinmaydi. Tanlasangiz, sotuvga chiqishi bilan
+                  xabar beramiz.
+                </p>
+              </div>
+            )}
             <button
-              key={t.number}
               type="button"
               aria-pressed={selected}
               onClick={() => {
@@ -120,14 +153,15 @@ export function TrainPicker() {
                   <div className="text-body-sm text-muted">
                     {t.car_types.length > 0
                       ? t.car_types.map(c => `${c.type} (${c.free_seats})`).join(", ")
-                      : "joy yo'q"}
+                      : "Chiptalar hali ochilmagan"}
                   </div>
                 </div>
                 <Badge variant={total > 0 ? "coral" : "muted"}>
-                  {total}
+                  {total > 0 ? total : "—"}
                 </Badge>
               </div>
             </button>
+            </Fragment>
           );
         })}
       </div>
