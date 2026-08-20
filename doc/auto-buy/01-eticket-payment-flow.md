@@ -1,11 +1,13 @@
 # eticket.railway.uz — Auto-buy card payment flow (LIVE-CAPTURED)
 
-**Status:** Verified by live network capture on 2026-08-18/19 against the real
-eticket.railway.uz production site (Angular 11.1.2 SPA), using the account owner's
-own session. This **resolves the blocker** documented previously (the "204 / paymentId
-binding" dead-end): a fresh `v2` order + `device-type: BROWSER` header + a valid Bearer
-token makes the whole Hamkorbank-Hold chain succeed. Card number / CVV / OTP were
-redacted at capture time and never stored.
+**Status:** Verified by live network capture on 2026-08-18/19 and re-confirmed
+end-to-end on **2026-08-20** against the real eticket.railway.uz production site
+(Angular 11.1.2 SPA), using the account owner's own session. Card number / CVV / OTP
+were redacted at capture time and never stored.
+
+The long-standing blocker (`payment-type/list` returning an empty list →
+`No supported NATIONAL_CURRENCY type`) is **resolved**: the `paymentId` is assigned by
+eticket and must be read back from the order (step 1b), not generated client-side.
 
 > The only step not executed end-to-end (to avoid a real charge) is the final
 > **OTP-confirm** call. Its endpoint + body are inferred from eticket's own Angular
@@ -84,22 +86,42 @@ Seat-hold helpers:
 - `GET /api/v1/universal-orders/get/{orderId}` — order detail
 - `GET /api/v1/universal-orders/process/end-time/{orderId}` — hold expiry countdown
 
+### 1b. Read the order's paymentId — `GET /api/v1/universal-orders/get/{orderId}`
+
+**eticket assigns the `paymentId`; the client never invents it.** It appears on the
+order detail once the order settles (a second or two after create):
+
+```jsonc
+{ "response": {
+    "expressItemData": [ /* … tickets … */ ],
+    "orderState": "ORDER_IN_PROCESS",
+    "orderPaymentData": {
+      "paymentId": "PaymentId-ce8b1c3b-569a-439e-a2cb-021eefb50075",
+      "paymentType": "None"
+    } } }
+```
+
+Poll `get` until `response.orderPaymentData.paymentId` is non-null, then use that
+exact string for steps 2 and 3.
+
 ### 2. List payment types — `POST /api/v3/payment-type/list`
 ```jsonc
-{ "paymentId": "PaymentId-<uuid4>" }   // client-generated; MUST be reused in step 3
+{ "paymentId": "PaymentId-ce8b1c3b-…" }   // from step 1b — MUST be reused in step 3
 ```
 **→** `[ {cardType:"FOREIGN_CURRENCY", showType:"OPTIONAL", paymentTypes:["StripeIntegration"]},
 {cardType:"NATIONAL_CURRENCY", showType:"PRIORITIZED", paymentTypes:["HamkorbankHold"]} ]`
 
-> The `paymentId` is a fresh `"PaymentId-" + uuid4()`. It works when the order was just
-> created via `v2` create with `device-type: BROWSER`. (Previously believed to require a
-> browser-only binding — it does not; a fresh valid order + correct headers is enough.)
+> ⚠️ A **client-generated** `"PaymentId-" + uuid4()` always returns an empty list — eticket
+> looks the id up against the order and finds nothing. That was the root cause of the
+> long-running `No supported NATIONAL_CURRENCY type. Eticket returned: (none)` failure.
+> Confirmed 2026-08-20 by capturing a real browser purchase (Toshkent→Samarqand, 127Ф,
+> wagon 23, seat 20) end to end.
 
 ### 3. Select payment type — `POST /api/v1/payment/select-payment-type`
 ```jsonc
-{ "id": "<orderId>", "paymentId": "PaymentId-<uuid4>", "type": "HamkorbankHold", "withLoyaltyProgram": null }
+{ "id": "<orderId>", "paymentId": "PaymentId-ce8b1c3b-…", "type": "HamkorbankHold", "withLoyaltyProgram": null }
 ```
-**→** `{ "data": { "paymentId": "PaymentId-<uuid4>" } }`
+**→** `{ "data": { "paymentId": "PaymentId-ce8b1c3b-…" } }`
 
 ### 4. Initiate hold — `POST /api/v1/hamkorbank-hold/do-payment`
 ```jsonc
