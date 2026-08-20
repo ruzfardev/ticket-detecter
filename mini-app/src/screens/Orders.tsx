@@ -40,11 +40,12 @@ export function Orders() {
   const row = (o: AutobuyOrder) => {
     const meta = TONE[o.status];
     const Icon = meta.Icon;
+    const seats = o.seat_numbers?.length ? o.seat_numbers : [o.seat_number];
     return (
       <ListRow
         key={o.id}
         before={<Icon className={`h-5 w-5 ${o.status === "awaiting_otp" ? "text-coral" : "text-ink"}`} strokeWidth={1.75} />}
-        title={`${o.train_number} · Vagon ${o.car_number} · Joy ${o.seat_number}`}
+        title={`${o.train_number} · Vagon ${o.car_number} · ${seats.length > 1 ? `Joylar ${seats.join(", ")}` : `Joy ${seats[0]}`}`}
         subtitle={`${o.travel_date}${o.amount_uzs ? ` · ${o.amount_uzs.toLocaleString("ru-RU")} so'm` : ""}`}
         after={<Badge variant={meta.tone}>{meta.text}</Badge>}
         chevron

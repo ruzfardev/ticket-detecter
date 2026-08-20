@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Bell, Sparkles, Settings } from "lucide-react";
+import { Bell, Home, Sparkles, Settings, Ticket } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useHaptic } from "@/hooks/useHaptic";
 
@@ -11,9 +11,10 @@ type Tab = {
 };
 
 const TABS: Tab[] = [
-  { path: "/home",     label: "Xabarnoma",  Icon: Bell     },
-  { path: "/premium",  label: "Premium",    Icon: Sparkles },
-  { path: "/settings", label: "Sozlamalar", Icon: Settings },
+  { path: "/home",     label: "Asosiy",      Icon: Home     },
+  { path: "/orders",   label: "Buyurtmalar", Icon: Ticket   },
+  { path: "/premium",  label: "Premium",     Icon: Sparkles },
+  { path: "/settings", label: "Sozlamalar",  Icon: Settings },
 ];
 
 type Props = { children: ReactNode };
@@ -49,7 +50,7 @@ export function BottomNav({ children }: Props) {
       >
         <nav
           className={cn(
-            "pointer-events-auto flex items-stretch gap-1 rounded-3xl p-1.5",
+            "pointer-events-auto flex max-w-[calc(100vw-2rem)] items-stretch gap-0.5 rounded-3xl p-1.5",
             "border border-hairline bg-canvas/85 backdrop-blur-xl",
             "shadow-[0_8px_30px_-8px_rgba(0,0,0,0.18)] dark:shadow-[0_8px_30px_-6px_rgba(0,0,0,0.6)]",
           )}
@@ -64,7 +65,7 @@ export function BottomNav({ children }: Props) {
                 onClick={() => handleTab(path, active)}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex min-w-[68px] flex-col items-center justify-center gap-1 rounded-2xl px-2 py-1.5",
+                  "flex min-w-[62px] flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1.5 py-1.5",
                   "transition-colors duration-200",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral/40",
                   active

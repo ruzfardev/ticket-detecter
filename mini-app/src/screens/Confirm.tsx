@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   MapPin, CalendarDays, TrainFront, Armchair, ArrowDownToLine, ArrowUpToLine,
+  Zap,
 } from "lucide-react";
 
 import { createSubscription } from "@/api/client";
@@ -22,6 +24,7 @@ export function Confirm() {
   const qc = useQueryClient();
   const haptic = useHaptic();
   const w = useWizard();
+  const [autobuy, setAutobuy] = useState(false);
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -37,7 +40,7 @@ export function Confirm() {
         berth: w.berth,
       });
     },
-    onSuccess: () => {
+    onSuccess: (sub) => {
       haptic.notify("success");
       toast.success("Xabarnoma yaratildi");
       qc.invalidateQueries({ queryKey: ["subs"] });
@@ -45,7 +48,9 @@ export function Confirm() {
       // NOTE: do not reset() here — clearing the wizard while Confirm is still
       // mounted makes useWizardGuard see empty fields and bounce to step 1.
       // handleNew() in Home resets on the next wizard entry instead.
-      navigate("/home", { replace: true });
+      // Auto-buy still needs passengers and a card, so hand off to its own
+      // screen rather than trying to collect all of that inline here.
+      navigate(autobuy ? `/sub/${sub.id}/autobuy` : "/home", { replace: true });
     },
     onError: (err: any) => {
       haptic.notify("error");
@@ -112,6 +117,35 @@ export function Confirm() {
         )}
       </ListGroup>
 
+      <ListGroup
+        label="Avto sotib olish"
+        footer={
+          autobuy
+            ? "Saqlagandan so'ng yo'lovchi va kartani tanlaysiz."
+            : "Yoqilsa, joy topilgan zahoti chipta o'zi bron qilinadi — sizga faqat SMS kod kerak bo'ladi."
+        }
+      >
+        <ListRow
+          before={
+            <Zap
+              className={`h-5 w-5 ${autobuy ? "text-coral" : "text-muted-soft"}`}
+              strokeWidth={1.75}
+            />
+          }
+          title="Avtomatik sotib olish"
+          subtitle={autobuy ? "Yoqilgan" : "Faqat xabar yuboriladi"}
+          after={
+            <input
+              type="checkbox"
+              checked={autobuy}
+              onChange={e => setAutobuy(e.target.checked)}
+              className="h-5 w-5 accent-coral"
+              aria-label="Avto sotib olish"
+            />
+          }
+        />
+      </ListGroup>
+
       <p className="text-body-sm text-muted px-1">
         Bo'sh joy paydo bo'lganda Telegram orqali darhol xabar olasiz.
       </p>
@@ -123,6 +157,8 @@ export function Confirm() {
               <Spinner size="sm" className="text-on-primary" />
               Saqlanmoqda...
             </span>
+          ) : autobuy ? (
+            "Saqlash va sozlash"
           ) : (
             "Saqlash"
           )}

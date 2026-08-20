@@ -43,6 +43,11 @@ from app.railway.user_client import (
 )
 from app.services import card_service
 
+# eticket returns `endLifeTime` without an offset, in Tashkent wall-clock time
+# (verified: order created 07:19:56+05:00 -> endLifeTime "07:31:57", a 12-minute
+# hold). Reading it as UTC pushed every countdown 5 hours into the future.
+TASHKENT_TZ = timezone(timedelta(hours=5))
+
 
 # --- exceptions ---
 
@@ -361,7 +366,7 @@ async def _execute_pipeline(
         try:
             ts = datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
             if ts.tzinfo is None:
-                ts = ts.replace(tzinfo=timezone.utc)
+                ts = ts.replace(tzinfo=TASHKENT_TZ)
             await pool.execute(
                 "UPDATE autobuy_orders SET hold_until = $1 WHERE id = $2",
                 ts, autobuy_id,
@@ -513,7 +518,11 @@ async def submit_otp(
     client = RailwayUserClient(pool, user_id)
     try:
         await client.confirm_otp(order.payment_type, order.payment_subid, otp)
-    except PaymentFailed as exc:
+    except Exception as exc:
+        # Any failure here leaves the hold intact, so return the order to
+        # `awaiting_otp` and let the user re-enter the code. Reverting only on
+        # PaymentFailed used to strand the row in `paying` forever whenever
+        # eticket answered with anything else.
         await pool.execute(
             """
             UPDATE autobuy_orders SET status='awaiting_otp',
@@ -531,7 +540,20 @@ async def submit_otp(
         """,
         autobuy_id,
     )
-    logger.info("autobuy_paid", id=autobuy_id)
+    # The ticket is bought — the subscription has served its purpose, so stop
+    # watching instead of alerting about seats the user no longer needs. The
+    # user can re-activate it from the mini-app if they want to keep looking.
+    deactivated = await pool.fetchval(
+        """
+        UPDATE subscriptions SET is_active = false, updated_at = now()
+        WHERE id = (SELECT subscription_id FROM autobuy_orders WHERE id = $1)
+          AND is_active
+        RETURNING id
+        """,
+        autobuy_id,
+    )
+    logger.info("autobuy_paid", id=autobuy_id,
+                subscription_deactivated=deactivated)
     await _notify_terminal(pool, autobuy_id, "paid")
     return await get_by_id(pool, autobuy_id, user_id)
 
@@ -646,9 +668,12 @@ async def _notify_awaiting_otp(pool: asyncpg.Pool, autobuy_id: int) -> None:
     info = await pool.fetchrow(
         """
         SELECT ao.id, ao.train_number, ao.car_number, ao.seat_number,
-               ao.travel_date, ao.amount_uzs,
+               ao.seat_numbers, ao.travel_date, ao.amount_uzs, ao.hold_until,
                u.tg_user_id,
-               sd.name_uz AS dep_name, sa.name_uz AS arr_name
+               sd.name_uz AS dep_name, sa.name_uz AS arr_name,
+               (SELECT array_agg(trim(f.firstname || ' ' || f.lastname))
+                  FROM railway_friends_cache f
+                 WHERE f.id = ANY(ao.passenger_cache_ids)) AS passenger_names
         FROM autobuy_orders ao
         JOIN users u ON u.id = ao.user_id
         JOIN stations sd ON sd.code = ao.dep_code
@@ -667,8 +692,10 @@ async def _notify_awaiting_otp(pool: asyncpg.Pool, autobuy_id: int) -> None:
         travel_date=info["travel_date"].isoformat(),
         train_number=info["train_number"],
         car_number=info["car_number"],
-        seat_number=info["seat_number"],
+        seat_numbers=list(info["seat_numbers"] or [info["seat_number"]]),
+        passenger_names=list(info["passenger_names"] or []),
         amount_uzs=info["amount_uzs"],
+        hold_until=info["hold_until"],
     )
 
 
@@ -678,7 +705,8 @@ async def _notify_terminal(
 ) -> None:
     info = await pool.fetchrow(
         """
-        SELECT ao.id, ao.train_number, ao.seat_number,
+        SELECT ao.id, ao.train_number, ao.car_number, ao.seat_number,
+               ao.seat_numbers, ao.travel_date, ao.amount_uzs,
                u.tg_user_id,
                sd.name_uz AS dep_name, sa.name_uz AS arr_name
         FROM autobuy_orders ao
@@ -697,7 +725,10 @@ async def _notify_terminal(
         order_id=info["id"],
         status=status,
         route_name=f"{info['dep_name']} → {info['arr_name']}",
+        travel_date=info["travel_date"].isoformat(),
         train_number=info["train_number"],
-        seat_number=info["seat_number"],
+        car_number=info["car_number"],
+        seat_numbers=list(info["seat_numbers"] or [info["seat_number"]]),
+        amount_uzs=info["amount_uzs"],
         failure_reason=failure_reason,
     )

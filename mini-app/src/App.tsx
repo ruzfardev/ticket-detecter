@@ -23,7 +23,7 @@ import { BottomNav } from "./components/BottomNav";
 import { useBackButton } from "./hooks/useBackButton";
 import { useThemeSync } from "./hooks/useThemeSync";
 
-const TABBED_ROUTES = new Set(["/home", "/premium", "/settings"]);
+const TABBED_ROUTES = new Set(["/home", "/orders", "/premium", "/settings"]);
 const ROOT_ROUTES = new Set(["/"]);
 
 const tabbed = (el: JSX.Element) => <BottomNav>{el}</BottomNav>;
@@ -40,6 +40,7 @@ export function App() {
       <Route path="/"           element={<Welcome />} />
 
       <Route path="/home"     element={tabbed(<Home />)} />
+      <Route path="/orders"   element={tabbed(<Orders />)} />
       <Route path="/premium"  element={tabbed(<Premium />)} />
       <Route path="/settings" element={tabbed(<Settings />)} />
 
@@ -54,7 +55,6 @@ export function App() {
       <Route path="/railway-link"     element={<RailwayLink />} />
       <Route path="/friends"          element={<Friends />} />
       <Route path="/cards/add"        element={<CardAdd />} />
-      <Route path="/orders"           element={<Orders />} />
       <Route path="/order/:id"        element={<OrderDetail />} />
       <Route path="/donate"         element={<Donate />} />
       <Route path="/donate/custom"  element={<DonateCustom />} />

@@ -41,7 +41,10 @@ INVOICE_GENERATE_URL = f"{BASE_URL}/api/v1/universal-orders/invoice-generate"
 # currency gateways (route-dependent — Afrosiyob → HamkorbankHold, Plaskart → Payme).
 HAMKORBANK_HOLD_DO_URL = f"{BASE_URL}/api/v1/hamkorbank-hold/do-payment"
 HAMKORBANK_HOLD_PREPARE_URL = f"{BASE_URL}/api/v1/hamkorbank-hold/prepare-payment"
-HAMKORBANK_HOLD_PAY_URL = f"{BASE_URL}/api/v1/hamkorbank-hold/pay-receipt"
+# The Angular method is called `payReceiptHamkorHold` but it posts to
+# `confirm-payment`, NOT `pay-receipt` (which exists only for the non-hold
+# `/api/v1/hamkorbank/` gateway). Posting to pay-receipt returns a bare 404.
+HAMKORBANK_HOLD_CONFIRM_URL = f"{BASE_URL}/api/v1/hamkorbank-hold/confirm-payment"
 HAMKORBANK_HOLD_RESEND_URL = f"{BASE_URL}/api/v1/hamkorbank-hold/resend-code"
 
 PAYME_DO_URL = f"{BASE_URL}/api/v1/payme/do-payment"
@@ -145,6 +148,24 @@ class FriendRecord:
     your_self: bool
 
 
+def _payment_error_message(r: httpx.Response) -> str:
+    """Pull a human-readable reason out of an eticket payment rejection.
+
+    Shapes seen in the wild: `{"message": "..."}`, `{"error": "..."}`, and the
+    Spring default `{"status":404,"error":"Not Found","message":null}`.
+    """
+    try:
+        body = r.json()
+    except ValueError:
+        body = None
+    if isinstance(body, dict):
+        for key in ("message", "error", "detail"):
+            val = body.get(key)
+            if isinstance(val, str) and val.strip():
+                return val.strip()[:200]
+    return f"Payment rejected by eticket (HTTP {r.status_code})"
+
+
 class RailwayUserClient:
     """Per-user eticket client.
 
@@ -184,7 +205,8 @@ class RailwayUserClient:
                         self._jar.set(k.strip(), v.strip(), domain="eticket.railway.uz")
         return self._jar, headers
 
-    async def _post(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
+    async def _post(self, url: str, payload: dict[str, Any],
+                    *, payment_errors: bool = False) -> dict[str, Any]:
         await get_bucket().acquire()
         jar, headers = await self._prepare()
         try:
@@ -194,7 +216,7 @@ class RailwayUserClient:
                 jar.extract_cookies(r)   # persist Set-Cookie for the next call
         except httpx.HTTPError as e:
             raise RailwayUnavailable(f"{url} network error: {e}")
-        await self._handle_status(r, url)
+        await self._handle_status(r, url, payment_errors=payment_errors)
         # 204 No Content / empty body — return empty dict to keep callers simple.
         body = (r.text or "").strip()
         if not body:
@@ -204,7 +226,8 @@ class RailwayUserClient:
         except ValueError:
             raise RailwayUnavailable(f"{url} returned non-JSON body")
 
-    async def _handle_status(self, r: httpx.Response, url: str = "") -> None:
+    async def _handle_status(self, r: httpx.Response, url: str = "",
+                             *, payment_errors: bool = False) -> None:
         short_url = url.replace("https://eticket.railway.uz", "") if url else ""
         if r.status_code == 429:
             raise RateLimited("railway.uz returned 429")
@@ -222,6 +245,17 @@ class RailwayUserClient:
             raise RailwayLoginFailed("eticket session invalid; will retry")
         if r.status_code >= 500:
             raise RailwayUnavailable(f"railway.uz {r.status_code} {short_url}")
+        # On payment endpoints a 4xx is eticket rejecting the input (bad OTP,
+        # declined card) — a user-fixable payment error, not an outage. Surface
+        # it as PaymentFailed so the caller can keep the order retryable.
+        if payment_errors and 400 <= r.status_code < 500:
+            logger.warning("railway_payment_rejected", user_id=self._user_id,
+                           url=short_url, status=r.status_code,
+                           body=r.text[:200])
+            raise PaymentFailed(
+                _payment_error_message(r),
+                {"status": r.status_code, "url": short_url},
+            )
         # Accept any 2xx (200 OK, 204 No Content). Reject everything else.
         if not (200 <= r.status_code < 300):
             logger.warning(
@@ -481,21 +515,27 @@ class RailwayUserClient:
     async def confirm_otp(
         self, payment_type: str, payment_subid: str, otp: str,
     ) -> None:
-        """Submit the SMS-OTP. On 200 the payment is captured by eticket."""
+        """Submit the SMS-OTP. On 200 the payment is captured by eticket.
+
+        Body field is `confirmationCode` (not `code`) — taken verbatim from the
+        site's own `sendSMS()`: `payReceiptHamkorHold({id, confirmationCode})`.
+        A rejected code comes back as a 4xx, which `payment_errors=True` turns
+        into PaymentFailed so the caller can let the user retry.
+        """
         otp = "".join(ch for ch in (otp or "") if ch.isdigit())
         if not otp:
             raise PaymentFailed("OTP is empty")
         if payment_type == PAYMENT_TYPE_HAMKORBANK_HOLD:
-            await self._post(HAMKORBANK_HOLD_PAY_URL, {
+            await self._post(HAMKORBANK_HOLD_CONFIRM_URL, {
                 "id": payment_subid,
-                "code": otp,
-            })
+                "confirmationCode": otp,
+            }, payment_errors=True)
             return
         if payment_type == PAYMENT_TYPE_PAYME:
             await self._post(PAYME_VERIFY_CARD_URL, {
                 "id": payment_subid,
-                "code": otp,
-            })
+                "confirmationCode": otp,
+            }, payment_errors=True)
             return
         raise PaymentFailed(f"Unsupported payment type: {payment_type}")
 

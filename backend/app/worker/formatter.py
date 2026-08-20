@@ -18,60 +18,63 @@ def format_alert(
     *,
     lang: str = "uz",
 ) -> str:
-    lines: list[str] = [
-        "🚂 <b>Chipta topildi!</b>",
-        f"📍 Marshrut: <b>{_e(route_name)}</b>",
-        f"📅 Sana: <b>{travel_date}</b>",
-        "",
-    ]
-
     total = sum(
         len(c.get("lower", [])) + len(c.get("upper", [])) + len(c.get("places", []))
         for c in snapshot.values()
     )
 
-    head = f"• <b>{_e(train_number)}</b>"
+    lines: list[str] = [
+        f"🎉 <b>Bo'sh joy topildi — {total} ta</b>",
+        _RULE,
+        f"📍 <b>{_e(route_name)}</b>",
+        f"📅 {travel_date}",
+    ]
+
+    head = f"🚂 <b>{_e(train_number)}</b>"
     if train_brand:
-        head += f" ({_e(train_brand)})"
+        head += f" · {_e(train_brand)}"
     lines.append(head)
     if departure and arrival:
-        time_part = f" ({time_on_way})" if time_on_way else ""
-        lines.append(f"  🕐 {_short(departure)} → {_short(arrival)}{time_part}")
-    lines.append(f"  💺 Jami: <b>{total} ta</b>")
-    lines.append("")
+        time_part = f"  ({time_on_way})" if time_on_way else ""
+        lines.append(f"🕐 {_short(departure)} → {_short(arrival)}{time_part}")
+    lines.append(_RULE)
 
     # Group cars by detected layout
     has_berth = any(("lower" in c or "upper" in c) for c in snapshot.values())
     if has_berth:
-        lines.append("  🪑 <b>Plaskart / Kupe</b>:")
         for car_no, payload in snapshot.items():
             lower = payload.get("lower", [])
             upper = payload.get("upper", [])
             car_total = len(lower) + len(upper)
             if car_total == 0:
                 continue
-            lines.append(f"     Vagon {_e(car_no)} ({car_total} ta):")
+            lines.append(f"🚃 <b>Vagon {_e(car_no)}</b> — {car_total} ta")
             if lower:
-                preview = ", ".join(str(p) for p in lower[:12])
-                extra = " ..." if len(lower) > 12 else ""
-                lines.append(f"        ⬇️ pastki ({len(lower)}): {preview}{extra}")
+                lines.append(f"   ⬇️ pastki ({len(lower)}): {_preview(lower)}")
             if upper:
-                preview = ", ".join(str(p) for p in upper[:12])
-                extra = " ..." if len(upper) > 12 else ""
-                lines.append(f"        ⬆️ tepa   ({len(upper)}): {preview}{extra}")
+                lines.append(f"   ⬆️ tepa ({len(upper)}): {_preview(upper)}")
 
     other_cars = {k: v for k, v in snapshot.items() if "places" in v}
-    if other_cars:
-        lines.append("  🪑 <b>Boshqa vagonlar</b>:")
-        for car_no, payload in other_cars.items():
-            places = payload.get("places", [])
-            preview = ", ".join(str(p) for p in places[:12])
-            extra = " ..." if len(places) > 12 else ""
-            lines.append(f"     Vagon {_e(car_no)} ({len(places)}): {preview}{extra}")
+    for car_no, payload in other_cars.items():
+        places = payload.get("places", [])
+        lines.append(
+            f"🚃 <b>Vagon {_e(car_no)}</b> — {len(places)} ta: {_preview(places)}"
+        )
 
-    lines.append("")
-    lines.append('🔗 <a href="https://eticket.railway.uz/uz/home">Bilet olish</a>')
+    lines.append(_RULE)
+    lines.append('🔗 <a href="https://eticket.railway.uz/uz/home">eticket.railway.uz\'da olish</a>')
+    lines.append("<i>⚡️ Avto sotib olish yoqilgan bo'lsa, joy o'zi bron qilinadi.</i>")
     return "\n".join(lines)
+
+
+_RULE = "━━━━━━━━━━━━━━━"
+
+
+def _preview(seats: list, limit: int = 12) -> str:
+    """Comma-joined seat numbers, truncated with a count of what's hidden."""
+    shown = ", ".join(str(p) for p in seats[:limit])
+    rest = len(seats) - limit
+    return f"{shown} +{rest}" if rest > 0 else shown
 
 
 def _e(text: str) -> str:

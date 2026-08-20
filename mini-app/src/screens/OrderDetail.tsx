@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  CalendarDays, CheckCircle2, Clock, KeyRound, RefreshCw,
+  AlertCircle, CalendarDays, CheckCircle2, Clock, KeyRound, RefreshCw,
   Train as TrainIcon, X, XCircle,
 } from "lucide-react";
 
@@ -56,18 +56,28 @@ export function OrderDetail() {
   });
 
   const [otp, setOtp] = useState("");
+  const [otpError, setOtpError] = useState<string | null>(null);
 
   const submit = useMutation({
     mutationFn: (code: string) => submitOrderOtp(orderId, code),
     onSuccess: () => {
+      setOtpError(null);
       toast.success("To'lov muvaffaqiyatli");
       qc.invalidateQueries({ queryKey: ["order", orderId] });
       qc.invalidateQueries({ queryKey: ["orders"] });
     },
     onError: (err: any) => {
       const code = err?.response?.data?.error?.code;
-      if (code === "payment_failed") toast.error("OTP noto'g'ri yoki muddati o'tgan");
-      else toast.error("Xato. Qaytadan urinib ko'ring");
+      const msg =
+        code === "payment_failed"
+          ? "Kod noto'g'ri yoki muddati o'tgan. Qaytadan kiriting."
+          : "Kodni tekshirib bo'lmadi. Yana urinib ko'ring.";
+      // The hold is still alive — clear the field so the user can retype
+      // immediately instead of editing over a rejected code.
+      setOtp("");
+      setOtpError(msg);
+      toast.error(msg);
+      qc.invalidateQueries({ queryKey: ["order", orderId] });
     },
   });
 
@@ -86,7 +96,7 @@ export function OrderDetail() {
     },
   });
 
-  useEffect(() => { setOtp(""); }, [orderId]);
+  useEffect(() => { setOtp(""); setOtpError(null); }, [orderId]);
 
   if (order.isLoading) return <StatusView kind="loading" />;
   if (!order.data) return <StatusView kind="error" description="Buyurtma topilmadi" />;
@@ -94,6 +104,8 @@ export function OrderDetail() {
   const o = order.data;
   const label = STATUS_LABEL[o.status];
   const otpDigits = otp.replace(/\D/g, "");
+  const seats = o.seat_numbers?.length ? o.seat_numbers : [o.seat_number];
+  const passengers = o.passenger_names ?? [];
 
   return (
     <Screen
@@ -104,16 +116,22 @@ export function OrderDetail() {
       <ListGroup label="Tafsilotlar">
         <ListRow
           before={<TrainIcon className="h-5 w-5 text-ink" strokeWidth={1.75} />}
-          title={`${o.train_number} · Vagon ${o.car_number} · Joy ${o.seat_number}`}
+          title={`${o.train_number} · Vagon ${o.car_number}`}
+          subtitle={seats.length > 1 ? `Joylar: ${seats.join(", ")}` : `Joy ${seats[0]}`}
         />
         <ListRow
           before={<CalendarDays className="h-5 w-5 text-ink" strokeWidth={1.75} />}
           title={o.travel_date}
           subtitle="Sana"
         />
-        {o.friend_name && (
-          <ListRow title={o.friend_name} subtitle="Hamroh" />
-        )}
+        {passengers.length > 0 ? (
+          <ListRow
+            title={passengers.join(", ")}
+            subtitle={passengers.length > 1 ? `Yo'lovchilar · ${passengers.length} ta` : "Yo'lovchi"}
+          />
+        ) : o.friend_name ? (
+          <ListRow title={o.friend_name} subtitle="Yo'lovchi" />
+        ) : null}
         {o.amount_uzs !== null && (
           <ListRow
             title={`${o.amount_uzs.toLocaleString("ru-RU")} so'm`}
@@ -152,9 +170,24 @@ export function OrderDetail() {
               maxLength={10}
               placeholder="• • • • •"
               value={otp}
-              onChange={e => setOtp(e.target.value)}
+              aria-invalid={otpError ? true : undefined}
+              aria-describedby={otpError ? "otp-error" : undefined}
+              onChange={e => {
+                setOtp(e.target.value);
+                if (otpError) setOtpError(null);
+              }}
               before={<KeyRound size={16} strokeWidth={1.75} />}
             />
+            {otpError && (
+              <p
+                id="otp-error"
+                role="alert"
+                className="flex items-start gap-1.5 px-1 text-body-sm text-error"
+              >
+                <AlertCircle size={14} strokeWidth={2} className="mt-0.5 shrink-0" />
+                {otpError}
+              </p>
+            )}
           </div>
           <div className="flex justify-end">
             <Button

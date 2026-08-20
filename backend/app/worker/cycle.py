@@ -133,6 +133,20 @@ async def _process_group(pool: asyncpg.Pool, g: asyncpg.Record) -> None:
         await _mark_polled(pool, g["id"], g["has_premium"])
         return
 
+    # A subscription with an auto-buy order still in flight already has seats
+    # held; alerting again would just spam the user while they are entering the
+    # SMS code. Once the order settles (cancelled/expired/failed) the sub drops
+    # out of this set and alerting resumes on its own; a `paid` order instead
+    # deactivates the subscription, so it never reaches here again.
+    busy_sub_ids = await _subs_with_live_orders(pool, [s["id"] for s in subs])
+    if busy_sub_ids:
+        logger.info("worker_subs_muted_by_live_order",
+                    count=len(busy_sub_ids), sub_ids=sorted(busy_sub_ids))
+        subs = [s for s in subs if s["id"] not in busy_sub_ids]
+    if not subs:
+        await _mark_polled(pool, g["id"], g["has_premium"])
+        return
+
     # For each train, only fetch detail if any sub is interested
     for idx, train in enumerate(trains):
         if not _any_sub_matches_train(subs, train.number):
@@ -171,6 +185,24 @@ async def _process_group(pool: asyncpg.Pool, g: asyncpg.Record) -> None:
                 await _maybe_autobuy(pool, sub, train, cars, snapshot, log_id, g)
 
     await _mark_polled(pool, g["id"], g["has_premium"])
+
+
+async def _subs_with_live_orders(
+    pool: asyncpg.Pool, sub_ids: list[int],
+) -> set[int]:
+    """Subscription ids that currently have an unfinished auto-buy order."""
+    if not sub_ids:
+        return set()
+    rows = await pool.fetch(
+        """
+        SELECT DISTINCT subscription_id
+        FROM autobuy_orders
+        WHERE subscription_id = ANY($1::bigint[])
+          AND status IN ('reserving', 'awaiting_otp', 'paying')
+        """,
+        sub_ids,
+    )
+    return {r["subscription_id"] for r in rows}
 
 
 def _any_sub_matches_train(subs: list[asyncpg.Record], train_number: str) -> bool:
