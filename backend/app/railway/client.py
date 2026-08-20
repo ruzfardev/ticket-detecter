@@ -185,8 +185,14 @@ class RailwayClient:
         cars_out: list[CarDetail] = []
         car_groups = (r.json().get("data", {}).get("train") or {}).get("carGroup") or []
         for g in car_groups:
+            # `type` is the stable Cyrillic code (Сидячий / Купе / Плацкартный);
+            # `typeShow` is a localised label that varies by brand and language
+            # ("O'rindiqli", "Kupe", "Sitting"). Preferring typeShow meant seated
+            # cars normalised to "o'rindiqli", which never equalled the
+            # "сидячий" a subscriber had stored — so no seated train could ever
+            # match. Judge on `type`, keep typeShow only for display.
             raw_ctype = str(g.get("type") or "")
-            ctype = normalize_car_type(g.get("typeShow") or g.get("type") or "")
+            ctype = normalize_car_type(g.get("type") or g.get("typeShow") or "")
             class_service = str((g.get("services") or {}).get("type") or "")
             for car in g.get("cars") or []:
                 places = car.get("places") or []

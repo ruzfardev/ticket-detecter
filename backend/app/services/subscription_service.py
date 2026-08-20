@@ -10,7 +10,7 @@ import asyncpg
 from app.core.errors import Forbidden, InvalidPayload, NotFound, SlotLimitReached
 from app.core.logging import logger
 from app.railway import user_auth
-from app.railway.models import BERTH_TYPES
+from app.railway.models import BERTH_TYPES, VALID_CAR_TYPES
 from app.services import user_service
 
 ALLOWED_PAYMENT_METHODS = {"payme", "click", "hamkorbank", "kapitalbank"}
@@ -304,8 +304,9 @@ def validate_payload(
     if dep_code == arr_code:
         from app.core.errors import InvalidPayload
         raise InvalidPayload("dep_code and arr_code must differ")
-    valid_types = {"плацкарта", "купе", "люкс", "св", "сидячий"}
-    bad = [t for t in car_types if t not in valid_types]
+    # Single source of truth — a duplicated literal here is how a car type can
+    # be selectable in the UI yet rejected on save.
+    bad = [t for t in car_types if t not in set(VALID_CAR_TYPES)]
     if bad:
         from app.core.errors import InvalidPayload
         raise InvalidPayload(f"Invalid car_types: {bad}")
