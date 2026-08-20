@@ -9,6 +9,7 @@ import {
 import {
   createSubscription, getCard, getFriends, getRailwayStatus, patchAutobuy,
 } from "@/api/client";
+import { carTypeLabels } from "@/lib/cartypes";
 import { useHaptic } from "@/hooks/useHaptic";
 import { useWizardGuard } from "@/hooks/useWizardGuard";
 import { useWizard } from "@/store/wizard";
@@ -142,7 +143,7 @@ export function Confirm() {
         />
         <ListRow
           before={<Armchair className="h-5 w-5 text-ink" strokeWidth={1.75} />}
-          title={w.car_types.join(", ")}
+          title={carTypeLabels(w.car_types)}
           subtitle="Vagon turi"
           chevron
           onClick={() => navigate("/new/car-type")}

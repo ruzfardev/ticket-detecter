@@ -11,6 +11,7 @@ import {
 import {
   deleteSubscription, listSubscriptions, patchSubscription,
 } from "@/api/client";
+import { carTypeLabels } from "@/lib/cartypes";
 import { useHaptic } from "@/hooks/useHaptic";
 import { useTelegram } from "@/hooks/useTelegram";
 import { Screen } from "@/components/Screen";
@@ -116,7 +117,7 @@ export function SubDetails() {
         />
         <ListRow
           before={<Armchair className="h-5 w-5 text-ink" strokeWidth={1.75} />}
-          title={sub.car_types.join(", ") || "Barchasi"}
+          title={carTypeLabels(sub.car_types) || "Barchasi"}
           subtitle="Vagon turi"
         />
         <ListRow
