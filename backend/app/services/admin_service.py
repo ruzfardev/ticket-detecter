@@ -142,6 +142,55 @@ async def refund_payment(pool: asyncpg.Pool, payment_id: int) -> dict:
 
 # ---- Broadcast --------------------------------------------------------------
 
+async def find_user(pool: asyncpg.Pool, tg_user_id: int) -> dict | None:
+    """Account summary for the admin lookup command."""
+    row = await pool.fetchrow(
+        """
+        SELECT u.id, u.tg_user_id, u.lang, u.tier, u.premium_until,
+               u.trial_granted_at, u.created_at,
+               (SELECT count(*) FROM subscriptions s
+                 WHERE s.user_id = u.id AND s.is_active)          AS active_subs,
+               (SELECT count(*) FROM autobuy_orders o
+                 WHERE o.user_id = u.id AND o.status = 'paid')    AS paid_orders,
+               EXISTS (SELECT 1 FROM user_railway_accounts a
+                        WHERE a.user_id = u.id
+                          AND a.link_status = 'active')           AS eticket_linked
+        FROM users u
+        WHERE u.tg_user_id = $1
+        """,
+        tg_user_id,
+    )
+    return dict(row) if row else None
+
+
+async def grant_premium(
+    pool: asyncpg.Pool, tg_user_id: int, days: int,
+) -> dict | None:
+    """Extend a user's premium by `days`. Returns None if the user is unknown.
+
+    Extends from whichever is later — now, or their current expiry — so
+    granting never shortens an entitlement someone already paid for.
+    """
+    row = await pool.fetchrow(
+        """
+        UPDATE users
+        SET tier = 'premium',
+            premium_until = GREATEST(COALESCE(premium_until, now()), now())
+                            + ($2 || ' days')::interval
+        WHERE tg_user_id = $1
+        RETURNING id, premium_until
+        """,
+        tg_user_id, str(int(days)),
+    )
+    if row is None:
+        return None
+    async with pool.acquire() as conn:
+        await _refresh_groups_for_user(conn, row["id"])
+    logger.info("admin_premium_grant", tg_user_id=tg_user_id, days=days,
+                until=row["premium_until"].isoformat())
+    return {"user_id": row["id"], "premium_until": row["premium_until"]}
+
+
 async def list_user_tg_ids(pool: asyncpg.Pool) -> list[int]:
     rows = await pool.fetch("SELECT tg_user_id FROM users ORDER BY id")
     return [r["tg_user_id"] for r in rows]

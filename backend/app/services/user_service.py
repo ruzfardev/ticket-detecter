@@ -13,6 +13,9 @@ from app.core.logging import logger
 
 # Admins (ADMIN_IDS) get permanent premium and effectively unlimited slots.
 _ADMIN_PREMIUM_UNTIL = datetime(2099, 12, 31, tzinfo=timezone.utc)
+
+# Every new account starts on premium for a week — see migration 0015.
+TRIAL_DAYS = 7
 _ADMIN_SLOT_MAX = 999
 
 
@@ -62,9 +65,39 @@ async def upsert_from_tg(pool: asyncpg.Pool, tg_user: TgUser) -> tuple[UserRow, 
     user = _row_to_user(row)
     if tg_user.id in settings.admin_id_set:
         user = await _ensure_admin_premium(pool, user)
+    else:
+        user = await _ensure_trial(pool, user)
     if is_new:
         logger.info("user_created", tg_user_id=tg_user.id, lang=lang)
     return user, is_new
+
+
+async def _ensure_trial(pool: asyncpg.Pool, user: UserRow) -> UserRow:
+    """Grant the one-week free trial, once per account.
+
+    Keyed on `trial_granted_at` rather than on "is this signup?" so it can never
+    fire twice, and GREATEST() means it can only extend — a paid account that
+    somehow reached here keeps the longer entitlement.
+    """
+    row = await pool.fetchrow(
+        """
+        UPDATE users
+        SET tier = 'premium',
+            premium_until = GREATEST(COALESCE(premium_until, now()),
+                                     now() + $2::interval),
+            trial_granted_at = now()
+        WHERE id = $1 AND trial_granted_at IS NULL
+        RETURNING tier, premium_until
+        """,
+        user.id, f"{TRIAL_DAYS} days",
+    )
+    if row is None:
+        return user            # already had its trial
+    user.tier = row["tier"]
+    user.premium_until = row["premium_until"]
+    logger.info("trial_granted", user_id=user.id, tg_user_id=user.tg_user_id,
+                days=TRIAL_DAYS, until=user.premium_until.isoformat())
+    return user
 
 
 async def _ensure_admin_premium(pool: asyncpg.Pool, user: UserRow) -> UserRow:

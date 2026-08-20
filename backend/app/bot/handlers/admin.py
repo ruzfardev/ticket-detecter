@@ -170,3 +170,69 @@ async def _run_broadcast(admin_id: int, text: str) -> None:
         )
     except Exception:
         pass
+
+
+# ---- /user <tg_id> ----------------------------------------------------------
+
+@router.message(Command("user"), IsAdmin())
+async def cmd_user(msg: Message, command: CommandObject) -> None:
+    arg = (command.args or "").strip()
+    if not arg.lstrip("-").isdigit():
+        await msg.answer(
+            "Foydalanish: <code>/user &lt;tg_user_id&gt;</code>\n"
+            "Masalan: <code>/user 970956519</code>"
+        )
+        return
+    info = await admin_service.find_user(get_pool(), int(arg))
+    if info is None:
+        await msg.answer(f"❌ Foydalanuvchi topilmadi: <code>{arg}</code>")
+        return
+    until = info["premium_until"]
+    await msg.answer("\n".join([
+        "👤 <b>Foydalanuvchi</b>",
+        f"ID: <code>{info['tg_user_id']}</code> (ichki: {info['id']})",
+        f"Tarif: <b>{info['tier']}</b>",
+        f"Amal qiladi: {until.strftime('%Y-%m-%d %H:%M') if until else '—'}",
+        f"Sinov berilgan: {'ha' if info['trial_granted_at'] else 'yo‘q'}",
+        f"Til: {info['lang']}",
+        "",
+        f"Faol xabarnomalar: <b>{info['active_subs']}</b>",
+        f"Sotib olingan chiptalar: <b>{info['paid_orders']}</b>",
+        f"eticket ulangan: {'✅' if info['eticket_linked'] else '❌'}",
+        f"Ro‘yxatdan o‘tgan: {info['created_at'].strftime('%Y-%m-%d')}",
+    ]))
+
+
+# ---- /grant <tg_id> <days> --------------------------------------------------
+
+@router.message(Command("grant"), IsAdmin())
+async def cmd_grant(msg: Message, command: CommandObject) -> None:
+    parts = (command.args or "").split()
+    if len(parts) != 2 or not parts[0].isdigit() or not parts[1].lstrip("-").isdigit():
+        await msg.answer(
+            "Foydalanish: <code>/grant &lt;tg_user_id&gt; &lt;kun&gt;</code>\n"
+            "Masalan: <code>/grant 970956519 30</code>"
+        )
+        return
+    tg_id, days = int(parts[0]), int(parts[1])
+    if not (1 <= days <= 3650):
+        await msg.answer("❌ Kun 1 dan 3650 gacha bo‘lishi kerak.")
+        return
+    res = await admin_service.grant_premium(get_pool(), tg_id, days)
+    if res is None:
+        await msg.answer(f"❌ Foydalanuvchi topilmadi: <code>{tg_id}</code>")
+        return
+    until = res["premium_until"].strftime("%Y-%m-%d")
+    await msg.answer(
+        f"✅ <code>{tg_id}</code> ga <b>{days} kun</b> premium berildi.\n"
+        f"Amal qiladi: <b>{until}</b>"
+    )
+    try:
+        await get_bot().send_message(
+            tg_id,
+            f"🎁 <b>Sizga {days} kunlik Premium berildi!</b>\n\n"
+            f"• 3 ta xabarnoma slot\n• Har 10 soniyada tekshiruv\n"
+            f"• Amal qiladi: <b>{until}</b>",
+        )
+    except Exception as e:
+        logger.warning("grant_notify_failed", tg_user_id=tg_id, error=str(e))

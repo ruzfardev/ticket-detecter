@@ -10,18 +10,21 @@ from app.core.logging import logger
 
 
 COMMANDS_UZ = [
-    BotCommand(command="start",    description="Botni ishga tushirish"),
-    BotCommand(command="menu",     description="Asosiy menyu"),
-    BotCommand(command="help",     description="Yordam"),
-    BotCommand(command="contact",  description="Aloqa"),
-    BotCommand(command="language", description="Tilni tanlash"),
-    BotCommand(command="premium",  description="Premium obuna"),
-    BotCommand(command="donate",   description="Loyihani qo'llab-quvvatlash"),
+    BotCommand(command="start",    description="🚂 Botni ishga tushirish"),
+    BotCommand(command="menu",     description="📋 Asosiy menyu"),
+    BotCommand(command="holat",    description="👤 Mening holatim va tarifim"),
+    BotCommand(command="premium",  description="💎 Premium obuna"),
+    BotCommand(command="donate",   description="❤️ Loyihani qo'llab-quvvatlash"),
+    BotCommand(command="language", description="🌐 Tilni tanlash"),
+    BotCommand(command="help",     description="❓ Yordam"),
+    BotCommand(command="contact",  description="✉️ Aloqa"),
 ]
 
 # Shown only in admin chats (scoped), on top of the public list.
 ADMIN_COMMANDS = COMMANDS_UZ + [
     BotCommand(command="stats",     description="📊 Statistika (admin)"),
+    BotCommand(command="user",      description="👤 Foydalanuvchi ma'lumoti (admin)"),
+    BotCommand(command="grant",     description="🎁 Premium berish (admin)"),
     BotCommand(command="refund",    description="↩️ Refund (admin)"),
     BotCommand(command="broadcast", description="📣 Broadcast (admin)"),
 ]
