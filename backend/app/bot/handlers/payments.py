@@ -58,9 +58,19 @@ async def on_successful_payment(msg: Message) -> None:
             raw=sp.model_dump(),
         )
     except Exception as e:
-        logger.exception("payment_record_failed", error=str(e))
-        await msg.answer("✅ To'lov qabul qilindi, lekin xabar yuborishda xato. "
-                         "Iltimos, shu yerga — botga yozing, admin yordam beradi.")
+        # The Stars are already taken at this point — Telegram has cleared the
+        # charge. If we cannot record it, the user has paid and received
+        # nothing, so this must reach an admin rather than only the log.
+        logger.exception("payment_record_failed", error=str(e),
+                         charge=sp.telegram_payment_charge_id,
+                         payload=sp.invoice_payload, stars=sp.total_amount)
+        await _alert_admins_payment_lost(msg, sp, e)
+        await msg.answer(
+            "⚠️ To'lovingiz qabul qilindi, lekin uni tizimda saqlashda xato "
+            "yuz berdi. Admin xabardor qilindi — tez orada hal qilamiz. "
+            "To'lov kodi:\n"
+            f"<code>{sp.telegram_payment_charge_id}</code>"
+        )
         return
 
     if result.get("type") == "premium":
@@ -82,6 +92,25 @@ async def on_successful_payment(msg: Message) -> None:
         await msg.answer("✅ To'lov qabul qilindi.")
 
     await _notify_admins_payment(msg, result)
+
+
+async def _alert_admins_payment_lost(msg: Message, sp, exc: Exception) -> None:
+    """A cleared payment we failed to record — needs manual intervention."""
+    try:
+        u = msg.from_user
+        who = f"@{u.username}" if u and u.username else (u.first_name if u else "—")
+        await notify_admins("\n".join([
+            "🚨 <b>TO'LOV YO'QOLDI — qo'lda hal qilish kerak</b>",
+            f"Kim: {who} (<code>{u.id if u else '?'}</code>)",
+            f"Miqdor: {sp.total_amount} ⭐",
+            f"Payload: <code>{sp.invoice_payload}</code>",
+            f"Charge: <code>{sp.telegram_payment_charge_id}</code>",
+            f"Xato: <code>{str(exc)[:300]}</code>",
+            "",
+            "Foydalanuvchi pul to'ladi, lekin hech narsa olmadi.",
+        ]))
+    except Exception as e:
+        logger.warning("admin_payment_lost_notify_failed", error=str(e))
 
 
 async def _notify_admins_payment(msg: Message, result: dict) -> None:

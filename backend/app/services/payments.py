@@ -8,8 +8,9 @@ identify the buyer.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
-from typing import Literal
+from typing import Any, Literal
 
 import asyncpg
 import httpx
@@ -136,6 +137,17 @@ async def precheck(
 
 # ---- Successful payment processing ------------------------------------------
 
+def _jsonb(obj: Any) -> str:
+    """Serialize for a JSONB column.
+
+    No asyncpg type codec is registered for json/jsonb on this pool, so a bare
+    dict raises `DataError: invalid input for query argument` and the INSERT
+    never happens. Passing text plus an explicit `::jsonb` cast is how the rest
+    of the codebase writes JSONB.
+    """
+    return json.dumps(obj, ensure_ascii=False, default=str)
+
+
 async def record_success(
     pool: asyncpg.Pool,
     tg_user_id: int,
@@ -175,11 +187,12 @@ async def record_success(
                     INSERT INTO payments
                       (user_id, tg_payment_charge_id, provider_charge_id,
                        stars_amount, type, plan, granted_from, granted_until, raw)
-                    VALUES ($1, $2, $3, $4, 'premium', $5, $6, $7, $8)
+                    VALUES ($1, $2, $3, $4, 'premium', $5, $6, $7, $8::jsonb)
                     RETURNING id
                     """,
                     user_id, tg_payment_charge_id, provider_charge_id,
-                    stars_amount, plan_id, granted_from, granted_until, raw,
+                    stars_amount, plan_id, granted_from, granted_until,
+                    _jsonb(raw),
                 )
                 await conn.execute(
                     "UPDATE users SET tier = 'premium', premium_until = $1 WHERE id = $2",
@@ -205,11 +218,11 @@ async def record_success(
                     INSERT INTO payments
                       (user_id, tg_payment_charge_id, provider_charge_id,
                        stars_amount, type, plan, granted_from, granted_until, raw)
-                    VALUES ($1, $2, $3, $4, 'donate', $5, $6, $6, $7)
+                    VALUES ($1, $2, $3, $4, 'donate', $5, $6, $6, $7::jsonb)
                     RETURNING id
                     """,
                     user_id, tg_payment_charge_id, provider_charge_id,
-                    stars_amount, plan_id, now, raw,
+                    stars_amount, plan_id, now, _jsonb(raw),
                 )
                 logger.info("payment_donate_success",
                             payment_id=payment_id, stars=stars_amount)
