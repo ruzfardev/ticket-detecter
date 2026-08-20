@@ -125,6 +125,8 @@ class OrderState:
     order_id: str
     end_life_time: str | None         # ISO timestamp
     amount_uzs: int | None
+    payment_id: str | None            # response.orderPaymentData.paymentId
+    order_state: str | None           # e.g. 'ORDER_IN_PROCESS'
     raw: dict[str, Any]
 
 
@@ -328,10 +330,13 @@ class RailwayUserClient:
                 t = (ticket.get("tariff") or {}).get("amount")
                 if isinstance(t, (int, float)):
                     amount = int(amount or 0) + int(t)
+        pay_data = body.get("orderPaymentData") or {}
         return OrderState(
             order_id=order_id,
             end_life_time=None,
             amount_uzs=amount,
+            payment_id=(pay_data.get("paymentId") or None),
+            order_state=(body.get("orderState") or None),
             raw=data,
         )
 

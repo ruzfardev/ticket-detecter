@@ -371,27 +371,34 @@ async def _execute_pipeline(
 
     # Optional preferred payment method from the subscription.
     preferred = sub["autobuy_payment_method"] or None
-    payment_id = f"PaymentId-{_uuid4()}"
 
-    # Eticket needs ~15-20 seconds and several get_order/end_time polls
-    # before payment-type/list returns anything — the browser does ~10 polls
-    # over 19 seconds (confirmed via the network capture spike). Mirror that.
-    # Poll every 2s for up to 30s, calling payment-type/list every 4s so
-    # we don't hammer it.
+    # The paymentId is assigned BY eticket, not by us: it appears on
+    # GET /universal-orders/get/{id} under response.orderPaymentData.paymentId
+    # once the order settles. payment-type/list is keyed on that id, so an
+    # invented one always comes back empty (confirmed against a browser capture
+    # of a real purchase: create -> get -> payment-type/list{paymentId}).
+    payment_id: str | None = None
     groups: list = []
     started = asyncio.get_event_loop().time()
     DEADLINE = 30.0
     attempt = 0
     while asyncio.get_event_loop().time() - started < DEADLINE:
         attempt += 1
-        try:
-            await client.get_order(created.order_id)
-            await client.get_end_time(created.order_id)
-        except Exception:
-            pass
-        # Try payment-type/list every other tick. Transient failures (429,
-        # 5xx, blips) must not kill the pipeline — keep polling to deadline.
-        if attempt % 2 == 0:
+        if payment_id is None:
+            try:
+                state = await client.get_order(created.order_id)
+                payment_id = state.payment_id
+                if payment_id:
+                    logger.info("autobuy_payment_id_ready",
+                                id=autobuy_id, attempt=attempt,
+                                order_state=state.order_state)
+            except Exception as exc:
+                logger.warning("autobuy_get_order_poll_error",
+                               id=autobuy_id, attempt=attempt,
+                               error=str(exc)[:200])
+        if payment_id:
+            # Transient failures (429, 5xx, blips) must not kill the pipeline —
+            # keep polling to the deadline.
             try:
                 groups = await client.list_payment_types(payment_id)
             except Exception as exc:
@@ -405,6 +412,11 @@ async def _execute_pipeline(
                             elapsed=round(asyncio.get_event_loop().time() - started, 1))
                 break
         await asyncio.sleep(2.0)
+    if payment_id is None:
+        raise PaymentFailed(
+            "Eticket did not assign a paymentId to the order in time",
+            {"order_id": created.order_id},
+        )
     if not groups:
         # One more try after the deadline (in case the last sleep skipped it).
         try:
@@ -473,11 +485,6 @@ def _pick_payment_type(groups, preferred: str | None) -> str | None:
         if t in SUPPORTED:
             return t
     return None
-
-
-def _uuid4() -> str:
-    import uuid
-    return str(uuid.uuid4())
 
 
 def _jsonb(obj: Any) -> str:
