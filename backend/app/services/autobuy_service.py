@@ -48,6 +48,10 @@ from app.services import card_service
 # hold). Reading it as UTC pushed every countdown 5 hours into the future.
 TASHKENT_TZ = timezone(timedelta(hours=5))
 
+# Fallback when eticket won't tell us the hold deadline (it 400s for a few
+# seconds after create). Its real hold runs ~12 minutes.
+DEFAULT_HOLD = timedelta(minutes=10)
+
 
 # --- exceptions ---
 
@@ -360,19 +364,29 @@ async def _execute_pipeline(
         autobuy_id,
     )
 
-    # Capture hold_until as soon as available.
-    end_iso = await client.get_end_time(created.order_id)
-    if end_iso:
-        try:
+    # Capture hold_until as soon as available. This is bookkeeping for the
+    # countdown and the expiry sweeper — it must never abort a purchase.
+    # eticket answers end-time with a 400 for a few seconds after create
+    # ("Ma'lumot topilmadi"), which used to kill the whole order.
+    ts: datetime | None = None
+    try:
+        end_iso = await client.get_end_time(created.order_id)
+        if end_iso:
             ts = datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
             if ts.tzinfo is None:
                 ts = ts.replace(tzinfo=TASHKENT_TZ)
-            await pool.execute(
-                "UPDATE autobuy_orders SET hold_until = $1 WHERE id = $2",
-                ts, autobuy_id,
-            )
-        except ValueError:
-            pass
+    except (ValueError, AppError) as exc:
+        logger.warning("autobuy_end_time_unavailable",
+                       id=autobuy_id, error=str(exc)[:200])
+    if ts is None:
+        # eticket's hold is ~12 minutes; assume slightly less so we release the
+        # seats rather than sit on a reservation that has already lapsed.
+        ts = datetime.now(timezone.utc) + DEFAULT_HOLD
+        logger.info("autobuy_hold_assumed", id=autobuy_id, hold_until=ts.isoformat())
+    await pool.execute(
+        "UPDATE autobuy_orders SET hold_until = $1 WHERE id = $2",
+        ts, autobuy_id,
+    )
 
     # Optional preferred payment method from the subscription.
     preferred = sub["autobuy_payment_method"] or None
