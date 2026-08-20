@@ -34,6 +34,8 @@ class PatchAutobuy(BaseModel):
     # back-compat: accept a single friend_id too
     friend_id: int | None = None
     payment_method: str | None = None
+    # 'all' (default) or 'partial' — see subscription_service.SEAT_STRATEGIES
+    seat_strategy: str | None = None
 
 
 @router.get("")
@@ -106,6 +108,7 @@ async def patch_autobuy(
         enabled=body.enabled,
         friend_ids=friend_ids,
         payment_method=body.payment_method,
+        seat_strategy=body.seat_strategy,
     )
     return {"subscription": sub.to_dict()}
 

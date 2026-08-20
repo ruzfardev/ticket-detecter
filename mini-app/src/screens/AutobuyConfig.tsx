@@ -11,6 +11,7 @@ import {
   listSubscriptions,
   patchAutobuy,
   type PaymentMethod,
+  type SeatStrategy,
 } from "@/api/client";
 import { Screen } from "@/components/Screen";
 import { StatusView } from "@/components/StatusView";
@@ -46,6 +47,7 @@ export function AutobuyConfig() {
   const [enabled, setEnabled] = useState<boolean>(false);
   const [friendIds, setFriendIds] = useState<number[]>([]);
   const [payMethod, setPayMethod] = useState<PaymentMethod | null>(null);
+  const [strategy, setStrategy] = useState<SeatStrategy>("all");
 
   // Seed local state when the subscription loads.
   useEffect(() => {
@@ -59,6 +61,7 @@ export function AutobuyConfig() {
             : [],
       );
       setPayMethod(sub.autobuy_payment_method);
+      setStrategy(sub.autobuy_seat_strategy ?? "all");
     }
   }, [sub?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -77,6 +80,7 @@ export function AutobuyConfig() {
         enabled,
         friend_ids: enabled ? friendIds : null,
         payment_method: enabled ? payMethod : null,
+        seat_strategy: enabled ? strategy : null,
       }),
     onSuccess: () => {
       toast.success("Saqlandi");
@@ -213,6 +217,40 @@ export function AutobuyConfig() {
             )}
           </ListGroup>
 
+
+          {validCount > 1 && (
+            <ListGroup
+              label="Joy yetmasa"
+              footer={
+                strategy === "partial"
+                  ? "Nechta joy bo'lsa, shuncha olinadi. Qolganlari uchun kuzatuv davom etadi."
+                  : "Hamma yo'lovchiga bitta vagondan joy topilmaguncha kutiladi."
+              }
+            >
+              {([
+                { v: "all" as const, t: "Hammasi birga", d: "Yoki hech nima — guruh ajralmaydi" },
+                { v: "partial" as const, t: "Nechta bo'lsa, shuncha", d: "Kamida bittasini kafolatlash" },
+              ]).map(o => (
+                <ListRow
+                  key={o.v}
+                  before={
+                    <span
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-pill border ${
+                        strategy === o.v ? "border-coral bg-coral text-on-primary" : "border-muted-soft"
+                      }`}
+                      aria-hidden
+                    >
+                      {strategy === o.v && <Check className="h-3 w-3" strokeWidth={3} />}
+                    </span>
+                  }
+                  title={o.t}
+                  subtitle={o.d}
+                  selected={strategy === o.v}
+                  onClick={() => setStrategy(o.v)}
+                />
+              ))}
+            </ListGroup>
+          )}
           <ListGroup label="To'lov uslubi (ixtiyoriy)" footer="Tanlanmasa, bron paytida tanlaysiz">
             <RadioGroup
               value={payMethod ?? ""}

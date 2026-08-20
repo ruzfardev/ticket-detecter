@@ -653,18 +653,7 @@ async def submit_otp(
         """,
         autobuy_id,
     )
-    # The ticket is bought — the subscription has served its purpose, so stop
-    # watching instead of alerting about seats the user no longer needs. The
-    # user can re-activate it from the mini-app if they want to keep looking.
-    deactivated = await pool.fetchval(
-        """
-        UPDATE subscriptions SET is_active = false, updated_at = now()
-        WHERE id = (SELECT subscription_id FROM autobuy_orders WHERE id = $1)
-          AND is_active
-        RETURNING id
-        """,
-        autobuy_id,
-    )
+    deactivated = await _deactivate_if_everyone_seated(pool, autobuy_id)
     await pool.execute(
         "UPDATE subscriptions SET autobuy_fail_count = 0 "
         "WHERE id = (SELECT subscription_id FROM autobuy_orders WHERE id = $1)",
@@ -795,6 +784,43 @@ async def _mark_failed(pool: asyncpg.Pool, autobuy_id: int, reason: str) -> None
     await _register_failure(pool, autobuy_id)
 
 
+async def _deactivate_if_everyone_seated(
+    pool: asyncpg.Pool, autobuy_id: int,
+) -> int | None:
+    """Stop watching once the whole group has tickets — not before.
+
+    With the 'partial' seat strategy an order can cover fewer passengers than
+    the subscription asked for. Switching the subscription off then would strand
+    the rest of the group with no ticket and no watcher, so it keeps running and
+    the fail counter is reset (this attempt succeeded).
+    """
+    row = await pool.fetchrow(
+        """
+        SELECT s.id,
+               COALESCE(array_length(s.autobuy_friend_ids, 1), 1) AS wanted,
+               COALESCE(array_length(o.seat_numbers, 1), 1)       AS got
+        FROM autobuy_orders o
+        JOIN subscriptions s ON s.id = o.subscription_id
+        WHERE o.id = $1
+        """,
+        autobuy_id,
+    )
+    if row is None:
+        return None
+    await pool.execute(
+        "UPDATE subscriptions SET autobuy_fail_count = 0 WHERE id = $1", row["id"],
+    )
+    if row["got"] < row["wanted"]:
+        logger.info("autobuy_partial_keeps_watching", sub_id=row["id"],
+                    wanted=row["wanted"], got=row["got"])
+        return None
+    return await pool.fetchval(
+        "UPDATE subscriptions SET is_active = false, updated_at = now() "
+        "WHERE id = $1 AND is_active RETURNING id",
+        row["id"],
+    )
+
+
 async def reconcile_pending(pool: asyncpg.Pool) -> int:
     """Settle orders whose payment outcome we could not determine in time.
 
@@ -839,12 +865,7 @@ async def reconcile_pending(pool: asyncpg.Pool) -> int:
             )
             if updated is None:
                 continue          # someone else settled it first
-            await pool.execute(
-                "UPDATE subscriptions SET is_active = false, autobuy_fail_count = 0, "
-                "updated_at = now() "
-                "WHERE id = (SELECT subscription_id FROM autobuy_orders WHERE id = $1)",
-                row["id"],
-            )
+            await _deactivate_if_everyone_seated(pool, row["id"])
             settled += 1
             logger.info("autobuy_reconciled_paid", id=row["id"],
                         was=row["status"], order_state=state)

@@ -73,6 +73,7 @@ export function Confirm() {
           enabled: true,
           friend_ids: friendIds,
           payment_method: w.autobuy_payment_method,
+          seat_strategy: w.autobuy_seat_strategy,
         });
       }
       return sub;
@@ -268,6 +269,42 @@ export function Confirm() {
               </div>
             )}
           </ListGroup>
+
+          {validCount > 1 && (
+            <ListGroup
+              label="Joy yetmasa"
+              footer={
+                w.autobuy_seat_strategy === "partial"
+                  ? "Nechta joy bo'lsa, shuncha olinadi. Qolganlari uchun kuzatuv davom etadi."
+                  : "Hamma yo'lovchiga bitta vagondan joy topilmaguncha kutiladi."
+              }
+            >
+              {([
+                { v: "all" as const, t: "Hammasi birga", d: "Yoki hech nima — guruh ajralmaydi" },
+                { v: "partial" as const, t: "Nechta bo'lsa, shuncha", d: "Kamida bittasini kafolatlash" },
+              ]).map(o => (
+                <ListRow
+                  key={o.v}
+                  before={
+                    <span
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-pill border ${
+                        w.autobuy_seat_strategy === o.v
+                          ? "border-coral bg-coral text-on-primary"
+                          : "border-muted-soft"
+                      }`}
+                      aria-hidden
+                    >
+                      {w.autobuy_seat_strategy === o.v && <Check className="h-3 w-3" strokeWidth={3} />}
+                    </span>
+                  }
+                  title={o.t}
+                  subtitle={o.d}
+                  selected={w.autobuy_seat_strategy === o.v}
+                  onClick={() => w.setField("autobuy_seat_strategy", o.v)}
+                />
+              ))}
+            </ListGroup>
+          )}
         </>
       )}
 

@@ -14,6 +14,10 @@ from app.railway.models import BERTH_TYPES, VALID_CAR_TYPES
 from app.services import user_service
 
 ALLOWED_PAYMENT_METHODS = {"payme", "click", "hamkorbank", "kapitalbank"}
+# How to handle a multi-passenger auto-buy when no single car seats everyone.
+#   all     -> buy nothing until one car fits the whole group (default)
+#   partial -> take what the best car offers, at least one seat
+SEAT_STRATEGIES = {"all", "partial"}
 
 
 @dataclass(slots=True)
@@ -39,6 +43,7 @@ class SubscriptionRow:
     autobuy_friend_ids: list[int] | None = None
     autobuy_friend_names: list[str] | None = None
     autobuy_payment_method: str | None = None
+    autobuy_seat_strategy: str = "all"
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -54,6 +59,7 @@ SELECT s.id, s.user_id, s.dep_code, s.arr_code, s.travel_date,
        s.train_numbers, s.car_types, s.berth, s.is_active,
        s.muted_until, s.created_at,
        s.autobuy_enabled, s.autobuy_friend_id, s.autobuy_friend_ids, s.autobuy_payment_method,
+       s.autobuy_seat_strategy,
        sd.name_uz AS dep_name, sa.name_uz AS arr_name,
        fc.firstname AS autobuy_friend_firstname,
        fc.lastname  AS autobuy_friend_lastname,
@@ -96,6 +102,7 @@ def _row_to_sub(row: asyncpg.Record) -> SubscriptionRow:
         autobuy_friend_ids=[int(x) for x in (row.get("autobuy_friend_ids") or [])] or None,
         autobuy_friend_names=list(row.get("autobuy_friend_names") or []) or None,
         autobuy_payment_method=row.get("autobuy_payment_method"),
+        autobuy_seat_strategy=row.get("autobuy_seat_strategy") or "all",
     )
 
 
@@ -184,6 +191,7 @@ async def update_autobuy(
     enabled: bool,
     friend_ids: list[int] | None,
     payment_method: str | None,
+    seat_strategy: str | None = None,
 ) -> SubscriptionRow:
     """Toggle/configure auto-buy on a subscription (1-4 passengers).
 
@@ -195,6 +203,12 @@ async def update_autobuy(
       - payment_method ∈ ALLOWED_PAYMENT_METHODS or None
     """
     await get_by_id(pool, sub_id, user_id)  # ownership check
+
+    if seat_strategy is not None and seat_strategy not in SEAT_STRATEGIES:
+        raise InvalidPayload(
+            f"Invalid seat_strategy: {seat_strategy}",
+            {"allowed": sorted(SEAT_STRATEGIES)},
+        )
 
     if payment_method is not None and payment_method not in ALLOWED_PAYMENT_METHODS:
         raise InvalidPayload(
@@ -235,13 +249,15 @@ async def update_autobuy(
             autobuy_friend_ids = $2::bigint[],
             autobuy_friend_id = $3,
             autobuy_payment_method = $4,
+            autobuy_seat_strategy = $5,
             updated_at = now()
-        WHERE id = $5
+        WHERE id = $6
         """,
         bool(enabled),
         ids if enabled else [],
         (ids[0] if ids else None),
         payment_method if enabled else None,
+        seat_strategy or "all",
         sub_id,
     )
     logger.info(
@@ -250,6 +266,7 @@ async def update_autobuy(
         enabled=bool(enabled),
         friend_ids=ids if enabled else [],
         payment_method=payment_method if enabled else None,
+        seat_strategy=seat_strategy or "all",
     )
     return await get_by_id(pool, sub_id, user_id)
 

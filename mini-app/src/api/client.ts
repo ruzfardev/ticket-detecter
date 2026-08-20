@@ -69,6 +69,7 @@ export type Train = {
 };
 
 export type PaymentMethod = "payme" | "click" | "hamkorbank" | "kapitalbank";
+export type SeatStrategy = "all" | "partial";
 
 export type Subscription = {
   id: number;
@@ -92,6 +93,8 @@ export type Subscription = {
   autobuy_friend_ids?: number[] | null;
   autobuy_friend_names?: string[] | null;
   autobuy_payment_method: PaymentMethod | null;
+  /** 'all' = everyone in one car or nothing; 'partial' = take what's there. */
+  autobuy_seat_strategy?: SeatStrategy;
 };
 
 export type RailwayAccountStatus = {
@@ -271,7 +274,12 @@ export const syncFriends = () =>
 
 export const patchAutobuy = (
   subId: number,
-  body: { enabled: boolean; friend_ids?: number[] | null; payment_method?: PaymentMethod | null },
+  body: {
+    enabled: boolean;
+    friend_ids?: number[] | null;
+    payment_method?: PaymentMethod | null;
+    seat_strategy?: SeatStrategy | null;
+  },
 ) =>
   mockApi.isEnabled
     ? mockApi.patchAutobuy(subId, body)

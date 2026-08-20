@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 
 export type Berth = "lower" | "upper" | "any";
 export type PayMethod = "hamkorbank" | "payme";
+export type SeatStrategy = "all" | "partial";
 
 export type WizardState = {
   dep_code?: string;
@@ -18,6 +19,7 @@ export type WizardState = {
   autobuy_enabled: boolean;
   autobuy_friend_ids: number[];
   autobuy_payment_method: PayMethod | null;
+  autobuy_seat_strategy: SeatStrategy;
   // Set once the subscription is saved. Every /new/* route self-evicts to Home
   // while this is true, so back-stepping can never land on a finished wizard
   // (which previously let the user save the same subscription twice).
@@ -35,6 +37,7 @@ const initial = {
   autobuy_enabled: false,
   autobuy_friend_ids: [] as number[],
   autobuy_payment_method: null as PayMethod | null,
+  autobuy_seat_strategy: "all" as SeatStrategy,
   completed: false,
 };
 
