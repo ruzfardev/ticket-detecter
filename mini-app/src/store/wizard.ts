@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
 export type Berth = "lower" | "upper" | "any";
+export type PayMethod = "hamkorbank" | "payme";
 
 export type WizardState = {
   dep_code?: string;
@@ -12,6 +13,11 @@ export type WizardState = {
   train_numbers: string[];  // empty = any train
   car_types: string[];
   berth: Berth;
+  // Auto-buy is configured inline on the last step. It lives here rather than
+  // in Confirm's local state so a detour to /cards/add doesn't lose it.
+  autobuy_enabled: boolean;
+  autobuy_friend_ids: number[];
+  autobuy_payment_method: PayMethod | null;
   setField: <K extends Exclude<keyof WizardState, "setField" | "reset">>(
     k: K, v: WizardState[K]
   ) => void;
@@ -22,6 +28,9 @@ const initial = {
   train_numbers: [] as string[],
   car_types: [] as string[],
   berth: "any" as Berth,
+  autobuy_enabled: false,
+  autobuy_friend_ids: [] as number[],
+  autobuy_payment_method: null as PayMethod | null,
 };
 
 export const useWizard = create<WizardState>()(

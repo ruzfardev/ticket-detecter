@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ListGroup, ListRow } from "@/components/ui/list";
+import { Spinner } from "@/components/ui/spinner";
 import { StickyAction } from "@/components/StickyAction";
 import { useTelegram } from "@/hooks/useTelegram";
 
@@ -237,8 +238,25 @@ export function OrderDetail() {
       )}
 
       {o.status === "paying" && (
-        <div className="text-center text-body-sm text-muted">
-          To'lov ishlanmoqda…
+        <div className="flex flex-col items-center gap-3 py-6">
+          <Spinner />
+          <div className="text-body-md text-ink">To'lov tekshirilmoqda…</div>
+          <p className="max-w-sm text-center text-body-sm text-muted">
+            eticket to'lovni tasdiqlashi bir necha soniya olishi mumkin.
+            Kod noto'g'ri bo'lsa, qaytadan kiritish uchun shu yerga qaytasiz.
+          </p>
+          <Button
+            variant="destructive"
+            disabled={cancel.isPending}
+            onClick={async () => {
+              if (await showConfirm("Buyurtmani bekor qilishni xohlaysizmi?")) {
+                cancel.mutate();
+              }
+            }}
+          >
+            <X size={16} strokeWidth={1.75} />
+            Buyurtmani bekor qilish
+          </Button>
         </div>
       )}
 

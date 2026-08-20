@@ -542,8 +542,27 @@ async def submit_otp(
     # A 2xx from confirm-payment means "code accepted for processing", NOT
     # "ticket bought" — eticket settles the order asynchronously (its own web UI
     # opens a websocket to learn the outcome). Trusting the 2xx reported a
-    # successful purchase to users who had typed a WRONG code. Ask eticket what
-    # actually happened to the order before claiming anything.
+    # successful purchase to users who had typed a WRONG code.
+    #
+    # The body does carry the verdict though: eticket answers in a
+    # `{"data": ..., "error": ...}` envelope, and a rejected code comes back as
+    # `{"data": null, "error": {...}}`. Reading it lets us fail in ~1s instead of
+    # holding the request open for a ~27s poll — long enough that phones dropped
+    # the connection and the screen sat on "To'lov ishlanmoqda" forever.
+    if _is_rejection(confirm_resp):
+        reason = "Kod qabul qilinmadi. Qaytadan kiriting."
+        await pool.execute(
+            """
+            UPDATE autobuy_orders SET status='awaiting_otp',
+              failure_reason=$1, updated_at=now()
+            WHERE id=$2
+            """,
+            reason, autobuy_id,
+        )
+        logger.warning("autobuy_otp_rejected", id=autobuy_id,
+                       response=str(confirm_resp)[:400])
+        raise PaymentFailed(reason, {"stage": "confirm"})
+
     settled, order_state = await _await_order_settled(
         client, order.railway_order_id,
     )
@@ -605,9 +624,20 @@ _UNSETTLED_REASON = {
 }
 
 
+def _is_rejection(resp: Any) -> bool:
+    """True when eticket's `{data, error}` envelope reports a failure.
+
+    Observed for a wrong SMS code (HTTP 200):
+        {"data": null, "error": {"hamkorbankHoldId": "UX8512c059-…"}}
+    """
+    if not isinstance(resp, dict):
+        return False
+    return resp.get("data") is None and bool(resp.get("error"))
+
+
 async def _await_order_settled(
     client: RailwayUserClient, railway_order_id: str,
-    deadline_s: float = 25.0,
+    deadline_s: float = 12.0,
 ) -> tuple[bool, str | None]:
     """Poll eticket until the order leaves ORDER_IN_PROCESS.
 
