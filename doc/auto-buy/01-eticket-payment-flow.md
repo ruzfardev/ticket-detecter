@@ -220,6 +220,32 @@ user-fixable payment error rather than an outage.
 
 ---
 
+## The Payme gateway (different bodies — do not reuse Hamkorbank's)
+
+eticket picks the gateway **per order**: `payment-type/list` may return
+`NATIONAL_CURRENCY: ["HamkorbankHold"]` for one order and `["Payme"]` for another on the
+same route. Both must work. Payme's bodies carry the **orderId** and use its own id field
+`paymeId`; sending Hamkorbank's `{id, ...}` shape returns a flat **400**.
+
+Read from the Payme payment component (lazy chunk `12.*.js`) and the api service in `main.*.js`:
+
+| Step | Endpoint | Body |
+|---|---|---|
+| initiate | `POST /api/v1/payme/do-payment` | `{ "orderId": "<orderId>" }` → `{ paymeId, dataAmount, percent }` |
+| card | `POST /api/v1/payme/create-card` | `{ orderId, paymeId, cardNumber, cardExpiry }` |
+| confirm OTP | `POST /api/v1/payme/verify-card` | `{ orderId, paymeId, smsCode }` |
+| resend | `POST /api/v1/paysys-sum/resend-code` | `{ "paySysSumId": "<paymeId>" }` |
+
+⚠️ The OTP field is **`smsCode`** here, not Hamkorbank's `confirmationCode`.
+⚠️ `/api/v1/payme/resend-code` exists only in a loader-config list — the component actually
+calls the generic `paysys-sum/resend-code`.
+
+Component source: `pay()` builds `{orderId: sessionStorage.getItem("orderId"), paymeId,
+cardNumber, cardExpiry}` → `createReceiptPayme`; `sendSMS()` builds `{orderId, paymeId,
+smsCode}` → `payReceiptPayme`; `doPaymentPayme({orderId})` sets `this.paymeId = e.paymeId`.
+
+---
+
 ## eticket Angular service ↔ endpoint map (from `main.*.js`)
 
 | Service method | Endpoint (`t="hold"`) | Our step |
