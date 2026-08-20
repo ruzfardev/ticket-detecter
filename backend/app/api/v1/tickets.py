@@ -101,19 +101,44 @@ async def send_pdf_to_chat(
     user: UserRow = Depends(current_user),
     pool: asyncpg.Pool = Depends(db_pool),
 ) -> dict:
-    """Fetch the ticket PDF and deliver it via the bot as a document."""
+    """Fetch the ticket PDF and deliver it via the bot as a document.
+
+    The passenger name only exists on the detail endpoint, so that is fetched
+    too — a file called "Farrux_Rozmetov.pdf" is worth one extra request when
+    someone is holding several tickets in one chat.
+    """
     await _require_linked(pool, user.id)
     client = RailwayUserClient(pool, user.id)
+
+    names: list[str] = []
+    try:
+        detail = await client.get_purchased_detail(
+            body.order_item_id, body.created_at,
+        )
+        for t in (detail.get("tickets") or []):
+            p = t.get("passenger") or {}
+            full = " ".join(
+                str(x) for x in (p.get("firstname"), p.get("lastname")) if x
+            ).strip()
+            if full:
+                names.append(full)
+    except Exception as exc:
+        # Naming is a nicety; never fail the download over it.
+        logger.info("ticket_pdf_name_lookup_skipped",
+                    order_item_id=body.order_item_id, error=str(exc)[:120])
+
     blob = await client.get_purchased_pdf(body.order_item_id, body.created_at)
 
-    from app.services.ticket_delivery import send_ticket_pdf
+    from app.services.ticket_delivery import send_ticket_pdf, ticket_filename
     ok = await send_ticket_pdf(
         tg_user_id=user.tg_user_id,
         pdf=blob,
-        filename=f"chipta-{body.order_item_id[-8:]}.pdf",
+        filename=ticket_filename(names, body.order_item_id),
+        passenger_names=names,
     )
     if not ok:
         raise AppError("Could not deliver the ticket to Telegram")
     logger.info("ticket_pdf_sent", user_id=user.id,
-                order_item_id=body.order_item_id, bytes=len(blob))
+                order_item_id=body.order_item_id, bytes=len(blob),
+                passengers=len(names))
     return {"sent": True}
