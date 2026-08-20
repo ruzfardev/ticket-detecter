@@ -48,7 +48,11 @@ export type Station = {
 
 export type TrainCarType = {
   type: string;
+  /** eticket's own spelling, e.g. "Plaskartli". Falls back to `type`. */
+  label?: string;
   free_seats: number;
+  /** Cheapest tariff for this car type, in so'm. */
+  price_uzs?: number | null;
   supports_berth: boolean;
 };
 

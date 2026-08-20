@@ -126,10 +126,22 @@ class RailwayClient:
         for t in trains_raw:
             cars = []
             for c in t.get("cars", []) or []:
-                ctype = normalize_car_type(c.get("type") or "")
+                raw_type = str(c.get("type") or "")
+                ctype = normalize_car_type(raw_type)
                 if not ctype:
                     continue
-                cars.append(CarSummary(type=ctype, free_seats=int(c.get("freeSeats") or 0)))
+                # Cheapest class within this car type — the "from" price.
+                prices = [
+                    int(tf.get("tariff"))
+                    for tf in (c.get("tariffs") or [])
+                    if isinstance(tf, dict) and tf.get("tariff")
+                ]
+                cars.append(CarSummary(
+                    type=ctype,
+                    free_seats=int(c.get("freeSeats") or 0),
+                    price_uzs=min(prices) if prices else None,
+                    raw_type=raw_type,
+                ))
             sub = t.get("subRoute") or {}
             result.append(TrainSummary(
                 number=str(t.get("number") or ""),

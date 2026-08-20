@@ -48,7 +48,9 @@ async def search_trains(
         for c in t.cars:
             car_types.append({
                 "type": c.type,
+                "label": c.raw_type or c.type,   # eticket's own spelling
                 "free_seats": c.free_seats,
+                "price_uzs": c.price_uzs,
                 "supports_berth": c.type in BERTH_TYPES,
             })
         out.append({

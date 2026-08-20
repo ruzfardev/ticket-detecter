@@ -37,6 +37,9 @@ class CarSummary:
     """One car-type aggregate inside a TrainSummary."""
     type: str
     free_seats: int
+    # Cheapest tariff for this car type, in so'm. None when the API omits it.
+    price_uzs: int | None = None
+    raw_type: str = ""          # the API's own spelling, e.g. "Plaskartli"
 
 
 @dataclass(slots=True)

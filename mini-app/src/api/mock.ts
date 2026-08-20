@@ -94,39 +94,52 @@ const stations: Station[] = [
   { code: "2900740", name: "Farg'ona",        name_uz: "Farg'ona",        name_ru: "Фергана",   city: "Farg'ona" },
 ];
 
+// NB: railway.uz sends "DD.MM.YYYY HH:MM" (naive Tashkent wall clock), NOT ISO.
+// The mock used ISO for a long time, which is precisely why a formatter that
+// only understood ISO looked fine in dev and printed raw date strings in prod.
 const fakeTrains: Train[] = [
   {
     number: "076Ж", brand: "Yo'lovchi",
-    departure: "2026-06-15T16:05:00", arrival: "2026-06-16T05:23:00",
+    departure: "15.06.2026 16:05", arrival: "16.06.2026 05:23",
     time_on_way: "13:18",
-    dep_station: "Toshkent", arr_station: "Urganch",
+    dep_station: "TOSHKENT", arr_station: "URGANCH",
     car_types: [
-      { type: "плацкарта", free_seats: 24, supports_berth: true },
-      { type: "купе",      free_seats: 8,  supports_berth: true },
+      { type: "плацкарта", label: "Plaskartli", free_seats: 24, price_uzs: 177990, supports_berth: true },
+      { type: "купе",      label: "Kupe",       free_seats: 8,  price_uzs: 243750, supports_berth: true },
     ],
     train_id: "fake-076",
   },
   {
     number: "050Ф", brand: "Tezyurar",
-    departure: "2026-06-15T21:30:00", arrival: "2026-06-16T09:15:00",
+    departure: "15.06.2026 21:30", arrival: "16.06.2026 09:15",
     time_on_way: "11:45",
-    dep_station: "Toshkent", arr_station: "Urganch",
+    dep_station: "TOSHKENT", arr_station: "URGANCH",
     car_types: [
-      { type: "купе", free_seats: 4, supports_berth: true },
-      { type: "люкс", free_seats: 2, supports_berth: false },
+      { type: "купе", label: "Kupe", free_seats: 4, price_uzs: 243750, supports_berth: true },
+      { type: "люкс", label: "Lyuks", free_seats: 2, price_uzs: 509000, supports_berth: false },
     ],
     train_id: "fake-050",
   },
   {
     number: "112Х", brand: "Yo'lovchi",
-    departure: "2026-06-15T08:00:00", arrival: "2026-06-15T22:30:00",
+    departure: "15.06.2026 08:00", arrival: "15.06.2026 22:30",
     time_on_way: "14:30",
-    dep_station: "Toshkent", arr_station: "Urganch",
+    dep_station: "TOSHKENT", arr_station: "URGANCH",
     car_types: [
-      { type: "плацкарта", free_seats: 0, supports_berth: true },
-      { type: "сидячий", free_seats: 12, supports_berth: false },
+      { type: "плацкарта", label: "Plaskartli", free_seats: 0, price_uzs: 177990, supports_berth: true },
+      { type: "сидячий", label: "O'rindiqli", free_seats: 12, price_uzs: 98000, supports_berth: false },
     ],
     train_id: "fake-112",
+  },
+  // A train whose tickets are not on sale yet — eticket returns no cars at all
+  // and 204 from the detail endpoint. Exercises the "sotuvda yo'q" group.
+  {
+    number: "772Ф", brand: "Afrosiyob",
+    departure: "15.06.2026 19:48", arrival: "16.06.2026 00:01",
+    time_on_way: "04:13",
+    dep_station: "TOSHKENT", arr_station: "URGANCH",
+    car_types: [],
+    train_id: null,
   },
 ];
 

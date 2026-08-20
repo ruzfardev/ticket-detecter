@@ -1,7 +1,7 @@
 import { Fragment, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Inbox } from "lucide-react";
+import { AlertTriangle, Check, Inbox } from "lucide-react";
 
 import { searchTrains } from "@/api/client";
 import { useHaptic } from "@/hooks/useHaptic";
@@ -12,7 +12,6 @@ import { dayOffset, trainTime } from "@/lib/traintime";
 import { Screen } from "@/components/Screen";
 import { StickyAction } from "@/components/StickyAction";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -126,39 +125,98 @@ export function TrainPicker() {
                 );
               }}
               className={cn(
-                "w-full text-left rounded-lg p-4 transition-colors",
+                "w-full overflow-hidden rounded-2xl text-left transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral/30",
                 selected
                   ? "bg-surface-cream-strong border-2 border-coral"
-                  : "bg-surface-card border-2 border-transparent hover:bg-surface-cream-strong",
+                  : "bg-surface-card border-2 border-hairline-soft hover:bg-surface-cream-strong",
+                total === 0 && !selected && "opacity-80",
               )}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1 min-w-0">
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-display text-display-sm text-ink">{t.number}</span>
-                    {t.brand && (
-                      <span className="text-body-sm text-muted truncate">{t.brand}</span>
+              <div className="space-y-3 p-4">
+                {/* brand + number + selection state */}
+                <div className="flex items-center gap-2">
+                  {t.brand && (
+                    <span className="rounded-md bg-surface-cream-strong px-2 py-0.5 text-caption font-medium text-body-strong">
+                      {t.brand}
+                    </span>
+                  )}
+                  <span className="font-display text-display-sm text-ink">{t.number}</span>
+                  <span className="ml-auto shrink-0">
+                    {selected ? (
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-coral text-on-primary">
+                        <Check className="h-4 w-4" strokeWidth={3} />
+                      </span>
+                    ) : (
+                      <span className="block h-6 w-6 rounded-full border-2 border-hairline" />
                     )}
+                  </span>
+                </div>
+
+                {/* stations + times, with the journey time on the connector */}
+                <div className="flex items-end gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate text-caption-upper uppercase text-muted">
+                      {t.dep_station || "—"}
+                    </div>
+                    <div className="font-display text-display-sm tabular-nums text-coral">
+                      {trainTime(t.departure)}
+                    </div>
                   </div>
-                  <div className="text-body-sm text-body tabular-nums">
-                    {trainTime(t.departure)} → {trainTime(t.arrival)}
-                    {dayOffset(t.departure, t.arrival) > 0 && (
-                      <sup className="ml-0.5 text-coral">
-                        +{dayOffset(t.departure, t.arrival)}
-                      </sup>
+
+                  <div className="flex flex-1 flex-col items-center pb-1">
+                    {t.time_on_way && (
+                      <span className="rounded-pill border border-hairline px-2 py-0.5 text-caption tabular-nums text-muted">
+                        {t.time_on_way}
+                      </span>
                     )}
-                    {t.time_on_way && <span className="text-muted"> · {t.time_on_way}</span>}
+                    <div className="mt-1 w-full border-t border-dashed border-hairline" />
                   </div>
-                  <div className="text-body-sm text-muted">
-                    {t.car_types.length > 0
-                      ? t.car_types.map(c => `${c.type} (${c.free_seats})`).join(", ")
-                      : "Chiptalar hali ochilmagan"}
+
+                  <div className="min-w-0 text-right">
+                    <div className="truncate text-caption-upper uppercase text-muted">
+                      {t.arr_station || "—"}
+                    </div>
+                    <div className="font-display text-display-sm tabular-nums text-coral">
+                      {trainTime(t.arrival)}
+                      {dayOffset(t.departure, t.arrival) > 0 && (
+                        <sup className="ml-0.5 text-caption text-muted">
+                          +{dayOffset(t.departure, t.arrival)}
+                        </sup>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <Badge variant={total > 0 ? "coral" : "muted"}>
-                  {total > 0 ? total : "—"}
-                </Badge>
+
+                {/* car types with seat counts and starting price */}
+                {t.car_types.length > 0 ? (
+                  <div className="space-y-1 border-t border-hairline-soft pt-3">
+                    {t.car_types.map(c => (
+                      <div
+                        key={c.type}
+                        className="flex items-baseline justify-between gap-2 text-body-sm"
+                      >
+                        <span className="truncate text-body">{c.label ?? c.type}</span>
+                        <span className="shrink-0 tabular-nums text-muted">
+                          <b className="font-medium text-ink">{c.free_seats}</b> ta joy
+                          {c.price_uzs ? (
+                            <>
+                              {" · "}
+                              <b className="font-medium text-ink">
+                                {c.price_uzs.toLocaleString("ru-RU").replace(/ /g, " ")}
+                              </b>{" "}
+                              so'm dan
+                            </>
+                          ) : null}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="border-t border-hairline-soft pt-3 text-body-sm text-muted">
+                    Chiptalar hali ochilmagan
+                  </div>
+                )}
               </div>
             </button>
             </Fragment>
