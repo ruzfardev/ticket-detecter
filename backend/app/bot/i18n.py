@@ -22,7 +22,6 @@ _DICT: dict[str, dict[str, str]] = {
         ),
 
         # Reply keyboard labels
-        "menu.search": "🔍 Poyezd qidirish",
         "menu.notifs": "🔔 Xabarnomalarim",
         "menu.premium": "⭐ Premium",
         "menu.donate": "❤️ Qo'llab-quvvatlash",
@@ -81,7 +80,6 @@ _DICT: dict[str, dict[str, str]] = {
             "когда появятся свободные места.\n\n"
             "Чтобы начать, нажмите <b>🔍 Найти поезд</b>."
         ),
-        "menu.search": "🔍 Найти поезд",
         "menu.notifs": "🔔 Мои уведомления",
         "menu.premium": "⭐ Premium",
         "menu.donate": "❤️ Поддержать",
@@ -127,7 +125,6 @@ _DICT: dict[str, dict[str, str]] = {
             "seats become available.\n\n"
             "Tap <b>🔍 Search train</b> below to start."
         ),
-        "menu.search": "🔍 Search train",
         "menu.notifs": "🔔 My notifications",
         "menu.premium": "⭐ Premium",
         "menu.donate": "❤️ Support",
