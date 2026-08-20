@@ -83,17 +83,21 @@ async def _ensure_trial(pool: asyncpg.Pool, user: UserRow) -> UserRow:
     fire twice, and GREATEST() means it can only extend — a paid account that
     somehow reached here keeps the longer entitlement.
     """
+    # asyncpg maps `$2::interval` to a Python timedelta, so binding the string
+    # "7 days" raised DataError on EVERY call — before the WHERE clause was even
+    # evaluated, which broke the whole auth path, not just the grant. Build the
+    # interval in SQL from a plain number instead, as grant_premium does.
     row = await pool.fetchrow(
         """
         UPDATE users
         SET tier = 'premium',
             premium_until = GREATEST(COALESCE(premium_until, now()),
-                                     now() + $2::interval),
+                                     now() + ($2 || ' days')::interval),
             trial_granted_at = now()
         WHERE id = $1 AND trial_granted_at IS NULL
         RETURNING tier, premium_until
         """,
-        user.id, f"{TRIAL_DAYS} days",
+        user.id, str(TRIAL_DAYS),
     )
     if row is None:
         return user            # already had its trial
