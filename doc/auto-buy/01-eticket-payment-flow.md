@@ -167,6 +167,23 @@ and its service definition
 > (2026-08-20, order 23). The literal string `"/api/v1/hamkorbank-hold/pay-receipt"` does
 > appear in the bundle, but only inside a loader-suppression list, never as a call site.
 
+### Reading the confirm-payment response
+
+eticket replies in a `{"data": ..., "error": ...}` envelope. A **rejected code**
+comes back as **HTTP 200** with:
+
+```jsonc
+{ "data": null, "error": { "hamkorbankHoldId": "UX8512c059-aa97-476f-9dbb-b493230300ed" } }
+```
+
+So `data == null && error` is the fast, reliable rejection signal — check it before
+anything else. (Captured 2026-08-20 from order 32 / `UX780BF4BAAQKD`.)
+
+> Don't skip this and poll the order instead: the settle poll takes ~27s, which is long
+> enough for a phone on mobile data to drop the connection. The client then never sees
+> the result and the screen sits on "processing" forever even though the server had
+> already resolved it correctly.
+
 ### 🚨 A 2xx from confirm-payment does NOT mean the ticket was bought
 
 Confirmed the hard way on 2026-08-20 (order 25 / `UX780BE53LUTSJ`): a **wrong** SMS code
