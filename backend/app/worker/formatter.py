@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 
 _BERTH_LABEL = {"lower": "pastki", "upper": "tepa", "any": "har qanday"}
 
@@ -84,8 +86,19 @@ def _e(text: str) -> str:
                 .replace(">", "&gt;"))
 
 
-def _short(iso_or_text: str) -> str:
-    """Show 'HH:MM' if iso datetime, else as-is."""
-    if "T" in iso_or_text and len(iso_or_text) >= 16:
-        return iso_or_text[11:16]
-    return iso_or_text
+_DOTTED_DT = re.compile(r"^\d{2}\.\d{2}\.\d{4}[ T](\d{2}:\d{2})")
+
+
+def _short(raw: str) -> str:
+    """Reduce a railway.uz timestamp to 'HH:MM'.
+
+    The API sends naive Tashkent wall-clock as ``DD.MM.YYYY HH:MM`` — no 'T',
+    no offset — so the ISO branch alone let the full date through into
+    messages.
+    """
+    m = _DOTTED_DT.match(raw or "")
+    if m:
+        return m.group(1)
+    if "T" in raw and len(raw) >= 16:
+        return raw[11:16]
+    return raw

@@ -7,6 +7,7 @@ import { useHaptic } from "@/hooks/useHaptic";
 import { useWizardField } from "@/hooks/useWizardField";
 import { useWizardGuard } from "@/hooks/useWizardGuard";
 import { useWizard } from "@/store/wizard";
+import { dayOffset, trainTime } from "@/lib/traintime";
 import { Screen } from "@/components/Screen";
 import { StickyAction } from "@/components/StickyAction";
 import { Button } from "@/components/ui/button";
@@ -14,10 +15,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-function fmtTime(iso: string): string {
-  if (iso.includes("T") && iso.length >= 16) return iso.slice(11, 16);
-  return iso;
-}
 
 export function TrainPicker() {
   useWizardGuard(["dep_code", "arr_code", "travel_date"]);
@@ -112,7 +109,12 @@ export function TrainPicker() {
                     )}
                   </div>
                   <div className="text-body-sm text-body tabular-nums">
-                    {fmtTime(t.departure)} → {fmtTime(t.arrival)}
+                    {trainTime(t.departure)} → {trainTime(t.arrival)}
+                    {dayOffset(t.departure, t.arrival) > 0 && (
+                      <sup className="ml-0.5 text-coral">
+                        +{dayOffset(t.departure, t.arrival)}
+                      </sup>
+                    )}
                     {t.time_on_way && <span className="text-muted"> · {t.time_on_way}</span>}
                   </div>
                   <div className="text-body-sm text-muted">
