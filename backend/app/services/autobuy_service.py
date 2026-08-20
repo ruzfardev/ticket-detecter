@@ -258,8 +258,12 @@ async def try_start_autobuy(
             args.trigger_source, args.notification_id,
         )
     except asyncpg.UniqueViolationError:
-        logger.info("autobuy_seat_race",
-                    sub_id=args.subscription_id, seat=seat_numbers[0])
+        # Either the same seat was claimed twice, or this subscription already
+        # has an order in flight (idx_autobuy_orders_sub_inflight). Both mean
+        # "someone else got there first" — never start a second reservation.
+        logger.info("autobuy_claim_rejected",
+                    sub_id=args.subscription_id, seat=seat_numbers[0],
+                    reason="in-flight order already exists")
         return None
 
     autobuy_id = row["id"]
@@ -453,10 +457,14 @@ async def _execute_pipeline(
         available_str = ", ".join(
             f"{ct}:[{','.join(pts)}]" for ct, pts in available.items()
         ) or "(none)"
-        raise PaymentFailed(
-            f"No supported NATIONAL_CURRENCY type. Eticket returned: {available_str}",
-            {"available": available},
-        )
+        if preferred:
+            msg = (
+                f"Bu poyezd uchun tanlangan to'lov usuli ({preferred}) mavjud "
+                f"emas. Eticket taklif qildi: {available_str}"
+            )
+        else:
+            msg = f"No supported NATIONAL_CURRENCY type. Eticket returned: {available_str}"
+        raise PaymentFailed(msg, {"available": available, "preferred": preferred})
 
     await client.select_payment_type(created.order_id, payment_id, chosen)
     pay = await client.do_payment(chosen, created.order_id)
@@ -501,7 +509,15 @@ async def _execute_pipeline(
 
 
 def _pick_payment_type(groups, preferred: str | None) -> str | None:
-    """Pick a national-currency payment type, honouring the user's preference."""
+    """Pick a national-currency payment type, honouring the user's preference.
+
+    A stated preference is binding. If the user picked Humo/Uzcard
+    (HamkorbankHold) and eticket only offers Payme for this order, we do NOT
+    quietly route their saved card through the other gateway — that is a
+    different payment journey with a different SMS flow, and silently switching
+    is how one trip ended up with two reservations and two payment attempts.
+    Returning None fails the order cleanly instead.
+    """
     SUPPORTED = {PAYMENT_TYPE_HAMKORBANK_HOLD, PAYMENT_TYPE_PAYME}
     pref_map = {
         "hamkorbank": PAYMENT_TYPE_HAMKORBANK_HOLD,
@@ -512,8 +528,8 @@ def _pick_payment_type(groups, preferred: str | None) -> str | None:
     for g in groups:
         if g.card_type == "NATIONAL_CURRENCY":
             national.extend(g.payment_types)
-    if preferred_eticket and preferred_eticket in national:
-        return preferred_eticket
+    if preferred_eticket:
+        return preferred_eticket if preferred_eticket in national else None
     for t in national:
         if t in SUPPORTED:
             return t
