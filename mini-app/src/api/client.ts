@@ -327,3 +327,51 @@ export const cancelOrder = (id: number) =>
     ? mockApi.cancelOrder(id)
     : api.post<{ order: AutobuyOrder }>(`/api/v1/orders/${id}/cancel`)
         .then(r => r.data.order);
+
+/* ── Purchased tickets (eticket cabinet) ─────────────────────────────── */
+
+export type PurchasedTicket = {
+  order_id: string;
+  order_item_id: string;
+  created_at: string;        // "2026-08-20 11:47:55" — send back verbatim
+  final_status: string;      // order-level
+  amount_uzs: number;
+  train_number: string;
+  car_number: string;
+  car_type: string;
+  dep_station: string;
+  arr_station: string;
+  dep_at: string;            // "2026-10-15 17:20:00" (Tashkent wall clock)
+  arr_at: string;
+  seats: string[];
+  qr_url: string | null;
+};
+
+export type TicketDetail = {
+  tickets: {
+    ticket_id: string;
+    status: string;          // per-ticket; independent of the order status
+    seat_number: string;
+    amount_uzs: number;
+    passenger_name: string;
+  }[];
+  return_available_until: string | null;
+};
+
+export const listTickets = () =>
+  mockApi.isEnabled
+    ? mockApi.listTickets()
+    : api.get<{ tickets: PurchasedTicket[] }>("/api/v1/tickets")
+        .then(r => r.data.tickets);
+
+export const getTicketDetail = (order_item_id: string, created_at: string) =>
+  mockApi.isEnabled
+    ? mockApi.getTicketDetail()
+    : api.post<TicketDetail>("/api/v1/tickets/detail", { order_item_id, created_at })
+        .then(r => r.data);
+
+export const sendTicketPdf = (order_item_id: string, created_at: string) =>
+  mockApi.isEnabled
+    ? Promise.resolve({ sent: true })
+    : api.post<{ sent: boolean }>("/api/v1/tickets/pdf/send", { order_item_id, created_at })
+        .then(r => r.data);

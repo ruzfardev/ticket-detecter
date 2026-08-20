@@ -18,12 +18,13 @@ import { Friends } from "./screens/Friends";
 import { AutobuyConfig } from "./screens/AutobuyConfig";
 import { CardAdd } from "./screens/CardAdd";
 import { Orders } from "./screens/Orders";
+import { Tickets } from "./screens/Tickets";
 import { OrderDetail } from "./screens/OrderDetail";
 import { BottomNav } from "./components/BottomNav";
 import { useBackButton } from "./hooks/useBackButton";
 import { useThemeSync } from "./hooks/useThemeSync";
 
-const TABBED_ROUTES = new Set(["/home", "/orders", "/premium", "/settings"]);
+const TABBED_ROUTES = new Set(["/home", "/tickets", "/orders", "/premium", "/settings"]);
 const ROOT_ROUTES = new Set(["/"]);
 
 const tabbed = (el: JSX.Element) => <BottomNav>{el}</BottomNav>;
@@ -56,6 +57,7 @@ export function App() {
       <Route path="/friends"          element={<Friends />} />
       <Route path="/cards/add"        element={<CardAdd />} />
       <Route path="/order/:id"        element={<OrderDetail />} />
+      <Route path="/tickets"          element={tabbed(<Tickets />)} />
       <Route path="/donate"         element={<Donate />} />
       <Route path="/donate/custom"  element={<DonateCustom />} />
 

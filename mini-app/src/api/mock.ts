@@ -14,7 +14,9 @@ import type {
   RailwayAccountStatus,
   SavedCard,
   Station,
+  PurchasedTicket,
   Subscription,
+  TicketDetail,
   Train,
 } from "./client";
 
@@ -381,5 +383,45 @@ export const mockApi = {
     await wait(200);
     mockOrders = mockOrders.map(o => o.id === id ? { ...o, status: "cancelled" } : o);
     return mockOrders.find(o => o.id === id)!;
+  },
+  async listTickets(): Promise<PurchasedTicket[]> {
+    await wait(400);
+    return [
+      {
+        order_id: "UX780BGW7B851Q",
+        order_item_id: "ItemId-fake-1",
+        created_at: "2026-08-20 11:47:55",
+        final_status: "ORDER_COMPLETED_SUCCESSFULLY",
+        amount_uzs: 150090,
+        train_number: "095ФА", car_number: "07", car_type: "ПЛАЦ",
+        dep_station: "АНДИЖОН 1", arr_station: "ТОШКЕНТ-ЙУЛОВЧИ",
+        dep_at: "2026-10-15 17:20:00", arr_at: "2026-10-16 00:27:00",
+        seats: ["001"],
+        qr_url: "https://eticket.railway.uz/pages/check-ticket?expressId=fake",
+      },
+      {
+        order_id: "UX780ALE65Q3RW",
+        order_item_id: "ItemId-fake-2",
+        created_at: "2026-08-18 17:56:47",
+        final_status: "ORDER_COMPLETED_SUCCESSFULLY",
+        amount_uzs: 245140,
+        train_number: "056ЧА", car_number: "11", car_type: "ПЛАЦ",
+        dep_station: "ТОШКЕНТ ЖАНУБИЙ", arr_station: "УРГАНЧ",
+        dep_at: "2026-08-28 21:45:00", arr_at: "2026-08-29 12:03:00",
+        seats: ["047"],
+        qr_url: null,
+      },
+    ];
+  },
+
+  async getTicketDetail(): Promise<TicketDetail> {
+    await wait(300);
+    return {
+      tickets: [
+        { ticket_id: "77215198319906", status: "SoldTicket", seat_number: "001",
+          amount_uzs: 150090, passenger_name: "Farrux Rozmetov" },
+      ],
+      return_available_until: "2026-10-15T11:20:00Z",
+    };
   },
 };

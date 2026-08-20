@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Bell, Home, Sparkles, Settings, Ticket } from "lucide-react";
+import { Bell, Home, Settings, Ticket } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useHaptic } from "@/hooks/useHaptic";
 
@@ -11,10 +11,10 @@ type Tab = {
 };
 
 const TABS: Tab[] = [
-  { path: "/home",     label: "Asosiy",      Icon: Home     },
-  { path: "/orders",   label: "Buyurtmalar", Icon: Ticket   },
-  { path: "/premium",  label: "Premium",     Icon: Sparkles },
-  { path: "/settings", label: "Sozlamalar",  Icon: Settings },
+  { path: "/home",     label: "Asosiy",     Icon: Home     },
+  { path: "/tickets",  label: "Chiptalar",  Icon: Ticket   },
+  { path: "/orders",   label: "Buyurtma",   Icon: Bell     },
+  { path: "/settings", label: "Sozlamalar", Icon: Settings },
 ];
 
 type Props = { children: ReactNode };
