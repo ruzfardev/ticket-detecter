@@ -167,22 +167,23 @@ and its service definition
 > (2026-08-20, order 23). The literal string `"/api/v1/hamkorbank-hold/pay-receipt"` does
 > appear in the bundle, but only inside a loader-suppression list, never as a call site.
 
-### Reading the confirm-payment response
+### ⛔️ The confirm-payment response body tells you NOTHING
 
-eticket replies in a `{"data": ..., "error": ...}` envelope. A **rejected code**
-comes back as **HTTP 200** with:
+eticket replies in a `{"data": ..., "error": ...}` envelope and always nests the hold id
+under `error` — **on success and on rejection alike**:
 
 ```jsonc
 { "data": null, "error": { "hamkorbankHoldId": "UX8512c059-aa97-476f-9dbb-b493230300ed" } }
 ```
 
-So `data == null && error` is the fast, reliable rejection signal — check it before
-anything else. (Captured 2026-08-20 from order 32 / `UX780BF4BAAQKD`.)
+An earlier revision of this document claimed `data == null && error` was "the fast,
+reliable rejection signal". **That was wrong**, and it shipped. The rule was inferred from
+a single wrong-code sample with no successful response to compare against. The result:
+correct codes were reported to users as incorrect *after their card had been charged*
+(order 43, 2026-08-20 — `ORDER_COMPLETED_SUCCESSFULLY` at eticket while our row said
+"Kod qabul qilinmadi").
 
-> Don't skip this and poll the order instead: the settle poll takes ~27s, which is long
-> enough for a phone on mobile data to drop the connection. The client then never sees
-> the result and the screen sits on "processing" forever even though the server had
-> already resolved it correctly.
+Judge on `orderState` only — see the next section. If that costs a few seconds, pay them.
 
 ### 🚨 A 2xx from confirm-payment does NOT mean the ticket was bought
 
@@ -200,7 +201,8 @@ right after, and learns the real outcome over the `/ws` socket.
 
 | Value | Meaning |
 |---|---|
-| `ORDER_IN_PROCESS` | held, **not paid** (this is what an unpaid order shows) |
+| `ORDER_IN_PROCESS` | **UNKNOWN** — still settling. Do NOT report failure (see below) |
+| `ORDER_FAILED` | not paid — safe to let the user retry |
 | `ORDER_COMPLETED_SUCCESSFULLY` | **paid** — ticket issued |
 | `ORDER_FINISHED_WITH_CORPORATE_CONFIRMATION_SUCCEEDED` | paid (corporate card flow) |
 | `ORDER_FINISHED_WITH_ORDER_LIFECYCLE_DEADLINE_TIME_EXPIRED` | hold expired, not paid |
@@ -209,8 +211,18 @@ right after, and learns the real outcome over the `/ws` socket.
 means reserved-but-unpaid and `ORDER_COMPLETED_SUCCESSFULLY` means paid.)
 
 So: after confirm-payment, **poll the order** and only report success once it reaches a
-paid state. If it is still `ORDER_IN_PROCESS`, the code was not accepted — send the user
-back to retype it. The hold survives, so retries work until `hold_until`.
+paid state.
+
+**`ORDER_IN_PROCESS` after the deadline means we do not know — not that the code was
+wrong.** eticket clears the card *before* it flips `orderState`, so a payment can already
+have gone through while the order still reads IN_PROCESS. Treating that as a rejection is
+exactly how a charged customer was told their code was wrong. Leave the order pending, tell
+the user it is being checked, and let the background reconciler settle it
+(`autobuy_service.reconcile_pending`, run every worker tick — it also scans `awaiting_otp`,
+because that is where a paid-but-unrecognised order gets stranded).
+
+Only `ORDER_FAILED` or the expired state may be reported as a failure. The hold survives,
+so a retry works until `hold_until`.
 
 A rejected code *may* also come back as a 4xx; treat 4xx on payment endpoints as a
 user-fixable payment error rather than an outage.
