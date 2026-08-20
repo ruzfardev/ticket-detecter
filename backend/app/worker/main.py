@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import signal
+from datetime import datetime, timedelta, timezone
 
 from app.core.config import settings
 from app.core.logging import configure_logging, logger
@@ -20,6 +21,27 @@ from app.railway.client import close_client
 from app.worker.cycle import run_cycle
 
 _stop = asyncio.Event()
+
+
+_PREMIUM_SWEEP_EVERY = timedelta(hours=24)
+_last_premium_sweep: datetime | None = None
+
+
+async def _maybe_expire_premium(pool) -> None:
+    """Downgrade lapsed premium users once a day.
+
+    Lives here because nothing on the server ever scheduled the standalone
+    task — no cron entry, no systemd timer — so premium simply never expired.
+    """
+    global _last_premium_sweep
+    now = datetime.now(timezone.utc)
+    if _last_premium_sweep and now - _last_premium_sweep < _PREMIUM_SWEEP_EVERY:
+        return
+    _last_premium_sweep = now
+    from app.tasks import expire_premium
+    n = await expire_premium.run(pool)
+    if n:
+        logger.info("premium_expiry_swept", count=n)
 
 
 async def _main_loop() -> None:
@@ -37,6 +59,10 @@ async def _main_loop() -> None:
                 logger.info("autobuy_expirer_swept", count=n)
         except Exception as e:
             logger.exception("autobuy_expirer_unhandled", error=str(e))
+        try:
+            await _maybe_expire_premium(get_pool())
+        except Exception as e:
+            logger.exception("expire_premium_unhandled", error=str(e))
         try:
             await asyncio.wait_for(_stop.wait(), timeout=settings.watcher_tick_seconds)
         except asyncio.TimeoutError:
