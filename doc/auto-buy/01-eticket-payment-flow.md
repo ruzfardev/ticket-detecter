@@ -9,9 +9,16 @@ The long-standing blocker (`payment-type/list` returning an empty list →
 `No supported NATIONAL_CURRENCY type`) is **resolved**: the `paymentId` is assigned by
 eticket and must be read back from the order (step 1b), not generated client-side.
 
-> The only step not executed end-to-end (to avoid a real charge) is the final
-> **OTP-confirm** call. Its endpoint + body are inferred from eticket's own Angular
-> service methods and must be confirmed on the first real run (see step 6).
+> Step 6 (OTP-confirm) was resolved on 2026-08-20 after the first live run failed:
+> the endpoint is **`confirm-payment`** with **`confirmationCode`** (see step 6 for the
+> exact bundle source and the `pay-receipt` trap).
+
+### Timezone gotcha
+
+`GET /universal-orders/process/end-time/{id}` returns `endLifeTime` **without an offset,
+in Tashkent wall-clock time** (UTC+5) — e.g. an order created at `07:19:56+05:00` gets
+`"2026-08-20T07:31:57.219690193"`, a 12-minute hold. Parsing it as UTC pushes every
+countdown 5 hours out (the mini-app showed `310:50` instead of `~10:50`).
 
 ---
 
@@ -144,14 +151,27 @@ exact string for steps 2 and 3.
 
 ⚡ At this point the **bank sends the SMS OTP** to the cardholder's phone.
 
-### 6. Confirm OTP — `POST /api/v1/hamkorbank-hold/confirm-payment`  ⚠️ verify on first run
+### 6. Confirm OTP — `POST /api/v1/hamkorbank-hold/confirm-payment`  ✅ confirmed
 ```jsonc
-{ "id": "<holdId>", "code": "<otp>" }
+{ "id": "<holdId>", "confirmationCode": "<otp>" }
 ```
-Inferred from eticket's Angular service `payReceiptHamkorHold(e, t="hold")`. The bundle
-also references `hamkorbank-hold/pay-receipt`; on the first live run, capture the exact
-path (`confirm-payment` vs `pay-receipt`) and the code field name (`code` vs `otp` vs
-`smsCode`). **→** success = ticket issued to the user's eticket cabinet.
+Read verbatim from the payment component's `sendSMS()`:
+`this.api.payReceiptHamkorHold({ id: this.paymentTypeSystem, confirmationCode: this.code })`,
+and its service definition
+``payReceiptHamkorHold(e, t="hold") { return this.http.post(host + `/api/v1/hamkorbank-${t}/confirm-payment`, e) }``.
+
+> ⚠️ The method name says *pay-receipt* but the URL is **confirm-payment**. `pay-receipt`
+> exists only on the non-hold gateway (`payReceiptHamkor` → `/api/v1/hamkorbank/pay-receipt`).
+> Posting the hold flow to `/api/v1/hamkorbank-hold/pay-receipt` returns a bare
+> `404 {"error":"Not Found","message":null}` — this cost us the first live run
+> (2026-08-20, order 23). The literal string `"/api/v1/hamkorbank-hold/pay-receipt"` does
+> appear in the bundle, but only inside a loader-suppression list, never as a call site.
+
+**→** success = ticket issued to the user's eticket cabinet.
+
+A **rejected code** comes back as a 4xx. Treat 4xx on payment endpoints as a user-fixable
+payment error (let them retype), not as an outage — the hold survives, so retries work
+until `hold_until`.
 
 **Resend OTP — `POST /api/v1/hamkorbank-hold/resend-code`**  body `{ "id": "<holdId>" }`
 (service `resendSmsHamkorbankHold`).
@@ -164,7 +184,8 @@ path (`confirm-payment` vs `pay-receipt`) and the code field name (`code` vs `ot
 |---|---|---|
 | `doPaymentHamkorHold(e, t)` | `POST /api/v1/hamkorbank-{t}/do-payment` | 4 (initiate, `{orderId}`) |
 | `createReceiptHamkorHold(e, t)` | `POST /api/v1/hamkorbank-{t}/prepare-payment` | 5 (card, `{id,cardNumber,cardExpiry}`) |
-| `payReceiptHamkorHold(e, t)` | `POST /api/v1/hamkorbank-{t}/confirm-payment` | 6 (OTP, `{id,code}`) |
+| `payReceiptHamkorHold(e, t)` | `POST /api/v1/hamkorbank-{t}/confirm-payment` | 6 (OTP, `{id,confirmationCode}`) |
+| `payReceiptHamkor(e)` | `POST /api/v1/hamkorbank/pay-receipt` | — (non-hold gateway, unused) |
 | `resendSmsHamkorbankHold(e)` | `POST /api/v1/hamkorbank-hold/resend-code` | resend (`{id}`) |
 
 Component wiring observed: `doPaymentHamkorHold(...).subscribe(e => { totalCostFromDoPayment = e.totalCost; paymentTypeSystem = e.id; })` — i.e. the `id` from step 4 is the hold id used everywhere after.
