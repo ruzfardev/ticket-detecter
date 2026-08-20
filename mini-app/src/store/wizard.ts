@@ -18,10 +18,10 @@ export type WizardState = {
   autobuy_enabled: boolean;
   autobuy_friend_ids: number[];
   autobuy_payment_method: PayMethod | null;
-  // Navigation depth when the wizard was entered, so finishing it can unwind
-  // every step off the history stack instead of leaving them behind the
-  // back button.
-  start_depth: number;
+  // Set once the subscription is saved. Every /new/* route self-evicts to Home
+  // while this is true, so back-stepping can never land on a finished wizard
+  // (which previously let the user save the same subscription twice).
+  completed: boolean;
   setField: <K extends Exclude<keyof WizardState, "setField" | "reset">>(
     k: K, v: WizardState[K]
   ) => void;
@@ -35,7 +35,7 @@ const initial = {
   autobuy_enabled: false,
   autobuy_friend_ids: [] as number[],
   autobuy_payment_method: null as PayMethod | null,
-  start_depth: 0,
+  completed: false,
 };
 
 export const useWizard = create<WizardState>()(

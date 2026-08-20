@@ -5,6 +5,7 @@ import { Search, MapPin, ArrowRight } from "lucide-react";
 
 import { listStations, Station } from "@/api/client";
 import { useWizardField } from "@/hooks/useWizardField";
+import { useWizardGuard } from "@/hooks/useWizardGuard";
 import { useWizard } from "@/store/wizard";
 import { Screen } from "@/components/Screen";
 import { StickyAction } from "@/components/StickyAction";
@@ -18,6 +19,9 @@ import { useHaptic } from "@/hooks/useHaptic";
 type Mode = "dep" | "arr";
 
 export function RoutePicker() {
+  // No fields required at step 1 — this is here so a finished wizard evicts
+  // itself from /new too, not just from the later steps.
+  useWizardGuard([]);
   const navigate = useNavigate();
   const haptic = useHaptic();
   const setField = useWizard(s => s.setField);

@@ -9,6 +9,13 @@ export function useWizardGuard(required: RequiredField[], redirectTo = "/new") {
   const state = useWizard();
 
   useEffect(() => {
+    // A finished wizard must never be reachable again. Its state is persisted
+    // in sessionStorage, so without this a back-step would render a fully
+    // populated Confirm screen and let the same subscription be saved twice.
+    if (state.completed) {
+      navigate("/home", { replace: true });
+      return;
+    }
     const missing = required.some(k => {
       const v = state[k];
       if (Array.isArray(v)) return v.length === 0;
