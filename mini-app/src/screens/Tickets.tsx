@@ -26,11 +26,39 @@ function hhmm(raw: string): string {
   return trainTime((raw ?? "").replace(" ", "T"));
 }
 
-/** A returned ticket still sits under a COMPLETED order, so status is per-ticket. */
-const TICKET_STATUS: Record<string, { text: string; tone: "success" | "muted" | "coral" }> = {
-  SoldTicket:     { text: "Amal qiladi",  tone: "success" },
-  ReturnedTicket: { text: "Qaytarilgan",  tone: "muted" },
+/**
+ * Per-ticket status. Independent of the order's status — a returned ticket
+ * still sits under an ORDER_COMPLETED_SUCCESSFULLY order.
+ *
+ * Values taken from eticket's own bundle, plus `ReturnedTicket`, which the live
+ * API returns even though the bundle spells it `ReturnTicket`.
+ */
+type Tone = "success" | "muted" | "coral";
+
+const TICKET_STATUS: Record<string, { text: string; tone: Tone }> = {
+  ConfirmedTicket:   { text: "Amal qiladi",     tone: "success" },
+  ReservedTicket:    { text: "Bron qilingan",   tone: "coral"   },
+  UnconfirmedTicket: { text: "Tasdiqlanmagan",  tone: "coral"   },
+  NotPayedTicket:    { text: "To'lanmagan",     tone: "coral"   },
+  ReturnTicket:      { text: "Qaytarilgan",     tone: "muted"   },
+  ReturnedTicket:    { text: "Qaytarilgan",     tone: "muted"   },
+  UsedTicket:        { text: "Foydalanilgan",   tone: "muted"   },
+  ExpiredTicket:     { text: "Muddati o'tgan",  tone: "muted"   },
+  DelayedTicket:     { text: "Kechiktirilgan",  tone: "muted"   },
+  PaperTicket:       { text: "Qog'oz chipta",   tone: "muted"   },
 };
+
+/** Unknown value: drop the "Ticket" suffix and space out the camelCase, so a
+ *  status we have not seen still reads as words rather than "ConfirmedTicket". */
+function statusOf(raw: string): { text: string; tone: Tone } {
+  const known = TICKET_STATUS[raw];
+  if (known) return known;
+  const text = (raw ?? "")
+    .replace(/Ticket$/, "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .trim();
+  return { text: text || "—", tone: "muted" };
+}
 
 function TicketCard({ t }: { t: PurchasedTicket }) {
   const [open, setOpen] = useState(false);
@@ -106,7 +134,7 @@ function TicketCard({ t }: { t: PurchasedTicket }) {
             <div className="flex justify-center py-2"><Spinner size="sm" /></div>
           )}
           {detail.data?.tickets.map(d => {
-            const s = TICKET_STATUS[d.status] ?? { text: d.status, tone: "muted" as const };
+            const s = statusOf(d.status);
             return (
               <div key={d.ticket_id} className="flex items-center gap-2 text-body-sm">
                 <span className="min-w-0 flex-1 truncate text-ink">
