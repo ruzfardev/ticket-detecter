@@ -190,7 +190,12 @@ export function OrderDetail() {
               </p>
             )}
           </div>
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
+            {/* Telegram deep-links straight here, so this screen must offer its
+                own way out — the WebView has no history to go back to. */}
+            <Button variant="link" size="sm" onClick={() => navigate("/orders")}>
+              Buyurtmalar
+            </Button>
             <Button
               variant="link"
               size="sm"
@@ -232,8 +237,12 @@ export function OrderDetail() {
       )}
 
       {o.status === "reserving" && (
-        <div className="text-center text-body-sm text-muted">
-          Bron qilinmoqda…
+        <div className="flex flex-col items-center gap-3 py-6">
+          <Spinner />
+          <div className="text-body-sm text-muted">Bron qilinmoqda…</div>
+          <Button variant="secondary" onClick={() => navigate("/orders")}>
+            Buyurtmalar
+          </Button>
         </div>
       )}
 

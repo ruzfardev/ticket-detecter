@@ -9,6 +9,7 @@ import {
 import {
   createSubscription, getCard, getFriends, getRailwayStatus, patchAutobuy,
 } from "@/api/client";
+import { getNavDepth, releaseNavDepth } from "@/hooks/useBackButton";
 import { useHaptic } from "@/hooks/useHaptic";
 import { useWizardGuard } from "@/hooks/useWizardGuard";
 import { useWizard } from "@/store/wizard";
@@ -84,7 +85,17 @@ export function Confirm() {
       // NOTE: do not reset() here — clearing the wizard while Confirm is still
       // mounted makes useWizardGuard see empty fields and bounce to step 1.
       // handleNew() in Home resets on the next wizard entry instead.
-      navigate("/home", { replace: true });
+      //
+      // Pop every wizard step off the stack rather than just replacing the last
+      // one: otherwise back-stepping walks the user through all six screens
+      // again, and re-tapping Saqlash there creates a duplicate subscription.
+      const steps = getNavDepth() - w.start_depth;
+      if (steps > 0) {
+        releaseNavDepth(steps);
+        navigate(-steps);
+      } else {
+        navigate("/home", { replace: true });
+      }
     },
     onError: (err: any) => {
       haptic.notify("error");

@@ -7,6 +7,7 @@ import {
 
 import { getMe, getRailwayStatus, listOrders, listSubscriptions } from "@/api/client";
 import { useWizard } from "@/store/wizard";
+import { getNavDepth } from "@/hooks/useBackButton";
 import { useHaptic } from "@/hooks/useHaptic";
 import { useTelegram } from "@/hooks/useTelegram";
 import { Screen } from "@/components/Screen";
@@ -60,6 +61,7 @@ export function Home() {
   const haptic = useHaptic();
   const { user: tgUser } = useTelegram();
   const reset = useWizard(s => s.reset);
+  const setField = useWizard(s => s.setField);
   const me = useQuery({ queryKey: ["me"], queryFn: getMe });
   const subs = useQuery({ queryKey: ["subs"], queryFn: listSubscriptions });
   const railway = useQuery({ queryKey: ["railwayAccount"], queryFn: getRailwayStatus });
@@ -122,6 +124,9 @@ export function Home() {
       return;
     }
     reset();
+    // Remember where the stack was, so Confirm can pop every wizard step when
+    // the subscription is saved.
+    setField("start_depth", getNavDepth());
     navigate("/new");
   };
 

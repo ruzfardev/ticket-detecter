@@ -11,6 +11,7 @@ import {
 import {
   deleteSubscription, listSubscriptions, patchSubscription,
 } from "@/api/client";
+import { useHaptic } from "@/hooks/useHaptic";
 import { useTelegram } from "@/hooks/useTelegram";
 import { Screen } from "@/components/Screen";
 import { StatusView } from "@/components/StatusView";
@@ -29,6 +30,7 @@ export function SubDetails() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { showConfirm } = useTelegram();
+  const haptic = useHaptic();
 
   const { data, isLoading } = useQuery({
     queryKey: ["subs"],
@@ -42,6 +44,23 @@ export function SubDetails() {
   const toggle = useMutation({
     mutationFn: () => patchSubscription(subId, { is_active: !sub?.is_active }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["subs"] }),
+    onError: (err: any) => {
+      haptic.notify("error");
+      const code = err.response?.data?.error?.code;
+      if (code === "slot_limit_reached") {
+        // Resuming can legitimately fail: a free account has one slot, so a
+        // second active subscription is rejected. Without this the row just
+        // dimmed and sprang back, which reads as a dead button.
+        toast.error("Slot to'lgan — boshqa xabarnomani pauza qiling yoki Premium oling");
+        return;
+      }
+      if (code === "not_found" || code === "forbidden") {
+        toast.error("Xabarnoma topilmadi");
+        qc.invalidateQueries({ queryKey: ["subs"] });
+        return;
+      }
+      toast.error(err.response?.data?.error?.message || err.message || "Bajarilmadi");
+    },
   });
 
   const remove = useMutation({
@@ -51,6 +70,10 @@ export function SubDetails() {
       qc.invalidateQueries({ queryKey: ["subs"] });
       qc.invalidateQueries({ queryKey: ["me"] });
       navigate("/home", { replace: true });
+    },
+    onError: () => {
+      haptic.notify("error");
+      toast.error("O'chirib bo'lmadi");
     },
   });
 

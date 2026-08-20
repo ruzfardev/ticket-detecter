@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ListGroup, ListRow } from "@/components/ui/list";
 import { StickyAction } from "@/components/StickyAction";
+import { useSmartBack } from "@/hooks/useBackButton";
 import { useTelegram } from "@/hooks/useTelegram";
 
 function formatPan(raw: string): string {
@@ -27,6 +28,7 @@ function formatExpiry(raw: string): string {
 
 export function CardAdd() {
   const navigate = useNavigate();
+  const goBack = useSmartBack();
   const qc = useQueryClient();
   const { showConfirm } = useTelegram();
   const cardQ = useQuery({ queryKey: ["card"], queryFn: getCard });
@@ -43,7 +45,7 @@ export function CardAdd() {
     onSuccess: () => {
       toast.success("Karta saqlandi");
       qc.invalidateQueries({ queryKey: ["card"] });
-      navigate(-1);
+      goBack();
     },
     onError: () => toast.error("Karta saqlanmadi"),
   });
