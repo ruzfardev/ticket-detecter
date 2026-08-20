@@ -37,6 +37,12 @@ PAYMENT_TYPE_LIST_V1_URL = f"{BASE_URL}/api/v1/payment-type/list"
 PAYMENT_SELECT_URL = f"{BASE_URL}/api/v1/payment/select-payment-type"
 INVOICE_GENERATE_URL = f"{BASE_URL}/api/v1/universal-orders/invoice-generate"
 
+# Purchased tickets (the user's eticket cabinet).
+QUERY_ORDERS_LIST_URL = f"{BASE_URL}/api/v2/query/orders/list"
+QUERY_ORDERS_COUNT_URL = f"{BASE_URL}/api/v2/query/orders/count"
+QUERY_ORDERS_TICKETS_URL = f"{BASE_URL}/api/v2/query/orders/tickets"
+QUERY_ORDERS_PDF_URL = f"{BASE_URL}/api/v2/query/orders/pdf"
+
 # Gateway-specific. Phase C captures show these two are the live national-
 # currency gateways (route-dependent — Afrosiyob → HamkorbankHold, Plaskart → Payme).
 HAMKORBANK_HOLD_DO_URL = f"{BASE_URL}/api/v1/hamkorbank-hold/do-payment"
@@ -136,6 +142,27 @@ class OrderState:
 
 
 @dataclass(slots=True)
+class PurchasedTicket:
+    """One leg of a purchased order, as shown in the eticket cabinet."""
+    order_id: str
+    order_item_id: str
+    created_at: str            # "2026-08-20 11:47:55" — feed back via _api_created_date
+    final_status: str          # order-level, e.g. ORDER_COMPLETED_SUCCESSFULLY
+    amount_uzs: int
+    train_number: str
+    train_type: str
+    car_number: str
+    car_type: str
+    dep_station: str
+    arr_station: str
+    dep_at: str                # "2026-10-15 17:20:00" (Tashkent wall clock)
+    arr_at: str
+    seats: list[str]
+    qr_url: str | None
+    raw: dict[str, Any]
+
+
+@dataclass(slots=True)
 class FriendRecord:
     friend_id: str
     firstname: str
@@ -208,9 +235,12 @@ class RailwayUserClient:
         return self._jar, headers
 
     async def _post(self, url: str, payload: dict[str, Any],
-                    *, payment_errors: bool = False) -> dict[str, Any]:
+                    *, payment_errors: bool = False,
+                    extra_headers: dict[str, str] | None = None) -> dict[str, Any]:
         await get_bucket().acquire()
         jar, headers = await self._prepare()
+        if extra_headers:
+            headers = {**headers, **extra_headers}
         try:
             async with httpx.AsyncClient(timeout=20, cookies=jar,
                                          follow_redirects=False) as http:
@@ -565,6 +595,96 @@ class RailwayUserClient:
             await self._post(PAYSYS_SUM_RESEND_URL, {"paySysSumId": payment_subid})
             return
         raise PaymentFailed(f"Unsupported payment type: {payment_type}")
+
+    # ---- purchased tickets (eticket cabinet) ----
+
+    @staticmethod
+    def _api_created_date(created_at: str) -> str:
+        """`"2026-08-20 11:47:55"` -> `"2026-08-20T11:47:55+05:00"`.
+
+        The list endpoint returns a space-separated timestamp, but tickets/pdf
+        demand ISO with the Tashkent offset — send it back as received and they
+        answer a bare 400 with no message.
+        """
+        s = (created_at or "").strip().replace(" ", "T")
+        if not s:
+            return s
+        return s if ("+" in s[10:] or s.endswith("Z")) else f"{s}+05:00"
+
+    async def list_purchased(
+        self, page: int = 0, length: int = 20,
+    ) -> list[PurchasedTicket]:
+        """Orders from the user's eticket cabinet, newest first."""
+        data = await self._post(
+            QUERY_ORDERS_LIST_URL,
+            {"page": page, "length": length},
+            extra_headers={"page": str(page), "limit": str(length)},
+        )
+        out: list[PurchasedTicket] = []
+        for order in (data.get("data") or []):
+            created = str(order.get("createDateTime") or "")
+            for item in (order.get("items") or []):
+                dep = item.get("departure") or {}
+                arr = item.get("arrival") or {}
+                train = item.get("train") or {}
+                car = item.get("car") or {}
+                out.append(PurchasedTicket(
+                    order_id=str(order.get("orderId") or ""),
+                    order_item_id=str(item.get("orderItemId") or ""),
+                    created_at=created,
+                    final_status=str(order.get("finalStatus") or ""),
+                    amount_uzs=int(float(item.get("totalCost") or 0)),
+                    train_number=str(train.get("number") or ""),
+                    train_type=str(train.get("type") or ""),
+                    car_number=str(car.get("number") or ""),
+                    car_type=str(car.get("type") or ""),
+                    dep_station=str(dep.get("stationName") or ""),
+                    arr_station=str(arr.get("stationName") or ""),
+                    dep_at=str(dep.get("dateTime") or ""),
+                    arr_at=str(arr.get("dateTime") or ""),
+                    seats=[str(t.get("seat") or "") for t in (item.get("tickets") or [])],
+                    qr_url=item.get("qrCode") or None,
+                    raw=item,
+                ))
+        return out
+
+    async def get_purchased_detail(
+        self, order_item_id: str, created_at: str,
+    ) -> dict[str, Any]:
+        """Passengers, per-ticket status and return window for one order item.
+
+        `ticket.status` is independent of the order's `finalStatus` — a returned
+        ticket still sits under an ORDER_COMPLETED_SUCCESSFULLY order.
+        """
+        return await self._post(QUERY_ORDERS_TICKETS_URL, {
+            "orderItemId": order_item_id,
+            "createdDate": self._api_created_date(created_at),
+        })
+
+    async def get_purchased_pdf(
+        self, order_item_id: str, created_at: str,
+    ) -> bytes:
+        """The printable ticket. Returns decoded PDF bytes.
+
+        Despite the endpoint name this is NOT a binary response: it answers
+        `application/json` with `{"pdf": "<base64>"}`, so streaming the body
+        straight through would hand the user a broken file.
+        """
+        data = await self._post(QUERY_ORDERS_PDF_URL, {
+            "orderItemId": order_item_id,
+            "createdDate": self._api_created_date(created_at),
+        })
+        b64 = (data or {}).get("pdf")
+        if not b64:
+            raise RailwayUnavailable("eticket returned no pdf payload")
+        import base64
+        try:
+            blob = base64.b64decode(b64)
+        except Exception as exc:
+            raise RailwayUnavailable(f"pdf is not valid base64: {exc}")
+        if not blob.startswith(b"%PDF"):
+            raise RailwayUnavailable("decoded payload is not a PDF")
+        return blob
 
     # ---- friends (Phase A) ----
 

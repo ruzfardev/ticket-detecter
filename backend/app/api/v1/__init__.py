@@ -10,6 +10,7 @@ from app.api.v1 import (
     railway_account,
     stations,
     subscriptions,
+    tickets,
     trains,
 )
 
@@ -24,3 +25,4 @@ router.include_router(railway_account.router)
 router.include_router(friends.router)
 router.include_router(cards.router)
 router.include_router(orders.router)
+router.include_router(tickets.router)
