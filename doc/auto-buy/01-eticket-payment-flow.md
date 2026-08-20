@@ -167,11 +167,36 @@ and its service definition
 > (2026-08-20, order 23). The literal string `"/api/v1/hamkorbank-hold/pay-receipt"` does
 > appear in the bundle, but only inside a loader-suppression list, never as a call site.
 
-**→** success = ticket issued to the user's eticket cabinet.
+### 🚨 A 2xx from confirm-payment does NOT mean the ticket was bought
 
-A **rejected code** comes back as a 4xx. Treat 4xx on payment endpoints as a user-fixable
-payment error (let them retype), not as an outage — the hold survives, so retries work
-until `hold_until`.
+Confirmed the hard way on 2026-08-20 (order 25 / `UX780BE53LUTSJ`): a **wrong** SMS code
+still returned **HTTP 200**. We reported "Chipta sotib olindi!" for a purchase that had
+not happened.
+
+eticket settles the order **asynchronously**. Its own web UI never treats the HTTP
+response as the verdict — `sendSMS()` calls `runWebsocket()` and `getReservationInfo()`
+right after, and learns the real outcome over the `/ws` socket.
+
+**The only trustworthy signal we have over plain HTTP is the order's state:**
+
+`GET /api/v1/universal-orders/get/{orderId}` → `response.orderState`
+
+| Value | Meaning |
+|---|---|
+| `ORDER_IN_PROCESS` | held, **not paid** (this is what an unpaid order shows) |
+| `ORDER_COMPLETED_SUCCESSFULLY` | **paid** — ticket issued |
+| `ORDER_FINISHED_WITH_CORPORATE_CONFIRMATION_SUCCEEDED` | paid (corporate card flow) |
+| `ORDER_FINISHED_WITH_ORDER_LIFECYCLE_DEADLINE_TIME_EXPIRED` | hold expired, not paid |
+
+(The orders list exposes the same idea as `finalStatus`, where `RESERVATION_SUCCEEDED`
+means reserved-but-unpaid and `ORDER_COMPLETED_SUCCESSFULLY` means paid.)
+
+So: after confirm-payment, **poll the order** and only report success once it reaches a
+paid state. If it is still `ORDER_IN_PROCESS`, the code was not accepted — send the user
+back to retype it. The hold survives, so retries work until `hold_until`.
+
+A rejected code *may* also come back as a 4xx; treat 4xx on payment endpoints as a
+user-fixable payment error rather than an outage.
 
 **Resend OTP — `POST /api/v1/hamkorbank-hold/resend-code`**  body `{ "id": "<holdId>" }`
 (service `resendSmsHamkorbankHold`).
