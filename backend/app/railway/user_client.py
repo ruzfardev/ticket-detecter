@@ -144,20 +144,54 @@ class FriendRecord:
 
 
 class RailwayUserClient:
-    """Per-call HTTP client. Cheap to instantiate; reuses global TokenBucket."""
+    """Per-user eticket client.
+
+    Shares ONE cookie jar across every call of this instance so eticket's
+    Set-Cookie responses persist between requests — critical for the payment
+    flow: eticket binds the in-progress order to the session cookie
+    (``X-VS-Id``) it (re)issues while the order is being formed. A fresh
+    cookie set per call drops that binding, so ``payment-type/list`` can't
+    find the order and returns 204 (the historical "no supported
+    NATIONAL_CURRENCY" dead-end). The browser works precisely because it keeps
+    the cookie. HTTP clients are still per-call (cheap, auto-closed); only the
+    jar is shared.
+    """
 
     def __init__(self, pool: asyncpg.Pool, user_id: int):
         self._pool = pool
         self._user_id = user_id
+        self._jar: httpx.Cookies | None = None
+
+    async def _prepare(self) -> tuple[httpx.Cookies, dict[str, str]]:
+        """Return the shared cookie jar + fresh auth headers (Cookie stripped).
+
+        The jar is seeded once from the stored cookie_str, then carried across
+        the create -> payment-type/list -> do-payment -> pay-receipt sequence
+        (updated from each response's Set-Cookie). Authorization / X-XSRF-TOKEN
+        are refreshed on every call in case the token was renewed mid-flight.
+        """
+        headers = (await get_or_refresh_for_user(self._pool, self._user_id)).as_headers()
+        cookie_hdr = headers.pop("Cookie", "") or ""
+        if self._jar is None:
+            self._jar = httpx.Cookies()
+            for part in cookie_hdr.split(";"):
+                part = part.strip()
+                if "=" in part:
+                    k, _, v = part.partition("=")
+                    if k.strip():
+                        self._jar.set(k.strip(), v.strip(), domain="eticket.railway.uz")
+        return self._jar, headers
 
     async def _post(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
         await get_bucket().acquire()
-        headers = (await get_or_refresh_for_user(self._pool, self._user_id)).as_headers()
-        async with httpx.AsyncClient(timeout=20) as http:
-            try:
+        jar, headers = await self._prepare()
+        try:
+            async with httpx.AsyncClient(timeout=20, cookies=jar,
+                                         follow_redirects=False) as http:
                 r = await http.post(url, json=payload, headers=headers)
-            except httpx.HTTPError as e:
-                raise RailwayUnavailable(f"{url} network error: {e}")
+                jar.extract_cookies(r)   # persist Set-Cookie for the next call
+        except httpx.HTTPError as e:
+            raise RailwayUnavailable(f"{url} network error: {e}")
         await self._handle_status(r, url)
         # 204 No Content / empty body — return empty dict to keep callers simple.
         body = (r.text or "").strip()
@@ -200,23 +234,27 @@ class RailwayUserClient:
     async def _post_text(self, url: str, payload: dict[str, Any]) -> str:
         """Same as `_post` but used when eticket returns a bare JSON string."""
         await get_bucket().acquire()
-        headers = (await get_or_refresh_for_user(self._pool, self._user_id)).as_headers()
-        async with httpx.AsyncClient(timeout=20) as http:
-            try:
+        jar, headers = await self._prepare()
+        try:
+            async with httpx.AsyncClient(timeout=20, cookies=jar,
+                                         follow_redirects=False) as http:
                 r = await http.post(url, json=payload, headers=headers)
-            except httpx.HTTPError as e:
-                raise RailwayUnavailable(f"{url} network error: {e}")
+                jar.extract_cookies(r)
+        except httpx.HTTPError as e:
+            raise RailwayUnavailable(f"{url} network error: {e}")
         await self._handle_status(r, url)
         return r.text
 
     async def _get(self, url: str) -> dict[str, Any]:
         await get_bucket().acquire()
-        headers = (await get_or_refresh_for_user(self._pool, self._user_id)).as_headers()
-        async with httpx.AsyncClient(timeout=20) as http:
-            try:
+        jar, headers = await self._prepare()
+        try:
+            async with httpx.AsyncClient(timeout=20, cookies=jar,
+                                         follow_redirects=False) as http:
                 r = await http.get(url, headers=headers)
-            except httpx.HTTPError as e:
-                raise RailwayUnavailable(f"{url} network error: {e}")
+                jar.extract_cookies(r)
+        except httpx.HTTPError as e:
+            raise RailwayUnavailable(f"{url} network error: {e}")
         await self._handle_status(r, url)
         try:
             return r.json()
