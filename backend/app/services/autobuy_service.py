@@ -466,7 +466,14 @@ async def _execute_pipeline(
     await client.submit_card(chosen, pay.payment_subid,
                              decrypted.pan, decrypted.exp_mmyy,
                              order_id=created.order_id)
-    await card_service.mark_used(pool, args.user_id)
+    # From here on the bank has already texted the user, so nothing below may
+    # raise: failing now would cancel an order they are actively holding a code
+    # for. Everything remaining is bookkeeping or notification.
+    try:
+        await card_service.mark_used(pool, args.user_id)
+    except Exception as exc:
+        logger.warning("autobuy_card_mark_used_failed",
+                       id=autobuy_id, error=str(exc)[:200])
 
     await pool.execute(
         """
@@ -484,7 +491,13 @@ async def _execute_pipeline(
     )
     logger.info("autobuy_awaiting_otp", id=autobuy_id, payment_type=chosen,
                 amount=pay.amount_uzs)
-    await _notify_awaiting_otp(pool, autobuy_id)
+    try:
+        await _notify_awaiting_otp(pool, autobuy_id)
+    except Exception as exc:
+        # The order is already awaiting_otp and the SMS is out; a Telegram
+        # hiccup must not undo that. The user can still open the mini-app.
+        logger.warning("autobuy_notify_otp_failed",
+                       id=autobuy_id, error=str(exc)[:200])
 
 
 def _pick_payment_type(groups, preferred: str | None) -> str | None:
