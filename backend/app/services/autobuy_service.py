@@ -457,14 +457,19 @@ async def _execute_pipeline(
         available_str = ", ".join(
             f"{ct}:[{','.join(pts)}]" for ct, pts in available.items()
         ) or "(none)"
-        if preferred:
-            msg = (
-                f"Bu poyezd uchun tanlangan to'lov usuli ({preferred}) mavjud "
-                f"emas. Eticket taklif qildi: {available_str}"
-            )
-        else:
-            msg = f"No supported NATIONAL_CURRENCY type. Eticket returned: {available_str}"
-        raise PaymentFailed(msg, {"available": available, "preferred": preferred})
+        raise PaymentFailed(
+            "Bu poyezd uchun mos to'lov usuli topilmadi. "
+            f"Eticket taklif qildi: {available_str}",
+            {"available": available, "preferred": preferred},
+        )
+
+    # eticket picks the gateways per order, so the user's saved preference is not
+    # always on offer. We proceed rather than lose the ticket, but the SMS will
+    # come from a different sender than they expect — so say which.
+    gateway_fallback = bool(preferred) and chosen != preferred_gateway(preferred)
+    if gateway_fallback:
+        logger.info("autobuy_gateway_fallback", id=autobuy_id,
+                    preferred=preferred, chosen=chosen)
 
     await client.select_payment_type(created.order_id, payment_id, chosen)
     pay = await client.do_payment(chosen, created.order_id)
@@ -500,7 +505,8 @@ async def _execute_pipeline(
     logger.info("autobuy_awaiting_otp", id=autobuy_id, payment_type=chosen,
                 amount=pay.amount_uzs)
     try:
-        await _notify_awaiting_otp(pool, autobuy_id)
+        await _notify_awaiting_otp(pool, autobuy_id,
+                                   gateway=chosen if gateway_fallback else None)
     except Exception as exc:
         # The order is already awaiting_otp and the SMS is out; a Telegram
         # hiccup must not undo that. The user can still open the mini-app.
@@ -508,28 +514,38 @@ async def _execute_pipeline(
                        id=autobuy_id, error=str(exc)[:200])
 
 
+_PREF_MAP = {
+    "hamkorbank": PAYMENT_TYPE_HAMKORBANK_HOLD,
+    "payme": PAYMENT_TYPE_PAYME,
+}
+
+
+def preferred_gateway(preferred: str | None) -> str | None:
+    """The user's saved choice, as an eticket payment-type name."""
+    return _PREF_MAP.get((preferred or "").lower())
+
+
 def _pick_payment_type(groups, preferred: str | None) -> str | None:
     """Pick a national-currency payment type, honouring the user's preference.
 
-    A stated preference is binding. If the user picked Humo/Uzcard
-    (HamkorbankHold) and eticket only offers Payme for this order, we do NOT
-    quietly route their saved card through the other gateway — that is a
-    different payment journey with a different SMS flow, and silently switching
-    is how one trip ended up with two reservations and two payment attempts.
-    Returning None fails the order cleanly instead.
+    The preference is advisory — the mini-app labels it "ixtiyoriy" (optional).
+    eticket decides per order which gateways it offers, so refusing to fall back
+    just means no ticket: a Toshkent→Navoiy order offering only Payme failed
+    outright for a user who had picked Humo/Uzcard, even though their card works
+    through either gateway.
+
+    Falling back is fine; doing it *silently* is not. The caller compares the
+    result against `preferred_gateway()` and tells the user which gateway the
+    SMS will come from, so an unexpected sender is never a surprise.
     """
     SUPPORTED = {PAYMENT_TYPE_HAMKORBANK_HOLD, PAYMENT_TYPE_PAYME}
-    pref_map = {
-        "hamkorbank": PAYMENT_TYPE_HAMKORBANK_HOLD,
-        "payme": PAYMENT_TYPE_PAYME,
-    }
-    preferred_eticket = pref_map.get((preferred or "").lower())
     national: list[str] = []
     for g in groups:
         if g.card_type == "NATIONAL_CURRENCY":
             national.extend(g.payment_types)
-    if preferred_eticket:
-        return preferred_eticket if preferred_eticket in national else None
+    wanted = preferred_gateway(preferred)
+    if wanted and wanted in national:
+        return wanted
     for t in national:
         if t in SUPPORTED:
             return t
@@ -977,7 +993,9 @@ async def _notify_autobuy_disarmed(
     )
 
 
-async def _notify_awaiting_otp(pool: asyncpg.Pool, autobuy_id: int) -> None:
+async def _notify_awaiting_otp(
+    pool: asyncpg.Pool, autobuy_id: int, *, gateway: str | None = None,
+) -> None:
     info = await pool.fetchrow(
         """
         SELECT ao.id, ao.train_number, ao.car_number, ao.seat_number,
@@ -1009,6 +1027,7 @@ async def _notify_awaiting_otp(pool: asyncpg.Pool, autobuy_id: int) -> None:
         passenger_names=list(info["passenger_names"] or []),
         amount_uzs=info["amount_uzs"],
         hold_until=info["hold_until"],
+        gateway=gateway,
     )
 
 

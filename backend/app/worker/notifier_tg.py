@@ -55,7 +55,7 @@ async def send_autobuy_otp_needed(
     tg_user_id: int, *, order_id: int, route_name: str,
     travel_date: str, train_number: str, car_number: str,
     seat_numbers: list[int], passenger_names: list[str],
-    amount_uzs: int | None, hold_until=None,
+    amount_uzs: int | None, hold_until=None, gateway: str | None = None,
 ) -> int | None:
     """When an autobuy order reaches `awaiting_otp`, ping the user with a
     WebApp button that opens the OTP-entry screen in the mini-app.
@@ -86,6 +86,13 @@ async def send_autobuy_otp_needed(
     money = _money(amount_uzs)
     if money:
         lines.append(f"💰 <b>{money}</b>")
+
+    # eticket chooses the gateway per order, so the SMS can arrive from a
+    # different sender than the user picked. Say so rather than let them wonder
+    # whether the message is genuine.
+    if gateway:
+        pretty = {"HamkorbankHold": "Hamkorbank", "Payme": "Payme"}.get(gateway, gateway)
+        lines.append(f"🏦 To'lov <b>{pretty}</b> orqali (tanlagan usulingiz bu poyezd uchun yo'q edi)")
 
     mins = _minutes_left(hold_until)
     lines += [
