@@ -720,12 +720,33 @@ async def expire_stale(pool: asyncpg.Pool) -> int:
     expired = 0
     for row in rows:
         if row["railway_order_id"]:
+            client = RailwayUserClient(pool, row["user_id"])
+            # eticket settles payments asynchronously, so an order can become
+            # paid between our last check and this sweep. Never cancel without
+            # asking first — cancelling a paid ticket is unrecoverable.
+            try:
+                state = (await client.get_order(row["railway_order_id"])).order_state
+            except Exception as exc:
+                logger.warning("autobuy_expire_state_check_failed",
+                               id=row["id"], error=str(exc)[:200])
+                state = None
+            if state in ORDER_STATE_PAID:
+                await pool.execute(
+                    """
+                    UPDATE autobuy_orders SET status='paid', failure_reason=NULL,
+                      updated_at=now()
+                    WHERE id=$1
+                    """,
+                    row["id"],
+                )
+                logger.info("autobuy_paid_late", id=row["id"], order_state=state)
+                await _notify_terminal(pool, row["id"], "paid")
+                continue
             try:
                 account = await user_auth.get_account(pool, row["user_id"])
                 railway_user_id = (account.railway_user_id if account else None) \
                     or await user_auth.resolve_railway_user_id(pool, row["user_id"]) \
                     or ""
-                client = RailwayUserClient(pool, row["user_id"])
                 await client.cancel_order(row["railway_order_id"], railway_user_id)
             except Exception as exc:
                 logger.warning("autobuy_expire_remote_failed",
