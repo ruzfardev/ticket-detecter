@@ -19,7 +19,6 @@ import pytest
 
 from app.railway import user_client as uc
 from app.railway.user_client import PaymentFailed, RailwayUserClient
-from app.services.autobuy_service import _is_rejection
 
 ORDER_ID = "UX780BE53LUTSJ"
 PAN = "8600123456789012"
@@ -105,16 +104,3 @@ async def test_empty_otp_is_rejected_without_a_request(client):
         await client.confirm_otp(uc.PAYMENT_TYPE_HAMKORBANK_HOLD,
                                  pay.payment_subid, "   ", order_id=ORDER_ID)
     assert len(client.calls) == before
-
-
-@pytest.mark.parametrize("body,expected", [
-    # Observed verbatim from a wrong SMS code — HTTP 200 with an error payload.
-    ({"data": None, "error": {"hamkorbankHoldId": "UX8512c059"}}, True),
-    ({"data": {"id": "x"}, "error": None}, False),
-    ({"data": None, "error": None}, False),
-    ({}, False),
-    ({"id": "UX", "totalCost": 1}, False),
-    (None, False),
-])
-def test_rejection_envelope_detection(body, expected):
-    assert _is_rejection(body) is expected

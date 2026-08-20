@@ -54,6 +54,14 @@ async def _main_loop() -> None:
         except Exception as e:
             logger.exception("worker_cycle_unhandled", error=str(e))
         try:
+            # Runs BEFORE the expirer: an order whose payment cleared late must
+            # be recognised as paid, never cancelled out from under the user.
+            n = await autobuy_service.reconcile_pending(get_pool())
+            if n:
+                logger.info("autobuy_reconciled", count=n)
+        except Exception as e:
+            logger.exception("autobuy_reconcile_unhandled", error=str(e))
+        try:
             n = await autobuy_service.expire_stale(get_pool())
             if n:
                 logger.info("autobuy_expirer_swept", count=n)
