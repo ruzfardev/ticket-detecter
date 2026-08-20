@@ -29,6 +29,8 @@ _DICT: dict[str, dict[str, str]] = {
         "menu.channel": "📢 Kanal",
         "menu.help": "ℹ️ Yordam",
         "menu.contact": "📞 Aloqa",
+        "menu.status": "👤 Holatim",
+        "menu.orders": "🎫 Buyurtmalarim",
 
         # /my
         "my.title": "🔔 Sizning xabarnomalaringiz ({used}/{max}):",
@@ -86,6 +88,8 @@ _DICT: dict[str, dict[str, str]] = {
         "menu.channel": "📢 Канал",
         "menu.help": "ℹ️ Помощь",
         "menu.contact": "📞 Контакты",
+        "menu.status": "👤 Мой статус",
+        "menu.orders": "🎫 Мои заказы",
         "my.title": "🔔 Ваши уведомления ({used}/{max}):",
         "my.empty": "📭 Пока нет уведомлений.\n\nНажмите <b>🔍 Найти поезд</b>.",
         "my.row": "{idx}. 🚂 <b>{route}</b>\n   📅 {date} · 🚆 {train}\n   🪑 {car_type} · {berth}",
@@ -130,6 +134,8 @@ _DICT: dict[str, dict[str, str]] = {
         "menu.channel": "📢 Channel",
         "menu.help": "ℹ️ Help",
         "menu.contact": "📞 Contact",
+        "menu.status": "👤 My status",
+        "menu.orders": "🎫 My orders",
         "my.title": "🔔 Your notifications ({used}/{max}):",
         "my.empty": "📭 No notifications yet.\n\nTap <b>🔍 Search train</b>.",
         "my.row": "{idx}. 🚂 <b>{route}</b>\n   📅 {date} · 🚆 {train}\n   🪑 {car_type} · {berth}",

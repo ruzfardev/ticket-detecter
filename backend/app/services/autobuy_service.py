@@ -647,6 +647,11 @@ async def submit_otp(
         """,
         autobuy_id,
     )
+    await pool.execute(
+        "UPDATE subscriptions SET autobuy_fail_count = 0 "
+        "WHERE id = (SELECT subscription_id FROM autobuy_orders WHERE id = $1)",
+        autobuy_id,
+    )
     logger.info("autobuy_paid", id=autobuy_id,
                 subscription_deactivated=deactivated)
     await _notify_terminal(pool, autobuy_id, "paid")
@@ -775,6 +780,7 @@ async def _mark_failed(pool: asyncpg.Pool, autobuy_id: int, reason: str) -> None
     )
     logger.warning("autobuy_failed", id=autobuy_id, reason=reason)
     await _notify_terminal(pool, autobuy_id, "failed", reason)
+    await _register_failure(pool, autobuy_id)
 
 
 async def expire_stale(pool: asyncpg.Pool) -> int:
@@ -833,7 +839,72 @@ async def expire_stale(pool: asyncpg.Pool) -> int:
         expired += 1
         logger.info("autobuy_expired", id=row["id"])
         await _notify_terminal(pool, row["id"], "expired")
+        await _register_failure(pool, row["id"])
     return expired
+
+
+# After this many consecutive failed/expired attempts, auto-buy switches itself
+# off. Retrying forever re-holds seats every ~12 minutes and trips the bank's
+# OTP rate limits; the subscription keeps sending plain alerts.
+MAX_CONSECUTIVE_FAILURES = 3
+
+
+async def _register_failure(pool: asyncpg.Pool, autobuy_id: int) -> None:
+    """Count a failed attempt, and disarm auto-buy once the budget is spent."""
+    row = await pool.fetchrow(
+        """
+        UPDATE subscriptions s
+        SET autobuy_fail_count = s.autobuy_fail_count + 1
+        FROM autobuy_orders o
+        WHERE o.id = $1 AND s.id = o.subscription_id AND s.autobuy_enabled
+        RETURNING s.id, s.user_id, s.autobuy_fail_count
+        """,
+        autobuy_id,
+    )
+    if row is None or row["autobuy_fail_count"] < MAX_CONSECUTIVE_FAILURES:
+        return
+    await pool.execute(
+        "UPDATE subscriptions SET autobuy_enabled = false, updated_at = now() "
+        "WHERE id = $1",
+        row["id"],
+    )
+    logger.warning("autobuy_disarmed_after_failures",
+                   sub_id=row["id"], failures=row["autobuy_fail_count"])
+    await _notify_autobuy_disarmed(pool, row["id"], row["autobuy_fail_count"])
+
+
+async def _reset_failures(pool: asyncpg.Pool, subscription_id: int) -> None:
+    await pool.execute(
+        "UPDATE subscriptions SET autobuy_fail_count = 0 WHERE id = $1",
+        subscription_id,
+    )
+
+
+async def _notify_autobuy_disarmed(
+    pool: asyncpg.Pool, subscription_id: int, failures: int,
+) -> None:
+    info = await pool.fetchrow(
+        """
+        SELECT u.tg_user_id, s.travel_date,
+               sd.name_uz AS dep_name, sa.name_uz AS arr_name
+        FROM subscriptions s
+        JOIN users u ON u.id = s.user_id
+        JOIN stations sd ON sd.code = s.dep_code
+        JOIN stations sa ON sa.code = s.arr_code
+        WHERE s.id = $1
+        """,
+        subscription_id,
+    )
+    if not info:
+        return
+    from app.worker.notifier_tg import send_autobuy_disarmed
+    await send_autobuy_disarmed(
+        info["tg_user_id"],
+        subscription_id=subscription_id,
+        route_name=f"{info['dep_name']} → {info['arr_name']}",
+        travel_date=info["travel_date"].isoformat(),
+        failures=failures,
+    )
 
 
 async def _notify_awaiting_otp(pool: asyncpg.Pool, autobuy_id: int) -> None:

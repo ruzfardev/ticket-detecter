@@ -29,6 +29,10 @@ def main_menu(lang: str = "uz", mini_app_url: str = "") -> ReplyKeyboardMarkup:
                 KeyboardButton(text=t("menu.notifs", lang)),
             ],
             [
+                KeyboardButton(text=t("menu.status", lang)),
+                KeyboardButton(text=t("menu.orders", lang)),
+            ],
+            [
                 KeyboardButton(text=t("menu.premium", lang)),
                 KeyboardButton(text=t("menu.donate", lang)),
             ],

@@ -204,3 +204,45 @@ async def _send(payload: dict) -> int | None:
     except Exception as e:
         logger.warning("send_alert_exception", error=str(e))
         return None
+
+
+async def send_autobuy_disarmed(
+    tg_user_id: int, *, subscription_id: int, route_name: str,
+    travel_date: str, failures: int,
+) -> int | None:
+    """Auto-buy switched itself off after repeated failures.
+
+    Says plainly that watching continues, so the user does not think the whole
+    subscription died.
+    """
+    if not settings.bot_token:
+        return None
+    miniapp = settings.miniapp_url.rstrip("/")
+    text = "\n".join([
+        "⚠️ <b>Avto sotib olish o'chirildi</b>",
+        f"<i>Ketma-ket {failures} marta muvaffaqiyatsiz urinish</i>",
+        _rule(),
+        f"📍 <b>{_esc(route_name)}</b>",
+        f"📅 {travel_date}",
+        _rule(),
+        "🔔 <b>Kuzatuv davom etmoqda</b> — joy topilsa xabar beramiz,",
+        "faqat avtomatik bron qilinmaydi.",
+        "",
+        "Sababi odatda: karta, eticket akkount yoki",
+        "SMS kod vaqtida kiritilmagani.",
+        "",
+        "Tekshirib, qaytadan yoqishingiz mumkin 👇",
+    ])
+    payload = {
+        "chat_id": tg_user_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+        "reply_markup": {
+            "inline_keyboard": [[
+                {"text": "⚡️ Qayta yoqish",
+                 "web_app": {"url": f"{miniapp}/sub/{subscription_id}/autobuy"}},
+            ]]
+        },
+    }
+    return await _send(payload)

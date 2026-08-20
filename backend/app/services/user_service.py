@@ -49,7 +49,11 @@ async def upsert_from_tg(pool: asyncpg.Pool, tg_user: TgUser) -> tuple[UserRow, 
 
     Returns (row, is_new).
     """
-    lang = tg_user.language_code if tg_user.language_code in ("uz", "ru", "en") else "uz"
+    # Default to Uzbek unless Telegram explicitly says Russian. Most users here
+    # run their phone in English while speaking Uzbek, and taking `en` at face
+    # value handed them an English bot for an Uzbek-only service. /language
+    # still lets anyone switch.
+    lang = "ru" if tg_user.language_code == "ru" else "uz"
     row = await pool.fetchrow(
         """
         INSERT INTO users (tg_user_id, lang)

@@ -31,6 +31,8 @@ _LABELS_DONATE  = _label_set("menu.donate")
 _LABELS_CHANNEL = _label_set("menu.channel")
 _LABELS_HELP    = _label_set("menu.help")
 _LABELS_CONTACT = _label_set("menu.contact")
+_LABELS_STATUS  = _label_set("menu.status")
+_LABELS_ORDERS  = _label_set("menu.orders")
 
 
 @router.message(F.text.in_(_LABELS_NOTIFS))
@@ -95,6 +97,63 @@ async def on_contact(message: Message) -> None:
     user = await ensure_user(message.from_user)
     text = f"{t('contact.title', user.lang)}\n\n{t('contact.body', user.lang)}"
     await message.answer(text, reply_markup=main_menu(user.lang))
+
+
+@router.message(F.text.in_(_LABELS_STATUS))
+async def on_status(message: Message) -> None:
+    # Same view as /holat — the button is just a discoverable entry point.
+    from app.bot.handlers.status import cmd_status
+    await cmd_status(message)
+
+
+@router.message(F.text.in_(_LABELS_ORDERS))
+async def on_orders(message: Message) -> None:
+    user = await ensure_user(message.from_user)
+    rows = await get_pool().fetch(
+        """
+        SELECT o.id, o.status, o.train_number, o.car_number, o.seat_numbers,
+               o.seat_number, o.travel_date, o.amount_uzs,
+               sd.name_uz AS dep_name, sa.name_uz AS arr_name
+        FROM autobuy_orders o
+        JOIN stations sd ON sd.code = o.dep_code
+        JOIN stations sa ON sa.code = o.arr_code
+        WHERE o.user_id = $1
+        ORDER BY o.id DESC
+        LIMIT 10
+        """,
+        user.id,
+    )
+    if not rows:
+        await message.answer(
+            "🎫 <b>Buyurtmalar yo'q</b>\n\n"
+            "Avto sotib olish yoqilganda, bron qilingan chiptalar shu yerda "
+            "ko'rinadi.",
+            reply_markup=main_menu(user.lang),
+        )
+        return
+
+    icon = {
+        "paid": "✅", "awaiting_otp": "⏳", "paying": "⏳", "reserving": "🔄",
+        "failed": "❌", "expired": "⌛", "cancelled": "🚫",
+    }
+    label = {
+        "paid": "To'landi", "awaiting_otp": "SMS kod kutilmoqda",
+        "paying": "Tekshirilmoqda", "reserving": "Bron qilinmoqda",
+        "failed": "Xato", "expired": "Muddati o'tdi", "cancelled": "Bekor qilindi",
+    }
+    lines = ["🎫 <b>Oxirgi buyurtmalar</b>", "━━━━━━━━━━━━━━━"]
+    for r in rows:
+        seats = list(r["seat_numbers"] or [r["seat_number"]])
+        line = (
+            f"{icon.get(r['status'], 'ℹ️')} <b>{label.get(r['status'], r['status'])}</b>\n"
+            f"   📍 {r['dep_name']} → {r['arr_name']} · {r['travel_date'].isoformat()}\n"
+            f"   🚂 {r['train_number']} · vagon {r['car_number']} · "
+            f"joy {', '.join(str(s) for s in seats)}"
+        )
+        if r["amount_uzs"]:
+            line += f"\n   💰 {r['amount_uzs']:,}".replace(",", " ") + " so'm"
+        lines.append(line)
+    await message.answer("\n\n".join(lines), reply_markup=main_menu(user.lang))
 
 
 # Premium/Donate handlers live in app.bot.handlers.payments (M5).
