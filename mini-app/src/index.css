@@ -8,13 +8,96 @@
 @tailwind utilities;
 
 @layer base {
+  /* ── Palette system ──────────────────────────────────────────────────
+     Three palettes, each with a light (base) and dark (.dark) variant:
+       :root / .dark                      — "eticket" (default) — colors
+         lifted from eticket.railway.uz's own stylesheet (#01c3a7 turquoise
+         CTAs, #187cee action blue, #212529 text, #f0f2f7/#dde0ed blocks).
+       [data-theme="cream"]               — the original warm cream/coral.
+       [data-theme="emerald"]             — deep emerald green.
+     `--coral` is the historical name of the *primary* token (buttons,
+     links, selection) — every palette overrides it. */
   :root {
-    /* Brand */
+    /* Primary — eticket brand turquoise #01c3a7 / #019c86 (doc: CTAs,
+       brand highlights); blue #187cee is the secondary accent */
+    --coral:          171 99% 38%;
+    --coral-active:   171 99% 31%;
+    --coral-disabled: 171 45% 72%;
+
+    /* Surfaces — white + #f0f2f7 blocks, #dde0ed strong (doc palette) */
+    --canvas:               0 0% 100%;
+    --surface-soft:         220 20% 97%;
+    --surface-card:         223 30% 95%;
+    --surface-cream-strong: 229 31% 90%;
+    --surface-dark:         235 21% 20%;
+    --surface-dark-elevated:235 19% 26%;
+    --surface-dark-soft:    235 21% 23%;
+
+    /* Text — #212529 primary, #354356 secondary, #8090a0/#9ea7b8 muted */
+    --ink:         210 11% 15%;
+    --body:        215 24% 27%;
+    --body-strong: 212 16% 20%;
+    --muted:       210 14% 56%;
+    --muted-soft:  219 15% 67%;
+    --hairline:      229 31% 90%;
+    --hairline-soft: 223 30% 95%;
+    --on-primary:   0 0% 100%;
+    --on-dark:      0 0% 100%;
+    --on-dark-soft: 235 10% 75%;
+
+    /* Accents — eticket action blue #187cee + warning yellow #ffc233 */
+    --accent-teal:  212 86% 51%;
+    --accent-amber: 42 100% 50%;
+
+    /* Semantic — doc green #28a745 (primary is teal, so success = green) */
+    --success: 134 61% 41%;
+    --warning: 42 100% 42%;
+    --error:     0 53% 51%;
+
+    /* Layout */
+    --tabbar-h: 64px;
+  }
+
+  /* eticket — dark: navy family (#292b3f hue), brightened turquoise */
+  .dark {
+    color-scheme: dark;
+    --coral:          171 85% 45%;
+    --coral-active:   171 99% 38%;
+    --coral-disabled: 220 15% 30%;
+
+    --canvas:               235 21% 11%;
+    --surface-soft:         235 19% 13%;
+    --surface-card:         235 17% 17%;
+    --surface-cream-strong: 235 15% 21%;
+    --surface-dark:         235 17% 19%;
+    --surface-dark-elevated:235 15% 24%;
+    --surface-dark-soft:    235 19% 15%;
+
+    --ink:         220 30% 95%;
+    --body:        226 15% 80%;
+    --body-strong: 224 20% 89%;
+    --muted:       230 8% 62%;
+    --muted-soft:  232 7% 52%;
+    --hairline:      233 12% 25%;
+    --hairline-soft: 234 14% 20%;
+    --on-primary:   0 0% 100%;
+    --on-dark:      220 30% 95%;
+    --on-dark-soft: 230 8% 65%;
+
+    --accent-teal:  216 87% 61%;
+    --accent-amber: 42 100% 62%;
+
+    --success: 134 50% 55%;
+    --warning: 42 100% 55%;
+    --error:     0 89% 64%;
+  }
+
+  /* ── "cream" — the original Anthropic-warm palette ─────────────────── */
+  [data-theme="cream"] {
     --coral:          16 50% 58%;
     --coral-active:   14 46% 45%;
     --coral-disabled: 30 26% 87%;
 
-    /* Surfaces — warm cream trinity */
     --canvas:               48 33% 97%;
     --surface-soft:         37 40% 94%;
     --surface-card:         39 34% 90%;
@@ -23,7 +106,6 @@
     --surface-dark-elevated:36  7% 14%;
     --surface-dark-soft:    45  7% 11%;
 
-    /* Text */
     --ink:         60 3% 8%;
     --body:        60 3% 23%;
     --body-strong: 60 3% 14%;
@@ -35,31 +117,19 @@
     --on-dark:      48 33% 97%;
     --on-dark-soft: 42 6% 61%;
 
-    /* Accents */
     --accent-teal:  170 37% 54%;
     --accent-amber:  28 77% 63%;
 
-    /* Semantic */
     --success: 132 38% 54%;
     --warning:  44 80% 46%;
     --error:     0 51% 52%;
-
-    /* Layout */
-    --tabbar-h: 64px;
   }
 
-  /* ── Warm-dark palette (Anthropic identity) ──────────────────────────
-     Activated by toggling `.dark` on <html> (see useThemeSync). Tailwind
-     tokens are all hsl(var(--x)), so overriding the vars re-skins the whole
-     app — only the literal TG chrome hex is handled separately. */
-  .dark {
-    color-scheme: dark;
-    /* Brand — coral nudged brighter for legibility on charcoal */
+  .dark[data-theme="cream"] {
     --coral:          16 60% 64%;
     --coral-active:   14 55% 55%;
     --coral-disabled: 30  8% 28%;
 
-    /* Surfaces — warm charcoal trinity */
     --canvas:               40 7%  9%;
     --surface-soft:         45 7%  11%;
     --surface-card:         36 7%  14%;
@@ -68,7 +138,6 @@
     --surface-dark-elevated:36 7%  20%;
     --surface-dark-soft:    45 7%  13%;
 
-    /* Text — warm off-white hierarchy */
     --ink:         48 20% 94%;
     --body:        45 12% 80%;
     --body-strong: 45 15% 88%;
@@ -80,15 +149,79 @@
     --on-dark:      48 20% 94%;
     --on-dark-soft: 42  7% 64%;
 
-    /* Accents — slightly brighter on dark */
     --accent-teal:  170 42% 60%;
     --accent-amber:  28 80% 68%;
 
-    /* Semantic */
     --success: 132 40% 60%;
     --warning:  44 78% 58%;
     --error:     0 62% 64%;
   }
+
+  /* ── "emerald" — deep green, gold accent (original design) ─────────── */
+  [data-theme="emerald"] {
+    --coral:          160 84% 30%;
+    --coral-active:   161 90% 24%;
+    --coral-disabled: 150 20% 78%;
+
+    --canvas:               140 25% 98%;
+    --surface-soft:         140 22% 95%;
+    --surface-card:         142 18% 91%;
+    --surface-cream-strong: 144 18% 88%;
+    --surface-dark:         168 25% 10%;
+    --surface-dark-elevated:168 20% 15%;
+    --surface-dark-soft:    168 22% 12%;
+
+    --ink:         168 30% 9%;
+    --body:        165 12% 25%;
+    --body-strong: 166 18% 16%;
+    --muted:       160 8% 40%;
+    --muted-soft:  158 7% 48%;
+    --hairline:      145 15% 85%;
+    --hairline-soft: 143 15% 89%;
+    --on-primary:   0 0% 100%;
+    --on-dark:      140 25% 97%;
+    --on-dark-soft: 150 8% 63%;
+
+    --accent-teal:  200 70% 45%;
+    --accent-amber:  38 92% 50%;
+
+    --success: 152 60% 38%;
+    --warning:  40 90% 42%;
+    --error:     4 70% 50%;
+  }
+
+  .dark[data-theme="emerald"] {
+    --coral:          158 60% 46%;
+    --coral-active:   158 65% 38%;
+    --coral-disabled: 160 8% 28%;
+
+    --canvas:               170 15% 8%;
+    --surface-soft:         168 14% 10%;
+    --surface-card:         166 12% 14%;
+    --surface-cream-strong: 165 11% 17%;
+    --surface-dark:         166 12% 16%;
+    --surface-dark-elevated:165 11% 20%;
+    --surface-dark-soft:    168 13% 12%;
+
+    --ink:         150 20% 94%;
+    --body:        150 10% 80%;
+    --body-strong: 150 14% 88%;
+    --muted:       152 7% 62%;
+    --muted-soft:  152 6% 52%;
+    --hairline:      160 10% 22%;
+    --hairline-soft: 162 10% 18%;
+    --on-primary:   0 0% 100%;
+    --on-dark:      150 20% 94%;
+    --on-dark-soft: 152 7% 65%;
+
+    --accent-teal:  190 60% 50%;
+    --accent-amber:  40 95% 60%;
+
+    --success: 152 55% 48%;
+    --warning:  42 90% 55%;
+    --error:     2 80% 62%;
+  }
+
 
   /* Reset / base */
   * {

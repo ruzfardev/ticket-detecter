@@ -8,7 +8,7 @@ import {
 
 import { getCard, getRailwayStatus, unlinkRailway } from "@/api/client";
 import { useTelegram } from "@/hooks/useTelegram";
-import { useTheme, type ThemeMode } from "@/store/theme";
+import { useTheme, type Palette, type ThemeMode } from "@/store/theme";
 import { Screen } from "@/components/Screen";
 import { ListGroup, ListRow } from "@/components/ui/list";
 import { cn } from "@/lib/utils";
@@ -19,12 +19,22 @@ const THEME_OPTS: { value: ThemeMode; label: string; Icon: typeof Monitor }[] = 
   { value: "dark", label: "Tungi", Icon: Moon },
 ];
 
+// Swatches are literal hexes (the light variant of each palette) so every
+// option shows its own colors regardless of which palette is active.
+const PALETTE_OPTS: { value: Palette; label: string; swatch: [string, string, string] }[] = [
+  { value: "eticket", label: "Eticket", swatch: ["#01c3a7", "#187cee", "#f0f2f7"] },
+  { value: "cream",   label: "Krem",    swatch: ["#c97b5e", "#5eb5a7", "#eee8dd"] },
+  { value: "emerald", label: "Zumrad",  swatch: ["#0c8d62", "#f59f0a", "#e4ece7"] },
+];
+
 export function Settings() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { openLink, haptic, showConfirm } = useTelegram();
   const mode = useTheme(s => s.mode);
   const setMode = useTheme(s => s.setMode);
+  const palette = useTheme(s => s.palette);
+  const setPalette = useTheme(s => s.setPalette);
 
   const accountQ = useQuery({ queryKey: ["railwayAccount"], queryFn: getRailwayStatus });
   const cardQ = useQuery({ queryKey: ["card"], queryFn: getCard });
@@ -65,6 +75,36 @@ export function Settings() {
                   strokeWidth={1.75}
                   className={active ? "text-coral" : ""}
                 />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex gap-1 rounded-lg bg-surface-card p-1">
+          {PALETTE_OPTS.map(({ value, label, swatch }) => {
+            const active = palette === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => {
+                  haptic?.selectionChanged?.();
+                  setPalette(value);
+                }}
+                className={cn(
+                  "flex flex-1 flex-col items-center gap-1.5 rounded-md py-2.5 text-caption transition-colors",
+                  active ? "bg-canvas text-ink" : "text-muted hover:text-ink",
+                )}
+              >
+                <span className="flex -space-x-1">
+                  {swatch.map(c => (
+                    <span
+                      key={c}
+                      className="h-4 w-4 rounded-full border border-canvas"
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </span>
                 {label}
               </button>
             );

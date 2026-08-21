@@ -1,23 +1,31 @@
 import { useEffect } from "react";
 
-import { useTheme } from "@/store/theme";
+import { useTheme, type Palette } from "@/store/theme";
 
-// Telegram needs the literal hex — it can't read CSS vars. Mirror --canvas
-// in index.css (light / .dark).
-const CANVAS_HEX = { light: "#faf9f5", dark: "#181714" } as const;
+// Telegram needs literal hex — it can't read CSS vars. Mirror each
+// palette's --canvas in index.css (light / .dark variants).
+const CANVAS_HEX: Record<Palette, { light: string; dark: string }> = {
+  eticket: { light: "#ffffff", dark: "#161722" },
+  cream:   { light: "#faf9f5", dark: "#181714" },
+  emerald: { light: "#f9fbf9", dark: "#111716" },
+};
 
 /**
- * Owns the app's effective light/dark: toggles the `.dark` class on <html>
- * AND recolors the Telegram chrome (header + background) to match.
+ * Owns the app's appearance: toggles the `.dark` class on <html>, sets the
+ * palette's `data-theme` attribute AND recolors the Telegram chrome
+ * (header + background) to match.
  *
  * Honours the user's preference (useTheme):
- *   - "system": follow the Telegram client theme (or OS `prefers-color-scheme`
- *     outside Telegram), reacting live to `themeChanged`.
- *   - "light" / "dark": force it regardless of the client.
+ *   - mode "system": follow the Telegram client theme (or OS
+ *     `prefers-color-scheme` outside Telegram), reacting live to
+ *     `themeChanged`.
+ *   - mode "light" / "dark": force it regardless of the client.
+ *   - palette: which of the three color palettes to apply.
  * Call once at the app root.
  */
 export function useThemeSync() {
   const mode = useTheme(s => s.mode);
+  const palette = useTheme(s => s.palette);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -33,7 +41,8 @@ export function useThemeSync() {
     const apply = () => {
       const dark = isDark();
       root.classList.toggle("dark", dark);
-      const hex = dark ? CANVAS_HEX.dark : CANVAS_HEX.light;
+      root.setAttribute("data-theme", palette);
+      const hex = CANVAS_HEX[palette][dark ? "dark" : "light"];
       try {
         tg?.setHeaderColor?.(hex);
         tg?.setBackgroundColor?.(hex);
@@ -51,5 +60,5 @@ export function useThemeSync() {
     const onMq = () => { if (mode === "system") apply(); };
     mq.addEventListener("change", onMq);
     return () => mq.removeEventListener("change", onMq);
-  }, [mode]);
+  }, [mode, palette]);
 }
