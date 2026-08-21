@@ -163,6 +163,10 @@ export type AutobuyOrder = {
   friend_name: string | null;
   last4: string | null;
   seconds_until_expiry: number | null;
+  /** Codes submitted so far; 0 until the user types one. */
+  otp_attempts?: number;
+  /** Set once eticket replied CONFIRMATION_PROCESSED — the code was taken. */
+  otp_confirmed_at?: string | null;
 };
 
 export type PlansResponse = {

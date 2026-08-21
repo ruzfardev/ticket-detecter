@@ -94,6 +94,10 @@ class AutobuyOrderDTO:
     seconds_until_expiry: int | None = None
     seat_numbers: list[int] | None = None
     passenger_names: list[str] | None = None
+    # How many codes were submitted, and when eticket first said
+    # CONFIRMATION_PROCESSED (the only proof a code was accepted).
+    otp_attempts: int = 0
+    otp_confirmed_at: datetime | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -101,6 +105,9 @@ class AutobuyOrderDTO:
         d["created_at"] = self.created_at.isoformat()
         d["updated_at"] = self.updated_at.isoformat()
         d["hold_until"] = self.hold_until.isoformat() if self.hold_until else None
+        d["otp_confirmed_at"] = (
+            self.otp_confirmed_at.isoformat() if self.otp_confirmed_at else None
+        )
         return d
 
 
@@ -110,7 +117,7 @@ SELECT
   ao.railway_order_id, ao.payment_type, ao.payment_subid, ao.train_number, ao.car_number,
   ao.seat_number, ao.seat_numbers, ao.dep_code, ao.arr_code, ao.travel_date, ao.amount_uzs,
   ao.status, ao.failure_reason, ao.hold_until, ao.trigger_source,
-  ao.created_at, ao.updated_at,
+  ao.created_at, ao.updated_at, ao.otp_attempts, ao.otp_confirmed_at,
   TRIM(BOTH ' ' FROM (fc.firstname || ' ' || fc.lastname)) AS friend_name,
   (SELECT array_agg(TRIM(BOTH ' ' FROM (fc2.firstname || ' ' || fc2.lastname)))
      FROM railway_friends_cache fc2 WHERE fc2.id = ANY(ao.passenger_cache_ids)) AS passenger_names,
@@ -143,6 +150,8 @@ def _row_to_order(row: asyncpg.Record) -> AutobuyOrderDTO:
         amount_uzs=row["amount_uzs"],
         status=row["status"],
         failure_reason=row["failure_reason"],
+        otp_attempts=row["otp_attempts"],
+        otp_confirmed_at=row["otp_confirmed_at"],
         hold_until=row["hold_until"],
         trigger_source=row["trigger_source"],
         created_at=row["created_at"],
@@ -572,7 +581,8 @@ async def submit_otp(
         raise InvalidPayload("Order is missing payment state")
 
     await pool.execute(
-        "UPDATE autobuy_orders SET status='paying', updated_at=now() WHERE id=$1",
+        "UPDATE autobuy_orders SET status='paying', "
+        "otp_attempts = otp_attempts + 1, updated_at=now() WHERE id=$1",
         autobuy_id,
     )
     client = RailwayUserClient(pool, user_id)
@@ -599,6 +609,19 @@ async def submit_otp(
             str(exc)[:200], autobuy_id,
         )
         raise
+
+    # CONFIRMATION_PROCESSED is eticket saying "a code was already accepted for
+    # this hold" (observed on every retype after a good code, orders 62/63). It
+    # is the one response that proves the bank took the code — remember it, so
+    # nobody downstream can call this a wrong code again.
+    already_processed = is_confirmation_processed(confirm_resp)
+    if already_processed:
+        await pool.execute(
+            "UPDATE autobuy_orders SET "
+            "otp_confirmed_at = COALESCE(otp_confirmed_at, now()) WHERE id=$1",
+            autobuy_id,
+        )
+        logger.info("autobuy_otp_already_processed", id=autobuy_id)
 
     # A 2xx from confirm-payment means "code accepted for processing", NOT
     # "ticket bought" — eticket settles asynchronously. Only `orderState` is
@@ -634,15 +657,18 @@ async def submit_otp(
         # already have been charged, so claiming "wrong code" here is the one
         # thing we must never do. Leave the order in `paying`; the worker's
         # reconciler settles it, and the mini-app polls until it flips.
+        reason = (REASON_CODE_ACCEPTED_WAITING if already_processed
+                  else REASON_CHECKING)
         await pool.execute(
             """
             UPDATE autobuy_orders SET status='paying',
               failure_reason=$1, updated_at=now()
             WHERE id=$2
             """,
-            "To'lov tekshirilmoqda", autobuy_id,
+            reason, autobuy_id,
         )
-        logger.info("autobuy_otp_pending", id=autobuy_id, order_state=order_state)
+        logger.info("autobuy_otp_pending", id=autobuy_id,
+                    order_state=order_state, already_processed=already_processed)
         return await get_by_id(pool, autobuy_id, user_id)
 
     await pool.execute(
@@ -663,6 +689,36 @@ async def submit_otp(
                 subscription_deactivated=deactivated)
     await _notify_terminal(pool, autobuy_id, "paid")
     return await get_by_id(pool, autobuy_id, user_id)
+
+
+# User-facing reasons for an order that is not settled yet. None of them may
+# claim the code was wrong — we have no response that proves that.
+REASON_CHECKING = "To'lov tekshirilmoqda"
+REASON_UNSETTLED_RETRY = (
+    "To'lov hali tasdiqlanmadi. Kod noto'g'ri bo'lsa qaytadan kiriting; "
+    "to'g'ri bo'lsa biroz kuting."
+)
+REASON_CODE_ACCEPTED_WAITING = (
+    "Kod qabul qilingan. Eticket to'lovni yakunlashini kutyapmiz — "
+    "qayta kiritish shart emas."
+)
+REASON_CODE_ACCEPTED_STUCK = (
+    "Kod qabul qilingan, lekin eticket to'lovni hali yakunlamadi. "
+    "Bu ularning tomonida qotib qolgan bo'lishi mumkin: agar 2–3 daqiqada "
+    "o'zgarmasa, buyurtmani bekor qiling — qidiruv davom etadi."
+)
+# How long after an accepted code we stop calling it "waiting" and say so.
+CONFIRMED_STUCK_AFTER = timedelta(seconds=120)
+
+
+def is_confirmation_processed(resp: Any) -> bool:
+    """True when eticket says the hold's confirmation was already consumed.
+
+    Observed shape (orders 62, 63): ``{"data": None, "error": "CONFIRMATION_PROCESSED"}``.
+    A successful first confirm looks different (``error`` is a dict carrying
+    ``hamkorbankHoldId``), so only the exact string counts.
+    """
+    return isinstance(resp, dict) and resp.get("error") == "CONFIRMATION_PROCESSED"
 
 
 # eticket's own `orderState` vocabulary (from its Angular bundle + live capture).
@@ -832,7 +888,8 @@ async def reconcile_pending(pool: asyncpg.Pool) -> int:
     """
     rows = await pool.fetch(
         """
-        SELECT id, user_id, status, railway_order_id, hold_until, updated_at
+        SELECT id, user_id, status, railway_order_id, hold_until, updated_at,
+               otp_confirmed_at, failure_reason
         FROM autobuy_orders
         WHERE status IN ('paying', 'awaiting_otp')
           AND railway_order_id IS NOT NULL
@@ -872,21 +929,42 @@ async def reconcile_pending(pool: asyncpg.Pool) -> int:
             await _notify_terminal(pool, row["id"], "paid")
             continue
 
-        # Not paid. Only a `paying` row needs rescuing — hand it back for a
-        # retry while the hold is still alive. An `awaiting_otp` row is already
-        # where the user needs it, and expire_stale closes out the rest.
+        # Not paid. Only a `paying` row needs rescuing; an `awaiting_otp` row
+        # is already where the user needs it, and expire_stale closes the rest.
         hold = row["hold_until"]
-        if (row["status"] == "paying" and state in ORDER_STATE_IN_PROGRESS
+        if not (row["status"] == "paying" and state in ORDER_STATE_IN_PROGRESS
                 and hold and hold > now):
+            continue
+
+        if row["otp_confirmed_at"] is None:
+            # No proof the code was taken: hand it back so a mistyped code can
+            # be corrected while the hold is alive. We do NOT know it was
+            # wrong — a slow settlement looks identical — so say exactly that.
             await pool.execute(
                 """
                 UPDATE autobuy_orders SET status='awaiting_otp',
                   failure_reason=$1, updated_at=now()
                 WHERE id=$2 AND status='paying'
                 """,
-                "Kod qabul qilinmadi. Qaytadan kiriting.", row["id"],
+                REASON_UNSETTLED_RETRY, row["id"],
             )
             logger.info("autobuy_reconciled_retryable", id=row["id"])
+            continue
+
+        # eticket confirmed it consumed a code (CONFIRMATION_PROCESSED) and the
+        # order still has not settled. Retyping cannot help, so keep it in
+        # `paying`; past the grace window, tell the user it looks stuck on
+        # eticket's side and that cancelling hands the seat back to the search.
+        # (Order 62: 10+ minutes in this state, paymentType never attached.)
+        if (now - row["otp_confirmed_at"] > CONFIRMED_STUCK_AFTER
+                and row["failure_reason"] != REASON_CODE_ACCEPTED_STUCK):
+            await pool.execute(
+                "UPDATE autobuy_orders SET failure_reason=$1, updated_at=now() "
+                "WHERE id=$2 AND status='paying'",
+                REASON_CODE_ACCEPTED_STUCK, row["id"],
+            )
+            logger.warning("autobuy_confirmed_but_unsettled", id=row["id"],
+                           confirmed_at=row["otp_confirmed_at"].isoformat())
     return settled
 
 
@@ -896,7 +974,7 @@ async def expire_stale(pool: asyncpg.Pool) -> int:
     grace = now - timedelta(seconds=15)
     rows = await pool.fetch(
         """
-        SELECT id, user_id, railway_order_id
+        SELECT id, user_id, railway_order_id, otp_attempts
         FROM autobuy_orders
         WHERE status IN ('reserving','awaiting_otp','paying')
           AND hold_until IS NOT NULL
@@ -944,9 +1022,17 @@ async def expire_stale(pool: asyncpg.Pool) -> int:
             row["id"],
         )
         expired += 1
-        logger.info("autobuy_expired", id=row["id"])
+        logger.info("autobuy_expired", id=row["id"],
+                    otp_attempts=row["otp_attempts"])
         await _notify_terminal(pool, row["id"], "expired")
-        await _register_failure(pool, row["id"])
+        # The failure budget exists to stop re-holding seats for someone who is
+        # not there to type the code. An order that expired *after* codes were
+        # submitted is eticket/the bank failing to settle, not the user's
+        # absence — disarming on it cost order 62's user their auto-buy.
+        if row["otp_attempts"] == 0:
+            await _register_failure(pool, row["id"])
+        else:
+            logger.info("autobuy_expired_after_otp_not_counted", id=row["id"])
     return expired
 
 

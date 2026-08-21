@@ -61,9 +61,20 @@ export function OrderDetail() {
 
   const submit = useMutation({
     mutationFn: (code: string) => submitOrderOtp(orderId, code),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       setOtpError(null);
-      toast.success("To'lov muvaffaqiyatli");
+      // A 200 here only means the code was handed to eticket. The order's
+      // status says what actually happened — it is `paid` only once eticket
+      // settled; `paying` means we are still waiting on them. Saying
+      // "successful" on `paying` (as this used to) was a lie the user saw
+      // seconds before the polling showed otherwise.
+      if (updated.status === "paid") {
+        toast.success("Chipta sotib olindi!");
+      } else if (updated.status === "paying") {
+        toast.message(updated.failure_reason ?? "Kod yuborildi — eticket tasdiqlashi kutilmoqda");
+      } else if (updated.failure_reason) {
+        toast.message(updated.failure_reason);
+      }
       qc.invalidateQueries({ queryKey: ["order", orderId] });
       qc.invalidateQueries({ queryKey: ["orders"] });
     },
@@ -189,6 +200,14 @@ export function OrderDetail() {
                 {otpError}
               </p>
             )}
+            {!otpError && o.failure_reason && o.otp_attempts ? (
+              // The backend's own account of the last attempt (e.g. "not
+              // settled yet — retype if it was wrong, wait if it was right").
+              <p className="flex items-start gap-1.5 px-1 text-body-sm text-muted">
+                <AlertCircle size={14} strokeWidth={2} className="mt-0.5 shrink-0" />
+                {o.failure_reason}
+              </p>
+            ) : null}
           </div>
           <div className="flex items-center justify-between">
             {/* Telegram deep-links straight here, so this screen must offer its
@@ -249,10 +268,12 @@ export function OrderDetail() {
       {o.status === "paying" && (
         <div className="flex flex-col items-center gap-3 py-6">
           <Spinner />
-          <div className="text-body-md text-ink">To'lov tekshirilmoqda…</div>
+          <div className="text-body-md text-ink">
+            {o.otp_confirmed_at ? "Kod qabul qilingan" : "To'lov tekshirilmoqda…"}
+          </div>
           <p className="max-w-sm text-center text-body-sm text-muted">
-            eticket to'lovni tasdiqlashi bir necha soniya olishi mumkin.
-            Kod noto'g'ri bo'lsa, qaytadan kiritish uchun shu yerga qaytasiz.
+            {o.failure_reason
+              ?? "eticket to'lovni tasdiqlashi bir necha soniya olishi mumkin. Kod noto'g'ri bo'lsa, qaytadan kiritish uchun shu yerga qaytasiz."}
           </p>
           <Button
             variant="destructive"
