@@ -1,5 +1,5 @@
 import { Screen } from "@/components/Screen";
-import { Wordmark } from "@/components/Wordmark";
+import { Logo } from "@/components/Logo";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
@@ -11,7 +11,10 @@ export function HomeSkeleton() {
   return (
     <Screen tabbed padded>
       <header className="flex h-8 items-center justify-between">
-        <Wordmark size="sm" />
+        <div className="flex items-center gap-2.5 text-ink">
+          <Logo size={22} />
+          <Skeleton className="h-3 w-36" />
+        </div>
         <Skeleton className="h-8 w-8 rounded-pill" />
       </header>
       <Skeleton className="h-[200px] rounded-xl" />

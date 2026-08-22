@@ -17,7 +17,6 @@ import { Screen } from "@/components/Screen";
 import { StatusView } from "@/components/StatusView";
 import { HomeSkeleton } from "@/components/HomeSkeleton";
 import { Logo } from "@/components/Logo";
-import { Wordmark } from "@/components/Wordmark";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ListGroup, ListRow } from "@/components/ui/list";
@@ -38,22 +37,6 @@ function Avatar({ url, name, onClick }: { url?: string; name: string; onClick: (
       {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : initial}
     </button>
   );
-}
-
-/** Small status pill used in the hero meta row. */
-function Chip({
-  children, onClick, tone = "default",
-}: { children: React.ReactNode; onClick?: () => void; tone?: "default" | "primary" }) {
-  const cls = cn(
-    "inline-flex h-7 items-center gap-1.5 rounded-pill border px-2.5 text-caption",
-    tone === "primary"
-      ? "border-coral/40 bg-canvas/70 text-coral"
-      : "border-hairline bg-canvas/70 text-body",
-    onClick && "active:scale-95 transition-transform",
-  );
-  return onClick
-    ? <button type="button" onClick={onClick} className={cls}>{children}</button>
-    : <span className={cls}>{children}</span>;
 }
 
 function StatusPill({ sub }: { sub: Subscription }) {
@@ -172,10 +155,39 @@ export function Home() {
 
   return (
     <Screen tabbed padded>
-      {/* Brand header — the bot name is already in Telegram's chrome, so the
-          lockup stays small; identity (name, tier) lives in the hero. */}
-      <header className="flex h-8 items-center justify-between">
-        <Wordmark size="sm" />
+      {/* Top strip — mark only (Telegram already draws the bot name right
+          above this), then the account facts as one quiet line: tier, poll
+          cadence, eticket link. Not badges: nothing here competes with the
+          OTP banner or the CTA for attention. */}
+      <header className="flex h-8 items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5 text-ink">
+          <Logo size={22} />
+          <div className="flex min-w-0 items-center gap-1.5 truncate text-caption text-muted">
+            <span className={cn("font-medium", isFree ? "text-body" : "text-coral")}>
+              {isFree ? "Free" : "Premium"}
+            </span>
+            {intervalS !== undefined && (
+              <>
+                <span aria-hidden>·</span>
+                <span className="inline-flex items-center gap-1">
+                  {isFree
+                    ? <RefreshCw width={11} height={11} strokeWidth={2} />
+                    : <Zap width={11} height={11} strokeWidth={2} className="text-coral" />}
+                  har {intervalS} s
+                </span>
+              </>
+            )}
+            {linked && (
+              <>
+                <span aria-hidden>·</span>
+                <span className="inline-flex items-center gap-1 truncate">
+                  <CheckCircle2 width={11} height={11} strokeWidth={2} className="text-success" />
+                  eticket ulangan
+                </span>
+              </>
+            )}
+          </div>
+        </div>
         <Avatar url={tgUser?.photo_url} name={name} onClick={go("/settings")} />
       </header>
 
@@ -225,26 +237,7 @@ export function Home() {
           </div>
           <p className="mt-1.5 text-body-sm text-body">{caption}</p>
         </div>
-        <div className="relative mt-4 flex flex-wrap items-center gap-2">
-          <Chip tone={isFree ? "default" : "primary"} onClick={go("/premium")}>
-            {isFree ? "Free" : <><Sparkles width={12} height={12} strokeWidth={2} />Premium</>}
-          </Chip>
-          {linked && (
-            <Chip onClick={go("/friends")}>
-              <CheckCircle2 width={12} height={12} strokeWidth={2} className="text-success" />
-              eticket ulangan
-            </Chip>
-          )}
-          {intervalS !== undefined && (
-            <Chip onClick={isFree ? go("/premium") : undefined}>
-              {isFree
-                ? <RefreshCw width={12} height={12} strokeWidth={2} />
-                : <Zap width={12} height={12} strokeWidth={2} className="text-coral" />}
-              har {intervalS} s
-            </Chip>
-          )}
-        </div>
-        <Button size="lg" full className="relative mt-4 rounded-lg" onClick={handleNew}>
+        <Button size="lg" full className="relative mt-5 rounded-lg" onClick={handleNew}>
           {blocked
             ? <><Sparkles width={18} height={18} strokeWidth={2} />Slot to'lgan — Premium</>
             : <><Plus width={18} height={18} strokeWidth={2} />Yangi xabarnoma</>}
