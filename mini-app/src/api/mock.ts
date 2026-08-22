@@ -27,27 +27,70 @@ let me: Me = {
     id: 1,
     tg_user_id: 970956519,
     lang: "uz",
-    tier: "free",
-    premium_until: null,
+    tier: "premium",
+    premium_until: "2026-12-31T00:00:00Z",
   },
-  slot: { max: 1, used: 0 },
+  slot: { max: 3, used: 2 },
+  watcher: { interval_s: 10 },
 };
 
-let subscriptions: Subscription[] = [];
+// Demo seed so Home renders a realistic state in mock mode.
+let subscriptions: Subscription[] = [
+  {
+    id: 1, user_id: 1, dep_code: "2900000", arr_code: "2900700",
+    dep_name: "Toshkent", arr_name: "Samarqand", travel_date: "2026-09-30",
+    train_numbers: ["126Ф"], car_types: ["плацкарта"], berth: "any",
+    is_active: true, muted_until: null, created_at: new Date().toISOString(),
+    last_notified_at: null, notif_count: 3,
+    autobuy_enabled: true, autobuy_friend_id: 1, autobuy_friend_name: "Farrux",
+    autobuy_payment_method: "hamkorbank", autobuy_seat_strategy: "all",
+  },
+  {
+    id: 2, user_id: 1, dep_code: "2900000", arr_code: "2900800",
+    dep_name: "Toshkent", arr_name: "Buxoro", travel_date: "2026-10-03",
+    train_numbers: [], car_types: ["купе"], berth: "lower",
+    is_active: true, muted_until: null, created_at: new Date().toISOString(),
+    last_notified_at: null, notif_count: 0,
+    autobuy_enabled: false, autobuy_friend_id: null, autobuy_friend_name: null,
+    autobuy_payment_method: null,
+  },
+  {
+    id: 3, user_id: 1, dep_code: "2900700", arr_code: "2900000",
+    dep_name: "Samarqand", arr_name: "Toshkent", travel_date: "2026-10-12",
+    train_numbers: ["127Ф"], car_types: ["плацкарта"], berth: "any",
+    is_active: false, muted_until: null, created_at: new Date().toISOString(),
+    last_notified_at: null, notif_count: 1,
+    autobuy_enabled: false, autobuy_friend_id: null, autobuy_friend_name: null,
+    autobuy_payment_method: null,
+  },
+];
 
 let railwayAccount: RailwayAccountStatus = {
-  linked: false,
-  link_status: null,
-  last_sync_at: null,
-  last_login_at: null,
-  masked_username: null,
-  railway_user_id: null,
+  linked: true,
+  link_status: "active",
+  last_sync_at: new Date().toISOString(),
+  last_login_at: new Date().toISOString(),
+  masked_username: "fa***@gmail.com",
+  railway_user_id: "mock-user",
 };
 
 let friends: Friend[] = [];
 
 let savedCard: SavedCard | null = null;
-let mockOrders: AutobuyOrder[] = [];
+// One live OTP order so Home's banner and Orders render in mock mode.
+let mockOrders: AutobuyOrder[] = [
+  {
+    id: 62, subscription_id: 1, user_id: 1, railway_friend_cache_id: 1,
+    railway_order_id: "UX780C4TSZ8JTK", payment_type: "HamkorbankHold",
+    train_number: "126Ф", car_number: "7", seat_number: 12, seat_numbers: [12],
+    passenger_names: ["Farrukh Ruzmetov"],
+    dep_code: "2900000", arr_code: "2900700", travel_date: "2026-09-30", amount_uzs: 245140,
+    status: "awaiting_otp", failure_reason: null,
+    hold_until: new Date(Date.now() + 9 * 60_000).toISOString(),
+    trigger_source: "auto", created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    friend_name: "Farrukh Ruzmetov", last4: "1234", seconds_until_expiry: 9 * 60 + 41,
+  },
+];
 
 const FAKE_FRIENDS_SEED: Friend[] = [
   {

@@ -305,3 +305,29 @@
     @apply border border-hairline;
   }
 }
+
+/* ── Brand motion (Logo / Welcome / Home) ────────────────────────────
+   Entrance + loading choreography is CSS-only and time-gated by
+   animation-delay, so a sub-second auth shows no loading motion at all.
+   Everything here is transform/opacity only and switches off under
+   prefers-reduced-motion. */
+@keyframes splash-in   { from { opacity: 0; transform: translateY(8px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes splash-late { from { opacity: 0; } to { opacity: 1; } }
+@keyframes splash-run  { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@keyframes logo-halo   { 0% { transform: scale(1); opacity: .6; } 70%, 100% { transform: scale(2.6); opacity: 0; } }
+@keyframes live-ping   { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+.splash-in   { animation: splash-in 360ms cubic-bezier(.2, .8, .2, 1) both; }
+.splash-rail { width: 56px; height: 2px; border-radius: 9999px; background: hsl(var(--hairline)); overflow: hidden;
+               animation: splash-late 200ms ease-out 1200ms both; }
+.splash-rail > i { display: block; height: 100%; width: 40%; border-radius: 9999px; background: hsl(var(--coral));
+               animation: splash-run 1.2s ease-in-out infinite alternate; }
+.logo-halo   { transform-box: fill-box; transform-origin: center;
+               animation: logo-halo 1.6s cubic-bezier(.2, .6, .3, 1) 600ms infinite; }
+.live-dot    { animation: live-ping 1.6s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-in, .splash-rail, .splash-rail > i, .logo-halo, .live-dot { animation: none !important; }
+  .splash-in { opacity: 1; transform: none; }
+  .logo-halo { opacity: 0; }
+}

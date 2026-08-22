@@ -6,11 +6,17 @@ import asyncpg
 from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel, Field
 
+from app.core.config import settings
 from app.api.deps import current_user, db_pool
 from app.services import user_service
 from app.services.user_service import UserRow
 
 router = APIRouter(prefix="/me", tags=["me"])
+
+
+def _watcher_interval(tier: str) -> int:
+    return (settings.watcher_premium_interval_s if tier == "premium"
+            else settings.watcher_free_interval_s)
 
 
 class UpdateMe(BaseModel):
@@ -32,6 +38,8 @@ async def get_me(
             "premium_until": user.premium_until.isoformat() if user.premium_until else None,
         },
         "slot": {"max": slot.max, "used": slot.used},
+        # Poll cadence for this tier — shown on Home so premium reads as speed.
+        "watcher": {"interval_s": _watcher_interval(user.tier)},
     }
 
 

@@ -46,6 +46,9 @@ export function useThemeSync() {
       try {
         tg?.setHeaderColor?.(hex);
         tg?.setBackgroundColor?.(hex);
+        // Bot API 7.10+: the strip behind the bottom tab bar; without it the
+        // tab zone keeps Telegram's default colour under a dark/cream canvas.
+        tg?.setBottomBarColor?.(hex);
       } catch {}
     };
 

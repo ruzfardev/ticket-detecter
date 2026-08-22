@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" fill="none">
+  <!-- For BotFather → Configure Mini App → Configure Splash Screen.
+       Telegram tints this single-colour silhouette itself; pair it with
+       background #ffffff (light) / #161722 (dark) so the in-app splash is a
+       continuation of the native placeholder, not a second splash. -->
+  <g transform="translate(64 64) scale(6)">
+    <path fill="#ffffff" fill-rule="evenodd" clip-rule="evenodd" d="M12 16H37.5A4.5 4.5 0 0 0 46.5 16H52A6 6 0 0 1 58 22V42A6 6 0 0 1 52 48H46.5A4.5 4.5 0 0 0 37.5 48H12A6 6 0 0 1 6 42V22A6 6 0 0 1 12 16ZM30 32A8 8 0 1 0 14 32A8 8 0 1 0 30 32ZM41 22.5H43V27H41ZM41 29.75H43V34.25H41ZM41 37H43V41.5H41Z"/>
+    <circle cx="22" cy="32" r="4.25" fill="#ffffff"/>
+  </g>
+</svg>

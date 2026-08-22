@@ -36,6 +36,8 @@ export type Me = {
     premium_until: string | null;
   };
   slot: { max: number; used: number };
+  /** How often the watcher polls for this user's tier (seconds). */
+  watcher?: { interval_s: number };
 };
 
 export type Station = {
@@ -180,7 +182,9 @@ export type PlansResponse = {
 export const authTg = () =>
   mockApi.isEnabled
     ? mockApi.authTg()
-    : api.post<Me>("/api/v1/auth/tg").then(r => r.data);
+    // 8 s cap so a dead network reaches the splash's retry state instead of
+    // pulsing forever.
+    : api.post<Me>("/api/v1/auth/tg", undefined, { timeout: 8000 }).then(r => r.data);
 
 export const getMe = () =>
   mockApi.isEnabled

@@ -1,77 +1,120 @@
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Plus, Sparkles, Heart, Settings, Bell, TrainFront, CalendarDays, ChevronRight,
-  Train, CheckCircle2, AlertCircle, Clock,
+  Plus, Sparkles, Bell, Ticket, TrainFront, CalendarDays, ChevronRight,
+  Train, AlertCircle, Clock, CheckCircle2, Zap, RefreshCw,
 } from "lucide-react";
 
-import { getMe, getRailwayStatus, listOrders, listSubscriptions } from "@/api/client";
+import {
+  getMe, getRailwayStatus, listOrders, listSubscriptions, listTickets,
+  type Subscription,
+} from "@/api/client";
 import { useWizard } from "@/store/wizard";
 import { useHaptic } from "@/hooks/useHaptic";
 import { useTelegram } from "@/hooks/useTelegram";
 import { Screen } from "@/components/Screen";
 import { StatusView } from "@/components/StatusView";
+import { HomeSkeleton } from "@/components/HomeSkeleton";
+import { Logo } from "@/components/Logo";
+import { Wordmark } from "@/components/Wordmark";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ListGroup, ListRow } from "@/components/ui/list";
+import { cn } from "@/lib/utils";
+import { formatShortDate } from "@/lib/dates";
 
-/* ── Small building blocks (Wallet-style) ──────────────────────────── */
+/* ── Small building blocks ─────────────────────────────────────────── */
 
-function Avatar({ url, name }: { url?: string; name: string }) {
-  if (url) {
-    return <img src={url} alt="" className="h-12 w-12 rounded-pill object-cover" />;
-  }
-  const initial = (name.trim()[0] ?? "T").toUpperCase();
-  return (
-    <div className="flex h-12 w-12 items-center justify-center rounded-pill bg-coral/15 font-display text-title-lg text-coral">
-      {initial}
-    </div>
-  );
-}
-
-type ActionProps = {
-  Icon: typeof Plus;
-  label: string;
-  onClick: () => void;
-  accent?: boolean;
-};
-
-/** A square quick-action tile — icon on top, label below (Wallet pattern). */
-function QuickAction({ Icon, label, onClick, accent }: ActionProps) {
+function Avatar({ url, name, onClick }: { url?: string; name: string; onClick: () => void }) {
+  const initial = (name.trim()[0] ?? "C").toUpperCase();
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-hairline bg-canvas py-3.5 transition-colors hover:bg-surface-soft active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
+      aria-label={`${name} — sozlamalar`}
+      className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-pill bg-coral/15 text-caption font-semibold text-coral focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
     >
-      <Icon
-        width={22}
-        height={22}
-        strokeWidth={1.75}
-        className={accent ? "text-coral" : "text-ink"}
-      />
-      <span className="text-caption text-body">{label}</span>
+      {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : initial}
     </button>
   );
 }
+
+/** Small status pill used in the hero meta row. */
+function Chip({
+  children, onClick, tone = "default",
+}: { children: React.ReactNode; onClick?: () => void; tone?: "default" | "primary" }) {
+  const cls = cn(
+    "inline-flex h-7 items-center gap-1.5 rounded-pill border px-2.5 text-caption",
+    tone === "primary"
+      ? "border-coral/40 bg-canvas/70 text-coral"
+      : "border-hairline bg-canvas/70 text-body",
+    onClick && "active:scale-95 transition-transform",
+  );
+  return onClick
+    ? <button type="button" onClick={onClick} className={cls}>{children}</button>
+    : <span className={cls}>{children}</span>;
+}
+
+function StatusPill({ sub }: { sub: Subscription }) {
+  const text = !sub.is_active ? "pauzada" : sub.autobuy_enabled ? "avto-xarid" : "kuzatuvda";
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap text-caption",
+      sub.is_active ? "text-coral" : "text-muted")}>
+      <i aria-hidden className={cn("h-2 w-2 rounded-pill",
+        sub.is_active ? "bg-coral live-dot" : "bg-muted-soft")} />
+      {text}
+    </span>
+  );
+}
+
+const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+/* ── Screen ────────────────────────────────────────────────────────── */
 
 export function Home() {
   const navigate = useNavigate();
   const haptic = useHaptic();
   const { user: tgUser } = useTelegram();
   const reset = useWizard(s => s.reset);
-  const setField = useWizard(s => s.setField);
   const me = useQuery({ queryKey: ["me"], queryFn: getMe });
   const subs = useQuery({ queryKey: ["subs"], queryFn: listSubscriptions });
   const railway = useQuery({ queryKey: ["railwayAccount"], queryFn: getRailwayStatus });
+  const linked = railway.data?.linked === true;
   const orders = useQuery({
     queryKey: ["orders"], queryFn: listOrders,
-    enabled: railway.data?.linked === true,
+    enabled: linked,
     refetchInterval: 8000,
+  });
+  // Shares the Tickets tab's cache; one eticket round-trip per 5 min at most.
+  const tickets = useQuery({
+    queryKey: ["tickets"], queryFn: listTickets,
+    enabled: linked,
+    staleTime: 5 * 60_000,
   });
   const awaitingOtp = (orders.data ?? []).find(o => o.status === "awaiting_otp");
 
-  if (me.isLoading || subs.isLoading) return <StatusView kind="loading" />;
+  // OTP countdown: tick locally between the 8 s refetches.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!awaitingOtp) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [awaitingOtp?.id]);
+  const otpSecs =
+    awaitingOtp && awaitingOtp.seconds_until_expiry !== null
+      ? Math.max(0, awaitingOtp.seconds_until_expiry - Math.floor((now - orders.dataUpdatedAt) / 1000))
+      : null;
+  // One haptic nudge per new OTP request — it is the only time-critical thing here.
+  const warned = useRef<number | null>(null);
+  useEffect(() => {
+    if (awaitingOtp && warned.current !== awaitingOtp.id) {
+      warned.current = awaitingOtp.id;
+      haptic.notify("warning");
+    }
+  }, [awaitingOtp?.id, haptic]);
+
+  if (me.isLoading || subs.isLoading) return <HomeSkeleton />;
   if (!me.data || !subs.data) {
     return <StatusView kind="error" description="Ma'lumotni yuklab bo'lmadi." />;
   }
@@ -83,96 +126,133 @@ export function Home() {
   const all = subs.data.subscriptions;
   const active = all.filter(s => s.is_active);
   const paused = all.filter(s => !s.is_active);
-
-  const subRow = (s: (typeof all)[number]) => (
-    <ListRow
-      key={s.id}
-      before={
-        <div className="flex h-10 w-10 items-center justify-center rounded-pill bg-canvas">
-          <TrainFront className="text-ink" width={20} height={20} strokeWidth={1.75} />
-        </div>
-      }
-      title={`${s.dep_name} → ${s.arr_name}`}
-      subtitle={
-        <span className="inline-flex items-center gap-1.5">
-          <CalendarDays width={14} height={14} strokeWidth={1.75} />
-          {s.travel_date} · {s.train_numbers.length ? s.train_numbers.join(", ") : "har qanday"}
-        </span>
-      }
-      after={
-        <span
-          className={`h-2 w-2 rounded-pill ${s.is_active ? "bg-coral" : "bg-muted-soft"}`}
-          aria-hidden
-        />
-      }
-      chevron
-      onClick={() => navigate(`/sub/${s.id}`)}
-    />
-  );
+  const anyAutobuy = active.some(s => s.autobuy_enabled);
+  const intervalS = me.data.watcher?.interval_s;
 
   const name =
     [tgUser?.first_name, tgUser?.last_name].filter(Boolean).join(" ") || "Mehmon";
-  const handle = tgUser?.username ? `@${tgUser.username}` : "Xush kelibsiz";
-
   const go = (path: string) => () => { haptic.selection(); navigate(path); };
 
   const handleNew = () => {
     haptic.impact("light");
-    if (blocked) {
-      navigate("/premium");
-      return;
-    }
+    if (blocked) { navigate("/premium"); return; }
     reset();
     navigate("/new");
   };
 
+  const caption =
+    active.length > 0
+      ? `Joy chiqsa — darhol xabar${anyAutobuy ? " yoki avto-xarid" : ""}.`
+      : paused.length > 0
+        ? "Hammasi pauzada — ro'yxatdan qayta yoqing."
+        : "Marshrut, sana va poyezdni tanlang — joy chiqsa xabar beramiz.";
+
+  const subRow = (s: Subscription) => (
+    <ListRow
+      key={s.id}
+      // No leading icon: every row would carry the same train glyph, and at
+      // 390 px it cost the width that keeps "Toshkent → Samarqand" on one line.
+      title={`${s.dep_name} → ${s.arr_name}`}
+      subtitle={
+        <span className="inline-flex items-center gap-1.5">
+          <CalendarDays width={14} height={14} strokeWidth={1.75} />
+          {formatShortDate(s.travel_date)} · {s.train_numbers.length ? s.train_numbers.join(", ") : "har qanday"}
+        </span>
+      }
+      // The whole row is the tap target; the status pill is the trailing
+      // element, so no chevron — it only ate title width.
+      after={<StatusPill sub={s} />}
+      onClick={() => navigate(`/sub/${s.id}`)}
+    />
+  );
+
+  const ordersActive = (orders.data ?? []).filter(o =>
+    ["reserving", "awaiting_otp", "paying"].includes(o.status)).length;
+  const ticketCount = tickets.data?.length ?? 0;
+
   return (
     <Screen tabbed padded>
-      {/* User header */}
-      <header className="flex items-center gap-3">
-        <Avatar url={tgUser?.photo_url} name={name} />
-        <div className="min-w-0 flex-1">
-          <div className="truncate font-display text-display-sm text-ink">{name}</div>
-          <div className="truncate text-caption text-muted">{handle}</div>
-        </div>
-        <Badge variant={isFree ? "outline" : "coral"}>
-          {isFree ? "Free" : "Premium"}
-        </Badge>
+      {/* Brand header — the bot name is already in Telegram's chrome, so the
+          lockup stays small; identity (name, tier) lives in the hero. */}
+      <header className="flex h-8 items-center justify-between">
+        <Wordmark size="sm" />
+        <Avatar url={tgUser?.photo_url} name={name} onClick={go("/settings")} />
       </header>
 
-      {/* Quick actions */}
-      <div className="grid grid-cols-4 gap-2">
-        <QuickAction Icon={Plus}      label="Yangi"    accent onClick={handleNew} />
-        <QuickAction Icon={Sparkles}  label="Premium"  onClick={go("/premium")} />
-        <QuickAction Icon={Heart}     label="Donate"   onClick={go("/donate")} />
-        <QuickAction Icon={Settings}  label="Sozlama"  onClick={go("/settings")} />
-      </div>
-
-      {/* Awaiting-OTP banner — top priority */}
+      {/* Awaiting-OTP banner — the one time-critical element, always first. */}
       {awaitingOtp && (
         <button
           type="button"
           onClick={() => navigate(`/order/${awaitingOtp.id}`)}
-          className="flex w-full items-center gap-3 rounded-lg border border-coral/40 bg-coral/8 p-4 text-left transition-colors hover:bg-coral/12 active:scale-[0.99]"
+          className="relative flex w-full items-center gap-3 rounded-xl bg-coral p-4 text-left text-on-primary transition-transform active:scale-[0.99]"
         >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-coral/15">
-            <Clock className="text-coral" width={20} height={20} strokeWidth={1.75} />
+          <span aria-hidden className="live-dot absolute right-3 top-3 h-1.5 w-1.5 rounded-pill bg-on-primary" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-on-primary/20">
+            <Clock width={20} height={20} strokeWidth={1.75} />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-title-sm text-ink">OTP kiriting</div>
-            <div className="text-caption text-muted">
-              {awaitingOtp.train_number} · Joy {awaitingOtp.seat_number}
-              {awaitingOtp.seconds_until_expiry !== null
-                ? ` · ${Math.floor(awaitingOtp.seconds_until_expiry/60)}:${String(awaitingOtp.seconds_until_expiry%60).padStart(2,"0")}`
-                : ""}
+            <div className="text-title-sm">SMS kodni kiriting</div>
+            <div className="truncate text-caption text-on-primary/80">
+              {awaitingOtp.train_number} · Vagon {awaitingOtp.car_number} · Joy{" "}
+              {awaitingOtp.seat_numbers?.length ? awaitingOtp.seat_numbers.join(", ") : awaitingOtp.seat_number}
             </div>
           </div>
-          <ChevronRight className="shrink-0 text-coral" width={20} height={20} strokeWidth={1.75} />
+          {otpSecs !== null && (
+            <span className="font-mono text-title-md tabular-nums">{mmss(otpSecs)}</span>
+          )}
+          <ChevronRight className="shrink-0" width={20} height={20} strokeWidth={1.75} />
         </button>
       )}
 
-      {/* Railway account link block */}
-      {railway.data && !railway.data.linked && (
+      {/* Hero — what the app is doing right now, and the one primary action. */}
+      <section className="relative overflow-hidden rounded-xl border border-coral/15 bg-surface-card p-5">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,hsl(var(--coral)/0.18),hsl(var(--accent-teal)/0.08)_60%,transparent)]"
+        />
+        <div className="absolute right-4 top-4 text-ink">
+          <Logo size={40} live={active.length > 0} />
+        </div>
+        <div className="relative max-w-[calc(100%-52px)]">
+          <div className="text-caption-upper uppercase text-muted">Kuzatuvda</div>
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="font-display text-display-xl font-semibold tabular-nums text-ink">
+              {active.length}
+            </span>
+            <span className="text-title-md tabular-nums text-muted-soft">
+              / {slot.max >= 999 ? "∞" : slot.max} slot
+            </span>
+          </div>
+          <p className="mt-1.5 text-body-sm text-body">{caption}</p>
+        </div>
+        <div className="relative mt-4 flex flex-wrap items-center gap-2">
+          <Chip tone={isFree ? "default" : "primary"} onClick={go("/premium")}>
+            {isFree ? "Free" : <><Sparkles width={12} height={12} strokeWidth={2} />Premium</>}
+          </Chip>
+          {linked && (
+            <Chip onClick={go("/friends")}>
+              <CheckCircle2 width={12} height={12} strokeWidth={2} className="text-success" />
+              eticket ulangan
+            </Chip>
+          )}
+          {intervalS !== undefined && (
+            <Chip onClick={isFree ? go("/premium") : undefined}>
+              {isFree
+                ? <RefreshCw width={12} height={12} strokeWidth={2} />
+                : <Zap width={12} height={12} strokeWidth={2} className="text-coral" />}
+              har {intervalS} s
+            </Chip>
+          )}
+        </div>
+        <Button size="lg" full className="relative mt-4 rounded-lg" onClick={handleNew}>
+          {blocked
+            ? <><Sparkles width={18} height={18} strokeWidth={2} />Slot to'lgan — Premium</>
+            : <><Plus width={18} height={18} strokeWidth={2} />Yangi xabarnoma</>}
+        </Button>
+      </section>
+
+      {/* Account states that need the user's hand */}
+      {railway.data && !linked && (
         <button
           type="button"
           onClick={go("/railway-link")}
@@ -183,14 +263,11 @@ export function Home() {
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-title-sm text-ink">eticket akkauntni ulang</div>
-            <div className="text-caption text-muted">
-              Hamrohlar va auto-buy uchun
-            </div>
+            <div className="text-caption text-muted">Avto-xarid va chiptalar uchun</div>
           </div>
           <ChevronRight className="shrink-0 text-muted-soft" width={20} height={20} strokeWidth={1.75} />
         </button>
       )}
-
       {railway.data?.link_status === "login_failed" && (
         <button
           type="button"
@@ -208,51 +285,17 @@ export function Home() {
         </button>
       )}
 
-      {railway.data?.linked && (
-        <button
-          type="button"
-          onClick={go("/friends")}
-          className="flex w-full items-center gap-3 rounded-lg bg-surface-card p-4 text-left transition-colors hover:bg-surface-soft active:scale-[0.99]"
-        >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-canvas">
-            <CheckCircle2 className="text-coral" width={20} height={20} strokeWidth={1.75} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-title-sm text-ink">eticket ulangan</div>
-            <div className="truncate text-caption text-muted">
-              {railway.data.masked_username ?? "Hamrohlarni ko'rish"}
-            </div>
-          </div>
-          <ChevronRight className="shrink-0 text-muted-soft" width={20} height={20} strokeWidth={1.75} />
-        </button>
-      )}
-
-      {/* Slot "balance" card */}
-      <div className="flex items-center gap-3 rounded-lg bg-surface-card p-4">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-pill bg-canvas">
-          <Bell width={22} height={22} className="text-coral" strokeWidth={1.75} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-title-sm text-ink">Aktiv xabarnomalar</div>
-          <div className="text-caption text-muted">{isFree ? "Free tarif" : "Premium tarif"}</div>
-        </div>
-        <div className="font-display text-display-sm tabular-nums text-ink">
-          {slot.used}
-          <span className="text-muted-soft">/{slot.max >= 999 ? "∞" : slot.max}</span>
-        </div>
-      </div>
-
       {/* Notifications */}
       {all.length === 0 ? (
-        <Card variant="feature" pad="lg">
+        <Card variant="feature" pad="md">
           <div className="flex items-start gap-4">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-canvas">
               <TrainFront className="text-ink" width={20} height={20} strokeWidth={1.75} />
             </div>
             <div className="space-y-1">
               <h3 className="font-display text-display-sm text-ink">Hali xabarnoma yo'q</h3>
-              <p className="text-body-md text-body">
-                “Yangi” tugmasini bosing — joy paydo bo'lishi bilan Telegram orqali xabar yetadi.
+              <p className="text-body-sm text-body">
+                “Yangi xabarnoma” tugmasini bosing — joy paydo bo'lishi bilan Telegram orqali xabar yetadi.
               </p>
             </div>
           </div>
@@ -268,6 +311,32 @@ export function Home() {
         </>
       )}
 
+      {/* Glance: orders in flight / tickets owned — only meaningful once linked */}
+      {linked && (
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={go("/orders")}
+            className="relative rounded-lg bg-surface-card p-4 text-left transition-transform active:scale-[0.99]"
+          >
+            <Bell className="absolute right-3 top-3 text-coral" width={18} height={18} strokeWidth={1.75} />
+            <div className="font-display text-display-sm tabular-nums text-ink">{ordersActive}</div>
+            <div className="text-caption text-muted">Buyurtma jarayonda</div>
+          </button>
+          <button
+            type="button"
+            onClick={go("/tickets")}
+            className="relative rounded-lg bg-surface-card p-4 text-left transition-transform active:scale-[0.99]"
+          >
+            <Ticket className="absolute right-3 top-3 text-coral" width={18} height={18} strokeWidth={1.75} />
+            <div className="font-display text-display-sm tabular-nums text-ink">
+              {tickets.isLoading ? "…" : ticketCount}
+            </div>
+            <div className="text-caption text-muted">Chipta sotib olingan</div>
+          </button>
+        </div>
+      )}
+
       {/* Premium upsell (free only) */}
       {isFree && (
         <button
@@ -279,8 +348,8 @@ export function Home() {
             <Sparkles className="text-coral" width={20} height={20} strokeWidth={1.75} />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-title-sm text-ink">Premium oling</div>
-            <div className="text-caption text-muted">3× tezroq tekshirish · 3 ta slot</div>
+            <div className="text-title-sm text-ink">Premium — 3× tezroq, 3 slot</div>
+            <div className="text-caption text-muted">Joyni birinchi bo'lib ilg'ang</div>
           </div>
           <ChevronRight className="shrink-0 text-muted-soft" width={20} height={20} strokeWidth={1.75} />
         </button>
