@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -109,6 +109,21 @@ export function OrderDetail() {
   });
 
   useEffect(() => { setOtp(""); setOtpError(null); }, [orderId]);
+
+  // Hand the user to Buyurtmalar once the purchase completes *in this view*.
+  // Keyed on the transition (live status -> paid) rather than on "status is
+  // paid", so opening an already-paid order from the list does not bounce
+  // straight back to it.
+  const prevStatus = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const status = order.data?.status;
+    const was = prevStatus.current;
+    prevStatus.current = status;
+    if (status !== "paid" || !was || was === "paid") return;
+    if (!["reserving", "awaiting_otp", "paying"].includes(was)) return;
+    const t = setTimeout(() => navigate("/orders", { replace: true }), 1500);
+    return () => clearTimeout(t);
+  }, [order.data?.status, navigate]);
 
   if (order.isLoading) return <StatusView kind="loading" />;
   if (!order.data) return <StatusView kind="error" description="Buyurtma topilmadi" />;
@@ -298,8 +313,8 @@ export function OrderDetail() {
             Chipta eticket.railway.uz akkountingizdagi
             "Mening yangi buyurtmalarim"da ko'rinadi.
           </p>
-          <Button variant="secondary" onClick={() => navigate("/home")}>
-            Bosh sahifaga
+          <Button variant="secondary" onClick={() => navigate("/orders", { replace: true })}>
+            Buyurtmalar
           </Button>
         </div>
       )}

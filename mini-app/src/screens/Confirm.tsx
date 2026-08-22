@@ -87,13 +87,14 @@ export function Confirm() {
       // mounted makes useWizardGuard see empty fields and bounce to step 1.
       // handleNew() in Home resets on the next wizard entry instead.
       //
-      // Mark the wizard finished, then go straight Home. The flag makes every
-      // /new/* route self-evict (see useWizardGuard), so back-stepping can
-      // never resurrect a completed wizard — counting history entries to
-      // unwind was unreliable, because `replace` navigations bump the counter
-      // without adding an entry, so it could jump back past the app entirely.
+      // Mark the wizard finished, then go straight to Buyurtmalar. The flag
+      // makes every /new/* route self-evict (see useWizardGuard), so
+      // back-stepping can never resurrect a completed wizard — counting
+      // history entries to unwind was unreliable, because `replace`
+      // navigations bump the counter without adding an entry, so it could
+      // jump back past the app entirely.
       w.setField("completed", true);
-      navigate("/home", { replace: true });
+      navigate("/orders", { replace: true });
     },
     onError: (err: any) => {
       haptic.notify("error");
