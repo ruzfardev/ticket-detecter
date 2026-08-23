@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Search, MapPin, ArrowRight } from "lucide-react";
+import { Search, MapPin, ArrowLeftRight } from "lucide-react";
 
 import { listStations, Station } from "@/api/client";
 import { useWizardField } from "@/hooks/useWizardField";
@@ -54,6 +54,18 @@ export function RoutePicker() {
     }
   };
 
+  // Swap the two ends in place. With only one end chosen the empty side moves
+  // too, so the picker reopens on whichever end is now missing.
+  const swap = () => {
+    haptic.selection();
+    setField("dep_code", arr_code);
+    setField("dep_name", arr_name);
+    setField("arr_code", dep_code);
+    setField("arr_name", dep_name);
+    if (!arr_code) setMode("dep");
+    else if (!dep_code) setMode("arr");
+  };
+
   const hint = !dep_code
     ? "Avval qayerdan ekanini tanlang"
     : !arr_code
@@ -75,7 +87,14 @@ export function RoutePicker() {
             >
               {dep_name || "Qayerdan?"}
             </button>
-            <ArrowRight className="h-4 w-4 text-muted-soft" strokeWidth={1.75} />
+            <button
+              type="button"
+              onClick={swap}
+              aria-label="Yo'nalishni almashtirish"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-pill bg-canvas text-ink transition-transform active:scale-90 active:rotate-180"
+            >
+              <ArrowLeftRight className="h-4 w-4" strokeWidth={1.75} />
+            </button>
             <button
               type="button"
               onClick={() => setMode("arr")}
@@ -92,7 +111,6 @@ export function RoutePicker() {
         placeholder="Stantsiya nomi..."
         value={q}
         onChange={e => setQ(e.target.value)}
-        autoFocus
       />
 
       {isLoading ? (
