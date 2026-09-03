@@ -44,6 +44,9 @@ class SubscriptionRow:
     autobuy_friend_names: list[str] | None = None
     autobuy_payment_method: str | None = None
     autobuy_seat_strategy: str = "all"
+    # Children under 5 riding on a lap — no seat, not counted in friend_ids.
+    autobuy_lap_child_ids: list[int] | None = None
+    autobuy_lap_child_names: list[str] | None = None
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -59,7 +62,9 @@ SELECT s.id, s.user_id, s.dep_code, s.arr_code, s.travel_date,
        s.train_numbers, s.car_types, s.berth, s.is_active,
        s.muted_until, s.created_at,
        s.autobuy_enabled, s.autobuy_friend_id, s.autobuy_friend_ids, s.autobuy_payment_method,
-       s.autobuy_seat_strategy,
+       s.autobuy_seat_strategy, s.autobuy_lap_child_ids,
+       (SELECT array_agg(TRIM(BOTH ' ' FROM (fc3.firstname || ' ' || fc3.lastname)))
+          FROM railway_friends_cache fc3 WHERE fc3.id = ANY(s.autobuy_lap_child_ids)) AS autobuy_lap_child_names,
        sd.name_uz AS dep_name, sa.name_uz AS arr_name,
        fc.firstname AS autobuy_friend_firstname,
        fc.lastname  AS autobuy_friend_lastname,
@@ -103,6 +108,8 @@ def _row_to_sub(row: asyncpg.Record) -> SubscriptionRow:
         autobuy_friend_names=list(row.get("autobuy_friend_names") or []) or None,
         autobuy_payment_method=row.get("autobuy_payment_method"),
         autobuy_seat_strategy=row.get("autobuy_seat_strategy") or "all",
+        autobuy_lap_child_ids=[int(x) for x in (row.get("autobuy_lap_child_ids") or [])] or None,
+        autobuy_lap_child_names=list(row.get("autobuy_lap_child_names") or []) or None,
     )
 
 
@@ -184,6 +191,26 @@ async def update_active(
     return await get_by_id(pool, sub_id, user_id)
 
 
+def _check_children(rows, seated_ids: list[int], lap_ids: list[int], travel_date: date) -> None:
+    """The same rules eticket's form applies, checked before anything is saved
+    so the failure shows up in the wizard, not in a failed order weeks later."""
+    from app.services.autobuy_service import ADULT_FROM, LAP_CHILD_UNDER, age_on
+    age = {r["id"]: (age_on(r["birth_day"], travel_date) if r["birth_day"] else ADULT_FROM)
+           for r in rows}
+    adults = [i for i in seated_ids if age[i] >= ADULT_FROM]
+    minors = [i for i in seated_ids if age[i] < ADULT_FROM]
+    if (minors or lap_ids) and not adults:
+        raise InvalidPayload("a child must travel with an adult passenger",
+                             {"code": "adult_required"})
+    too_old = [i for i in lap_ids if age[i] >= LAP_CHILD_UNDER]
+    if too_old:
+        raise InvalidPayload("a lap child must be under 5 on the travel date",
+                             {"code": "lap_child_too_old", "ids": too_old})
+    if len(lap_ids) > len(adults):
+        raise InvalidPayload("at most one lap child per adult",
+                             {"code": "too_many_lap_children"})
+
+
 async def update_autobuy(
     pool: asyncpg.Pool,
     sub_id: int,
@@ -192,17 +219,20 @@ async def update_autobuy(
     friend_ids: list[int] | None,
     payment_method: str | None,
     seat_strategy: str | None = None,
+    lap_child_ids: list[int] | None = None,
 ) -> SubscriptionRow:
-    """Toggle/configure auto-buy on a subscription (1-4 passengers).
+    """Toggle/configure auto-buy on a subscription (1-4 seated passengers).
 
     Enforces:
       - subscription ownership
       - every passenger belongs to this user
-      - 1..4 passengers when enabling
+      - 1..4 seated passengers when enabling
+      - lap children: under 5 on the travel date, at most one per adult, and
+        a child of any kind only alongside an adult (16+)
       - active linked railway account when enabling
       - payment_method ∈ ALLOWED_PAYMENT_METHODS or None
     """
-    await get_by_id(pool, sub_id, user_id)  # ownership check
+    sub = await get_by_id(pool, sub_id, user_id)  # ownership check
 
     if seat_strategy is not None and seat_strategy not in SEAT_STRATEGIES:
         raise InvalidPayload(
@@ -232,15 +262,20 @@ async def update_autobuy(
             raise user_auth.RailwayAccountRequired(
                 "Link your eticket.railway.uz account before enabling auto-buy"
             )
+        laps = [i for i in dict.fromkeys(int(f) for f in (lap_child_ids or [])) if i not in ids]
         owned = await pool.fetch(
-            "SELECT id FROM railway_friends_cache WHERE id = ANY($1::bigint[]) AND user_id = $2",
-            ids, user_id,
+            "SELECT id, birth_day FROM railway_friends_cache "
+            "WHERE id = ANY($1::bigint[]) AND user_id = $2",
+            ids + laps, user_id,
         )
         owned_ids = {r["id"] for r in owned}
-        missing = [i for i in ids if i not in owned_ids]
+        missing = [i for i in ids + laps if i not in owned_ids]
         if missing:
             raise InvalidPayload("passenger not found for this user",
                                  {"code": "friend_not_owned", "ids": missing})
+        _check_children(owned, ids, laps, sub.travel_date)
+    else:
+        laps = []
 
     await pool.execute(
         """
@@ -250,6 +285,7 @@ async def update_autobuy(
             autobuy_friend_id = $3,
             autobuy_payment_method = $4,
             autobuy_seat_strategy = $5,
+            autobuy_lap_child_ids = $7::bigint[],
             updated_at = now()
         WHERE id = $6
         """,
@@ -259,6 +295,7 @@ async def update_autobuy(
         payment_method if enabled else None,
         seat_strategy or "all",
         sub_id,
+        laps,
     )
     logger.info(
         "autobuy_config_changed",
@@ -267,6 +304,7 @@ async def update_autobuy(
         friend_ids=ids if enabled else [],
         payment_method=payment_method if enabled else None,
         seat_strategy=seat_strategy or "all",
+        lap_child_ids=laps,
     )
     return await get_by_id(pool, sub_id, user_id)
 

@@ -18,6 +18,7 @@ export type WizardState = {
   // in Confirm's local state so a detour to /cards/add doesn't lose it.
   autobuy_enabled: boolean;
   autobuy_friend_ids: number[];
+  autobuy_lap_child_ids: number[];
   autobuy_payment_method: PayMethod | null;
   autobuy_seat_strategy: SeatStrategy;
   // Set once the subscription is saved. Every /new/* route self-evicts to Home
@@ -36,6 +37,7 @@ const initial = {
   berth: "any" as Berth,
   autobuy_enabled: false,
   autobuy_friend_ids: [] as number[],
+  autobuy_lap_child_ids: [] as number[],
   autobuy_payment_method: null as PayMethod | null,
   autobuy_seat_strategy: "all" as SeatStrategy,
   completed: false,

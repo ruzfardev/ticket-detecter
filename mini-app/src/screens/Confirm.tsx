@@ -3,23 +3,25 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   MapPin, CalendarDays, TrainFront, Armchair, ArrowDownToLine, ArrowUpToLine,
-  Check, CreditCard, Link2, Users, Zap,
+  Check, CreditCard, Link2, Zap,
 } from "lucide-react";
 
 import {
   createSubscription, getCard, getFriends, getRailwayStatus, patchAutobuy,
 } from "@/api/client";
 import { carTypeLabels } from "@/lib/cartypes";
+import { MAX_SEATED, passengerProblem } from "@/lib/passengers";
 import { useHaptic } from "@/hooks/useHaptic";
 import { useWizardGuard } from "@/hooks/useWizardGuard";
 import { useWizard } from "@/store/wizard";
+import { PassengerPicker } from "@/components/PassengerPicker";
 import { Screen } from "@/components/Screen";
 import { StickyAction } from "@/components/StickyAction";
 import { Button } from "@/components/ui/button";
 import { ListGroup, ListRow } from "@/components/ui/list";
 import { Spinner } from "@/components/ui/spinner";
 
-const MAX_PASSENGERS = 4;
+const MAX_PASSENGERS = MAX_SEATED;
 
 export function Confirm() {
   useWizardGuard(["dep_code", "arr_code", "travel_date", "train_numbers", "car_types"]);
@@ -30,6 +32,7 @@ export function Confirm() {
   const w = useWizard();
   const autobuy = w.autobuy_enabled;
   const friendIds = w.autobuy_friend_ids;
+  const lapIds = w.autobuy_lap_child_ids ?? [];
 
   const accountQ = useQuery({ queryKey: ["railwayAccount"], queryFn: getRailwayStatus });
   const linked = accountQ.data?.linked === true;
@@ -41,17 +44,8 @@ export function Confirm() {
   const friends = friendsQ.data ?? [];
   const validCount = friendIds.filter(id => friends.some(f => f.id === id)).length;
   const hasCard = !!cardQ.data;
-  const autobuyReady = !autobuy || (linked && validCount >= 1 && hasCard);
-
-  const toggleFriend = (id: number) =>
-    w.setField(
-      "autobuy_friend_ids",
-      friendIds.includes(id)
-        ? friendIds.filter(x => x !== id)
-        : friendIds.length >= MAX_PASSENGERS
-          ? friendIds
-          : [...friendIds, id],
-    );
+  const problem = passengerProblem(friends, w.travel_date, friendIds, lapIds);
+  const autobuyReady = !autobuy || (linked && validCount >= 1 && !problem && hasCard);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -74,6 +68,7 @@ export function Confirm() {
           friend_ids: friendIds,
           payment_method: w.autobuy_payment_method,
           seat_strategy: w.autobuy_seat_strategy,
+          lap_child_ids: lapIds,
         });
       }
       return sub;
@@ -219,57 +214,18 @@ export function Confirm() {
             />
           </ListGroup>
 
-          <ListGroup
-            label={`Yo'lovchilar${validCount ? ` · ${validCount}/${MAX_PASSENGERS}` : ""}`}
-            footer={`Bir vagondan ${MAX_PASSENGERS} tagacha yonma-yon joy izlanadi.`}
-          >
-            {friendsQ.isLoading ? (
-              <ListRow title="Yuklanmoqda…" />
-            ) : friends.length === 0 ? (
-              <ListRow
-                before={<Users className="h-5 w-5 text-muted-soft" strokeWidth={1.75} />}
-                title="Hamroh yo'q"
-                subtitle="Avval eticket'da hamroh qo'shing"
-                onClick={() => navigate("/friends")}
-                chevron
-              />
-            ) : (
-              <div className="flex flex-col">
-                {friends.map(f => {
-                  const checked = friendIds.includes(f.id);
-                  const atMax = !checked && friendIds.length >= MAX_PASSENGERS;
-                  return (
-                    <button
-                      key={f.id}
-                      type="button"
-                      disabled={atMax}
-                      onClick={() => toggleFriend(f.id)}
-                      className="flex items-center gap-3 px-4 py-3 text-left active:bg-hairline-soft transition-colors min-h-[56px] border-b border-hairline-soft last:border-b-0 disabled:opacity-40"
-                    >
-                      <span
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border ${
-                          checked ? "border-coral bg-coral text-on-primary" : "border-muted-soft"
-                        }`}
-                        aria-hidden
-                      >
-                        {checked && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-body-md font-medium truncate text-ink">
-                          {`${f.firstname} ${f.lastname}`.trim()}
-                        </div>
-                        <div className="text-body-sm text-muted truncate">
-                          {f.is_self ? "Men · " : ""}
-                          {f.doc_type ?? ""}
-                          {f.doc_masked ? ` ${f.doc_masked}` : ""}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </ListGroup>
+          <PassengerPicker
+            friends={friends}
+            travelDate={w.travel_date}
+            seatedIds={friendIds}
+            lapIds={lapIds}
+            loading={friendsQ.isLoading}
+            onChange={(seated, lap) => {
+              w.setField("autobuy_friend_ids", seated);
+              w.setField("autobuy_lap_child_ids", lap);
+            }}
+            onAddFriend={() => navigate("/friends")}
+          />
 
           {validCount > 1 && (
             <ListGroup

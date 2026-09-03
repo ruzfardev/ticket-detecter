@@ -33,6 +33,7 @@ from app.core.logging import logger
 from app.railway import user_auth
 from app.railway._auth_common import decrypt
 from app.railway.user_client import (
+    DISCOUNT_CHILD_UNDER_5,
     CreateOrderArgs,
     OrderConflict,
     PassengerArg,
@@ -183,6 +184,49 @@ async def get_by_id(pool: asyncpg.Pool, order_id: int, user_id: int) -> AutobuyO
     return _row_to_order(row)
 
 
+# eticket's own form: under 5 rides on a lap (no seat, CHILD_UNDER_5), under
+# 16 is filed inside the accompanying adult's `children` even with a seat.
+LAP_CHILD_UNDER = 5
+ADULT_FROM = 16
+
+
+def age_on(birth: date_t, on: date_t) -> int:
+    """Completed years of age on `on`."""
+    years = on.year - birth.year
+    if (on.month, on.day) < (birth.month, birth.day):
+        years -= 1
+    return years
+
+
+def arrange_passengers(
+    seated: list[tuple[PassengerArg, int]],
+    laps: list[tuple[PassengerArg, int]],
+) -> list[PassengerArg]:
+    """Shape the group the way eticket's booking form does.
+
+    `seated` are passengers with a seat each (any age), `laps` are children
+    riding free on a lap; both carry the passenger's age on the travel date.
+    Adults stay top-level; every child is filed under an adult, lap children
+    spread one per adult. Returns the top-level list.
+    """
+    adults = [p for p, age in seated if age >= ADULT_FROM]
+    minors = [p for p, age in seated if age < ADULT_FROM]
+    if (minors or laps) and not adults:
+        raise InvalidPayload("a child must travel with an adult passenger",
+                             {"code": "adult_required"})
+    for i, (child, age) in enumerate(laps):
+        if age >= LAP_CHILD_UNDER:
+            raise InvalidPayload(
+                f"{child.firstname} is {age} on the travel date and needs a seat",
+                {"code": "lap_child_too_old"},
+            )
+        child.discount_type = DISCOUNT_CHILD_UNDER_5
+        adults[i % len(adults)].children.append(child)
+    for child in minors:
+        adults[0].children.append(child)
+    return adults
+
+
 @dataclass(slots=True)
 class StartArgs:
     user_id: int
@@ -217,7 +261,7 @@ async def try_start_autobuy(
         """
         SELECT s.id, s.user_id, s.dep_code, s.arr_code, s.travel_date,
                s.autobuy_enabled, s.autobuy_friend_id, s.autobuy_friend_ids,
-               s.autobuy_payment_method
+               s.autobuy_lap_child_ids, s.autobuy_payment_method
         FROM subscriptions s
         WHERE s.id = $1
         """,
@@ -232,7 +276,9 @@ async def try_start_autobuy(
         friend_ids = [int(sub["autobuy_friend_id"])]   # back-compat (pre-multi)
     if not friend_ids:
         raise InvalidPayload("subscription has no passengers selected")
-    # Pair each passenger with one seat, 1:1 (all-or-nothing on availability).
+    # Lap children ride without a seat, so they never count towards seats.
+    lap_ids = [int(f) for f in (sub["autobuy_lap_child_ids"] or []) if f]
+    # Pair each seated passenger with one seat, 1:1.
     seat_numbers = [int(s) for s in (args.seat_numbers or [])]
     if len(seat_numbers) < len(friend_ids):
         # Not enough seats for every passenger yet — watcher retries next tick.
@@ -256,15 +302,15 @@ async def try_start_autobuy(
               (subscription_id, user_id, railway_friend_cache_id, passenger_cache_ids,
                train_number, car_number, seat_number, seat_numbers,
                dep_code, arr_code, travel_date,
-               status, trigger_source, notification_id)
+               status, trigger_source, notification_id, lap_child_cache_ids)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-                    'reserving', $12, $13)
+                    'reserving', $12, $13, $14)
             RETURNING id
             """,
             args.subscription_id, args.user_id, friend_ids[0], friend_ids,
             args.train_number, args.car_number, seat_numbers[0], seat_numbers,
             args.dep_code, args.arr_code, args.dep_date,
-            args.trigger_source, args.notification_id,
+            args.trigger_source, args.notification_id, lap_ids,
         )
     except asyncpg.UniqueViolationError:
         # Either the same seat was claimed twice, or this subscription already
@@ -281,7 +327,8 @@ async def try_start_autobuy(
                 train=args.train_number, seats=seat_numbers)
 
     try:
-        await _execute_pipeline(pool, autobuy_id, args, sub, friend_ids, seat_numbers, card)
+        await _execute_pipeline(pool, autobuy_id, args, sub, friend_ids, seat_numbers, card,
+                                lap_ids=lap_ids)
     except Exception as exc:
         await _mark_failed(pool, autobuy_id, str(exc)[:200])
         raise
@@ -296,12 +343,16 @@ async def _execute_pipeline(
     friend_ids: list[int],
     seat_numbers: list[int],
     card: card_service.CardDTO,
+    *,
+    lap_ids: list[int] | None = None,
 ) -> None:
     """Drives create_order → list_payment_types → select → do_payment → submit_card.
 
-    Books all `friend_ids` passengers on `seat_numbers` (paired 1:1) in one
-    eticket order — a single payment + single OTP covers the whole group.
+    Books all `friend_ids` passengers on `seat_numbers` (paired 1:1) plus any
+    `lap_ids` children riding free, in one eticket order — a single payment +
+    single OTP covers the whole group.
     """
+    lap_ids = list(lap_ids or [])
     # Load every passenger (with decrypted doc, in-memory only), preserving order.
     rows = await pool.fetch(
         """
@@ -310,11 +361,11 @@ async def _execute_pipeline(
         FROM railway_friends_cache
         WHERE id = ANY($1::bigint[]) AND user_id = $2
         """,
-        friend_ids, args.user_id,
+        friend_ids + lap_ids, args.user_id,
     )
     by_id = {r["id"]: r for r in rows}
-    passengers: list[PassengerArg] = []
-    for fid in friend_ids:
+
+    def _arg(fid: int) -> tuple[PassengerArg, int]:
         fr = by_id.get(fid)
         if not fr:
             raise InvalidPayload("passenger not found", {"code": "friend_not_owned"})
@@ -324,7 +375,7 @@ async def _execute_pipeline(
                 {"code": "friend_doc_missing"},
             )
         bd = fr["birth_day"]
-        passengers.append(PassengerArg(
+        return PassengerArg(
             firstname=fr["firstname"] or "",
             lastname=fr["lastname"] or "",
             midname=fr["midname"] or "",
@@ -334,7 +385,12 @@ async def _execute_pipeline(
             doc_type=fr["doc_type"] or "ПУ",
             doc_id=decrypt(fr["doc_enc"]),
             region_id=fr["region_id"] or "",
-        ))
+        ), age_on(bd, args.dep_date)
+
+    passengers = arrange_passengers(
+        [_arg(fid) for fid in friend_ids],
+        [_arg(fid) for fid in lap_ids],
+    )
 
     account = await user_auth.get_account(pool, args.user_id)
     railway_user_id = account.railway_user_id if account else None

@@ -10,7 +10,7 @@ JWT 'id' claim (`/users/get` returns 404 for regular accounts).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import asyncpg
@@ -83,6 +83,14 @@ PAYMENT_TYPE_PAYME = "Payme"
 SUPPORTED_PAYMENT_TYPES = {PAYMENT_TYPE_HAMKORBANK_HOLD, PAYMENT_TYPE_PAYME}
 
 
+# Discount types eticket's own booking form sends. A child under 5 rides on an
+# adult's lap without a seat and is filed inside that adult's `children`;
+# every other passenger, child or not, is REGULAR — the age tariff (5-10 at
+# half fare) is eticket's own decision from the birth date.
+DISCOUNT_REGULAR = "REGULAR"
+DISCOUNT_CHILD_UNDER_5 = "CHILD_UNDER_5"
+
+
 @dataclass(slots=True)
 class PassengerArg:
     firstname: str
@@ -94,6 +102,10 @@ class PassengerArg:
     doc_type: str             # 'ПУ' | 'СР' | ...
     doc_id: str
     region_id: str
+    discount_type: str = DISCOUNT_REGULAR
+    # Passengers filed under this one: lap children (no seat) and, as eticket's
+    # form does it, anyone under 16 travelling on their own seat.
+    children: list["PassengerArg"] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -246,6 +258,31 @@ def parse_purchased_orders(
     return out
 
 
+def passenger_body(p: PassengerArg, *, nested: bool = False) -> dict[str, Any]:
+    """One passenger as eticket's create-order payload wants it.
+
+    Mirrors the site's own form: a top-level passenger carries a `children`
+    list (possibly empty); a passenger filed under another one carries
+    `children: null`.
+    """
+    return {
+        "birthDay": p.birth_day,
+        "gender": p.gender,
+        "children": None if nested else [passenger_body(c, nested=True) for c in p.children],
+        "citizenship": p.citizenship,
+        "docType": p.doc_type,
+        "firstname": p.firstname,
+        "lastname": p.lastname,
+        "midname": p.midname,
+        "regionId": p.region_id,
+        "docId": p.doc_id,
+        "discount": {
+            "type": p.discount_type, "pinfl": "",
+            "studentId": "", "tariff": "", "prefix": "",
+        },
+    }
+
+
 class RailwayUserClient:
     """Per-user eticket client.
 
@@ -383,22 +420,7 @@ class RailwayUserClient:
     # ---- universal-orders ----
 
     async def create_order(self, args: CreateOrderArgs) -> CreatedOrder:
-        passengers_body = [{
-            "birthDay": p.birth_day,
-            "gender": p.gender,
-            "children": [],
-            "citizenship": p.citizenship,
-            "docType": p.doc_type,
-            "firstname": p.firstname,
-            "lastname": p.lastname,
-            "midname": p.midname,
-            "regionId": p.region_id,
-            "docId": p.doc_id,
-            "discount": {
-                "type": "REGULAR", "pinfl": "",
-                "studentId": "", "tariff": "", "prefix": "",
-            },
-        } for p in args.passengers]
+        passengers_body = [passenger_body(p) for p in args.passengers]
         seats = list(args.seat_numbers or [])
         seats_range = f"{min(seats)}-{max(seats)}" if seats else "0-0"
         body = {

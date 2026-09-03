@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Check, CreditCard, Users, Zap } from "lucide-react";
+import { Check, CreditCard, Zap } from "lucide-react";
 
 import {
   getCard,
@@ -13,14 +13,16 @@ import {
   type PaymentMethod,
   type SeatStrategy,
 } from "@/api/client";
+import { PassengerPicker } from "@/components/PassengerPicker";
 import { Screen } from "@/components/Screen";
 import { StatusView } from "@/components/StatusView";
 import { StickyAction } from "@/components/StickyAction";
 import { Button } from "@/components/ui/button";
 import { ListGroup, ListRow } from "@/components/ui/list";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { MAX_SEATED, passengerProblem } from "@/lib/passengers";
 
-const MAX_PASSENGERS = 4;
+const MAX_PASSENGERS = MAX_SEATED;
 
 const PAYMENT_OPTIONS: { value: PaymentMethod; label: string; hint: string }[] = [
   { value: "hamkorbank", label: "Humo / Uzcard", hint: "Saqlangan karta orqali (tavsiya etiladi)" },
@@ -46,6 +48,7 @@ export function AutobuyConfig() {
 
   const [enabled, setEnabled] = useState<boolean>(false);
   const [friendIds, setFriendIds] = useState<number[]>([]);
+  const [lapIds, setLapIds] = useState<number[]>([]);
   const [payMethod, setPayMethod] = useState<PaymentMethod | null>(null);
   const [strategy, setStrategy] = useState<SeatStrategy>("all");
 
@@ -60,19 +63,11 @@ export function AutobuyConfig() {
             ? [sub.autobuy_friend_id]
             : [],
       );
+      setLapIds(sub.autobuy_lap_child_ids ?? []);
       setPayMethod(sub.autobuy_payment_method);
       setStrategy(sub.autobuy_seat_strategy ?? "all");
     }
   }, [sub?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const toggleFriend = (id: number) =>
-    setFriendIds(prev =>
-      prev.includes(id)
-        ? prev.filter(x => x !== id)
-        : prev.length >= MAX_PASSENGERS
-          ? prev
-          : [...prev, id],
-    );
 
   const save = useMutation({
     mutationFn: () =>
@@ -81,6 +76,7 @@ export function AutobuyConfig() {
         friend_ids: enabled ? friendIds : null,
         payment_method: enabled ? payMethod : null,
         seat_strategy: enabled ? strategy : null,
+        lap_child_ids: enabled ? lapIds : null,
       }),
     onSuccess: () => {
       toast.success("Saqlandi");
@@ -125,10 +121,11 @@ export function AutobuyConfig() {
 
   const friends = friendsQ.data ?? [];
   const validCount = friendIds.filter(id => friends.some(f => f.id === id)).length;
+  const problem = passengerProblem(friends, sub.travel_date, friendIds, lapIds);
   const canSave =
     !save.isPending &&
     (!enabled ||
-      (validCount >= 1 && validCount <= MAX_PASSENGERS && cardQ.data !== null));
+      (validCount >= 1 && validCount <= MAX_PASSENGERS && !problem && cardQ.data !== null));
 
   return (
     <Screen
@@ -167,55 +164,15 @@ export function AutobuyConfig() {
             />
           </ListGroup>
 
-          <ListGroup
-            label={`Yo'lovchilar${validCount ? ` · ${validCount}/${MAX_PASSENGERS}` : ""}`}
-            footer={`Bir vagondan ${MAX_PASSENGERS} tagacha yonma-yon joy izlanadi. Hammasi topilganda birga bron qilinadi.`}
-          >
-            {friends.length === 0 ? (
-              <ListRow
-                before={<Users className="h-5 w-5 text-muted-soft" strokeWidth={1.75} />}
-                title="Hamroh yo'q"
-                subtitle="Avval eticket'da hamroh qo'shing"
-                onClick={() => navigate("/friends")}
-                chevron
-              />
-            ) : (
-              <div className="flex flex-col">
-                {friends.map(f => {
-                  const checked = friendIds.includes(f.id);
-                  const atMax = !checked && friendIds.length >= MAX_PASSENGERS;
-                  return (
-                    <button
-                      key={f.id}
-                      type="button"
-                      disabled={atMax}
-                      onClick={() => toggleFriend(f.id)}
-                      className="flex items-center gap-3 px-4 py-3 text-left active:bg-hairline-soft transition-colors min-h-[56px] border-b border-hairline-soft last:border-b-0 disabled:opacity-40"
-                    >
-                      <span
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border ${
-                          checked ? "border-coral bg-coral text-on-primary" : "border-muted-soft"
-                        }`}
-                        aria-hidden
-                      >
-                        {checked && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-body-md font-medium truncate text-ink">
-                          {`${f.firstname} ${f.lastname}`.trim()}
-                        </div>
-                        <div className="text-body-sm text-muted truncate">
-                          {f.is_self ? "Men · " : ""}
-                          {f.doc_type ?? ""}
-                          {f.doc_masked ? ` ${f.doc_masked}` : ""}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </ListGroup>
+          <PassengerPicker
+            friends={friends}
+            travelDate={sub.travel_date}
+            seatedIds={friendIds}
+            lapIds={lapIds}
+            loading={friendsQ.isLoading}
+            onChange={(seated, lap) => { setFriendIds(seated); setLapIds(lap); }}
+            onAddFriend={() => navigate("/friends")}
+          />
 
 
           {validCount > 1 && (
@@ -282,7 +239,9 @@ export function AutobuyConfig() {
             ? "Avval karta saqlang"
             : enabled && validCount < 1
               ? "Kamida bitta yo'lovchi tanlang"
-              : undefined
+              : enabled && problem
+                ? problem
+                : undefined
         }
       >
         <Button full disabled={!canSave} onClick={() => save.mutate()}>
