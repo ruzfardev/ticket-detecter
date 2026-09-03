@@ -44,3 +44,9 @@ export function tashkentNow(): string {
 export function tashkentMonth(): string {
   return tashkentNow().slice(0, 7);
 }
+
+/** Today's date in Tashkent, "YYYY-MM-DD", shifted by `offsetDays`. */
+export function tashkentDate(offsetDays = 0): string {
+  return new Date(Date.now() + (5 * 3600 + offsetDays * 86_400) * 1000)
+    .toISOString().slice(0, 10);
+}

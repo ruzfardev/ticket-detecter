@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -21,7 +21,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ListGroup, ListRow } from "@/components/ui/list";
 import { cn } from "@/lib/utils";
-import { formatShortDate } from "@/lib/dates";
+import { formatShortDate, tashkentDate } from "@/lib/dates";
 
 /* ── Small building blocks ─────────────────────────────────────────── */
 
@@ -76,6 +76,14 @@ export function Home() {
     staleTime: 5 * 60_000,
   });
   const awaitingOtp = (orders.data ?? []).find(o => o.status === "awaiting_otp");
+  // The nearest valid ticket leaving today or tomorrow, Tashkent time.
+  const trip = useMemo(() => {
+    const today = tashkentDate(0), tomorrow = tashkentDate(1);
+    const legs = (tickets.data ?? [])
+      .filter(t => !t.returned && (t.dep_at.startsWith(today) || t.dep_at.startsWith(tomorrow)))
+      .sort((a, b) => (a.dep_at < b.dep_at ? -1 : a.dep_at > b.dep_at ? 1 : 0));
+    return legs[0] ? { leg: legs[0], today: legs[0].dep_at.startsWith(today) } : null;
+  }, [tickets.data]);
 
   // OTP countdown: tick locally between the 8 s refetches.
   const [now, setNow] = useState(() => Date.now());
@@ -303,6 +311,31 @@ export function Home() {
             <ListGroup label="Pauzada">{paused.map(subRow)}</ListGroup>
           )}
         </>
+      )}
+
+      {/* A trip today or tomorrow outranks the counters */}
+      {trip && (
+        <button
+          type="button"
+          onClick={go("/tickets")}
+          className="flex w-full items-center gap-3 rounded-lg bg-coral p-4 text-left text-on-primary transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-on-primary/20">
+            <TrainFront width={20} height={20} strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-caption-upper uppercase opacity-80">
+              {trip.today ? "Bugun safar" : "Ertaga safar"}
+            </div>
+            <div className="truncate text-title-sm">
+              {trip.leg.dep_station} → {trip.leg.arr_station}
+            </div>
+            <div className="text-caption opacity-80">
+              {trip.leg.dep_at.slice(11, 16)} · {trip.leg.train_number} · vagon {trip.leg.car_number} · joy {trip.leg.seats.join(", ")}
+            </div>
+          </div>
+          <ChevronRight width={20} height={20} strokeWidth={1.75} className="shrink-0 opacity-80" />
+        </button>
       )}
 
       {/* Glance: orders in flight / tickets owned — only meaningful once linked */}

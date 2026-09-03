@@ -24,6 +24,9 @@ from app.core.errors import AppError, InvalidPayload, NotFound
 from app.core.logging import logger
 from app.railway import user_auth
 from app.railway.user_client import PurchasedTicket, RailwayUserClient
+from app.services.ticket_status import (  # noqa: F401 — re-exported for tests
+    RETURNED, TERMINAL, is_returned, summarize_tickets,
+)
 from app.services.user_service import UserRow
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
@@ -32,11 +35,6 @@ router = APIRouter(prefix="/tickets", tags=["tickets"])
 # bought, not travelled: a 1 September trip ordered on 20 August sits in
 # 2026-08, and 2026-09 comes back empty.
 MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
-
-# eticket's own bundle spells it ReturnTicket; the live API says ReturnedTicket.
-RETURNED = frozenset({"ReturnedTicket", "ReturnTicket"})
-# Statuses that never change again — safe to remember for a long time.
-TERMINAL = RETURNED | {"UsedTicket", "ExpiredTicket"}
 
 # Per-ticket status exists only on the detail endpoint, so listing N legs costs
 # N+1 eticket calls. Terminal answers are kept for a day; live ones only
@@ -87,27 +85,6 @@ async def list_archived_tickets(
     client = RailwayUserClient(pool, user.id)
     tickets = await client.list_archived(month)
     return {"month": month, "tickets": await _with_tickets(client, tickets)}
-
-
-def summarize_tickets(raw: dict) -> list[dict]:
-    """Detail payload -> the per-ticket facts the list view needs."""
-    out: list[dict] = []
-    for t in (raw.get("tickets") or []):
-        p = t.get("passenger") or {}
-        out.append({
-            "ticket_id": str(t.get("ticketId") or ""),
-            "seat": str(t.get("seatNumber") or ""),
-            "status": str(t.get("status") or ""),
-            "passenger_name": " ".join(
-                str(x) for x in (p.get("firstname"), p.get("lastname")) if x
-            ).strip(),
-        })
-    return out
-
-
-def is_returned(tickets: list[dict]) -> bool:
-    """A leg counts as returned once every ticket on it has been."""
-    return bool(tickets) and all(t["status"] in RETURNED for t in tickets)
 
 
 async def _tickets_of(
