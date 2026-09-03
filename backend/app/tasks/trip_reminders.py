@@ -30,7 +30,7 @@ from app.core.logging import configure_logging, logger
 from app.db import close_pool, get_pool, init_pool
 from app.railway.user_client import PurchasedTicket, RailwayUserClient
 from app.services.ticket_delivery import send_ticket_pdf, ticket_filename
-from app.services.ticket_status import is_returned, summarize_tickets
+from app.services.ticket_status import is_confirmed, is_returned, summarize_tickets
 from app.worker.notifier_tg import _esc, _send
 
 # eticket timestamps are Tashkent wall clock without an offset; Uzbekistan has
@@ -150,6 +150,10 @@ async def _sweep_user(pool: asyncpg.Pool, user: asyncpg.Record) -> int:
         tickets = summarize_tickets(raw)
         if is_returned(tickets):
             await _claim(pool, user["id"], leg, kind, dep_at, "skipped_returned")
+            continue
+        if not is_confirmed(tickets):
+            # An unpaid reservation or an odd status: nothing to remind about
+            # yet. Not claimed, so it is looked at again if it gets paid.
             continue
         if not await _claim(pool, user["id"], leg, kind, dep_at, "sent"):
             continue   # another sweep got there first

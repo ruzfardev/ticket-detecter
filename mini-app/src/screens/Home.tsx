@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 
 import {
-  getMe, getRailwayStatus, listOrders, listSubscriptions, listTickets,
+  getMe, getRailwayStatus, isReservedLeg, listOrders, listSubscriptions, listTickets,
   type Subscription,
 } from "@/api/client";
 import { useWizard } from "@/store/wizard";
@@ -80,7 +80,8 @@ export function Home() {
   const trip = useMemo(() => {
     const today = tashkentDate(0), tomorrow = tashkentDate(1);
     const legs = (tickets.data ?? [])
-      .filter(t => !t.returned && (t.dep_at.startsWith(today) || t.dep_at.startsWith(tomorrow)))
+      .filter(t => !t.returned && !isReservedLeg(t)
+        && (t.dep_at.startsWith(today) || t.dep_at.startsWith(tomorrow)))
       .sort((a, b) => (a.dep_at < b.dep_at ? -1 : a.dep_at > b.dep_at ? 1 : 0));
     return legs[0] ? { leg: legs[0], today: legs[0].dep_at.startsWith(today) } : null;
   }, [tickets.data]);
@@ -160,7 +161,7 @@ export function Home() {
   const ordersActive = (orders.data ?? []).filter(o =>
     ["reserving", "awaiting_otp", "paying"].includes(o.status)).length;
   // A returned ticket is still in eticket's active list; it is not a trip.
-  const ticketCount = (tickets.data ?? []).filter(t => !t.returned).length;
+  const ticketCount = (tickets.data ?? []).filter(t => !t.returned && !isReservedLeg(t)).length;
 
   return (
     <Screen tabbed padded>

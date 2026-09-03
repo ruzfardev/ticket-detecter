@@ -33,3 +33,12 @@ def summarize_tickets(raw: dict) -> list[dict]:
 def is_returned(tickets: list[dict]) -> bool:
     """A leg counts as returned once every ticket on it has been."""
     return bool(tickets) and all(t["status"] in RETURNED for t in tickets)
+
+
+def is_confirmed(tickets: list[dict]) -> bool:
+    """Paid and valid — the only kind of ticket worth a reminder.
+
+    An unpaid reservation sits in the active list too (order
+    RESERVATION_SUCCEEDED) with the literal status "None" on its tickets.
+    """
+    return bool(tickets) and all(t["status"] == "ConfirmedTicket" for t in tickets)

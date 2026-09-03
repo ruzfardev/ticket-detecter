@@ -389,6 +389,11 @@ export type PurchasedTicket = {
   status_known: boolean;
 };
 
+/** An order eticket holds but has not been paid for — it sits in the active
+ *  list as RESERVATION_SUCCEEDED / ORDER_IN_PROCESS with ticket status "None". */
+export const isReservedLeg = (t: PurchasedTicket) =>
+  t.final_status.startsWith("RESERVATION") || t.final_status === "ORDER_IN_PROCESS";
+
 export type LegTicket = {
   ticket_id: string;
   seat: string;

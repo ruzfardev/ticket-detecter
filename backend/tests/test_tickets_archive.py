@@ -12,6 +12,7 @@ import asyncio
 import pytest
 
 from app.api.v1.tickets import MONTH_RE, is_returned, summarize_tickets
+from app.services.ticket_status import is_confirmed
 from app.railway.user_client import (
     ARCHIVE_MAX_PAGES,
     QUERY_ORDERS_ARCHIVE_TICKETS_URL,
@@ -165,3 +166,13 @@ def test_detail_endpoint_follows_the_archived_flag():
     asyncio.run(client.get_purchased_detail("ItemId-x", "2026-08-18 16:37:45"))
     asyncio.run(client.get_purchased_detail("ItemId-x", "2026-08-18 16:37:45", archived=True))
     assert urls == [QUERY_ORDERS_TICKETS_URL, QUERY_ORDERS_ARCHIVE_TICKETS_URL]
+
+
+def test_an_unpaid_reservation_is_neither_returned_nor_confirmed():
+    # Live shape: order RESERVATION_SUCCEEDED, ticket status literally "None".
+    reserved = summarize_tickets({"tickets": [{"ticketId": "1", "status": "None", "seatNumber": "012"}]})
+    assert is_returned(reserved) is False
+    assert is_confirmed(reserved) is False
+    assert is_confirmed([{"status": "ConfirmedTicket"}]) is True
+    assert is_confirmed([{"status": "ConfirmedTicket"}, {"status": "ReturnedTicket"}]) is False
+    assert is_confirmed([]) is False

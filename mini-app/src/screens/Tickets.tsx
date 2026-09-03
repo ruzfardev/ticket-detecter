@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 
 import {
-  listArchivedTickets, listTickets, sendTicketPdf,
+  isReservedLeg, listArchivedTickets, listTickets, sendTicketPdf,
   type PurchasedTicket,
 } from "@/api/client";
 import { Screen } from "@/components/Screen";
@@ -40,6 +40,8 @@ type Tone = "success" | "muted" | "coral";
 
 const TICKET_STATUS: Record<string, { text: string; tone: Tone }> = {
   ConfirmedTicket:   { text: "Amal qiladi",     tone: "success" },
+  // eticket's literal status on an unpaid reservation
+  None:              { text: "To'lanmagan",     tone: "coral"   },
   ReservedTicket:    { text: "Bron qilingan",   tone: "coral"   },
   UnconfirmedTicket: { text: "Tasdiqlanmagan",  tone: "coral"   },
   NotPayedTicket:    { text: "To'lanmagan",     tone: "coral"   },
@@ -76,6 +78,7 @@ function TicketCard({ t }: { t: PurchasedTicket }) {
     t.dep_at.replace(" ", "T"),
     t.arr_at.replace(" ", "T"),
   );
+  const reserved = isReservedLeg(t);
   const timeTone = t.returned ? "text-muted" : "text-coral";
 
   return (
@@ -89,6 +92,7 @@ function TicketCard({ t }: { t: PurchasedTicket }) {
           <TrainFront className="h-4 w-4 text-muted" strokeWidth={1.75} />
           <span className="font-display text-display-sm text-ink">{t.train_number}</span>
           {t.returned && <Badge variant="muted">Qaytarilgan</Badge>}
+          {reserved && <Badge variant="coral">Bron</Badge>}
           <span className="ml-auto text-body-sm tabular-nums text-muted">
             {t.amount_uzs.toLocaleString("ru-RU").replace(/ /g, " ")} so'm
           </span>
@@ -145,7 +149,12 @@ function TicketCard({ t }: { t: PurchasedTicket }) {
             <p className="text-body-sm text-muted">Yo'lovchi va holatni yuklab bo'lmadi.</p>
           )}
 
-          {!t.returned && (
+          {reserved && (
+            <p className="text-body-sm text-muted">
+              Bron to'lanmagan. To'lov o'tgach chipta shu yerda amal qiladi.
+            </p>
+          )}
+          {!t.returned && !reserved && (
             <>
               <Button
                 full
