@@ -427,6 +427,8 @@ export const mockApi = {
     mockOrders = mockOrders.map(o => o.id === id ? { ...o, status: "cancelled" } : o);
     return mockOrders.find(o => o.id === id)!;
   },
+  /** eticket's active list — upcoming travel only. A returned ticket stays
+   *  in it until the travel date, so one is here on purpose. */
   async listTickets(): Promise<PurchasedTicket[]> {
     await wait(400);
     return [
@@ -441,20 +443,96 @@ export const mockApi = {
         dep_at: "2026-10-15 17:20:00", arr_at: "2026-10-16 00:27:00",
         seats: ["001"],
         qr_url: "https://eticket.railway.uz/pages/check-ticket?expressId=fake",
+        archived: false, status_known: true, returned: true,
+        tickets: [{ ticket_id: "77215198319906", seat: "001",
+                    status: "ReturnedTicket", passenger_name: "Farrux Rozmetov" }],
       },
       {
-        order_id: "UX780ALE65Q3RW",
-        order_item_id: "ItemId-fake-2",
-        created_at: "2026-08-18 17:56:47",
+        order_id: "UX780CMQ2W9K1D",
+        order_item_id: "ItemId-fake-6",
+        created_at: "2026-09-02 09:05:12",
         final_status: "ORDER_COMPLETED_SUCCESSFULLY",
-        amount_uzs: 245140,
-        train_number: "056ЧА", car_number: "11", car_type: "ПЛАЦ",
-        dep_station: "ТОШКЕНТ ЖАНУБИЙ", arr_station: "УРГАНЧ",
-        dep_at: "2026-08-28 21:45:00", arr_at: "2026-08-29 12:03:00",
-        seats: ["047"],
+        amount_uzs: 175000,
+        train_number: "010Ф", car_number: "04", car_type: "КУПЕ",
+        dep_station: "ТОШКЕНТ-ЙУЛОВЧИ", arr_station: "БУХОРО",
+        dep_at: "2026-11-02 08:10:00", arr_at: "2026-11-02 12:15:00",
+        seats: ["021"],
         qr_url: null,
+        archived: false, status_known: true, returned: false,
+        tickets: [{ ticket_id: "77215198420001", seat: "021",
+                    status: "ConfirmedTicket", passenger_name: "Farrux Rozmetov" }],
       },
     ];
+  },
+
+  /** eticket's archive is keyed by the month a ticket was BOUGHT (a 1 Sep trip
+   *  ordered on 20 Aug sits in 2026-08); mirror that so the past tab behaves
+   *  in the browser the way it does in production. */
+  async listArchivedTickets(month: string): Promise<PurchasedTicket[]> {
+    await wait(400);
+    const leg = (
+      t: Omit<PurchasedTicket, "archived" | "status_known" | "returned" | "tickets"
+        | "final_status" | "qr_url">,
+      status: "ConfirmedTicket" | "ReturnedTicket",
+    ): PurchasedTicket => ({
+      ...t,
+      final_status: "ORDER_COMPLETED_SUCCESSFULLY",
+      qr_url: null,
+      archived: true,
+      status_known: true,
+      returned: status === "ReturnedTicket",
+      tickets: [{ ticket_id: `7${t.order_item_id.slice(-6)}`, seat: t.seats[0],
+                  status, passenger_name: "Farrux Rozmetov" }],
+    });
+    if (month === "2026-08") {
+      return [
+        leg({
+          order_id: "UX780ALE65Q3RW", order_item_id: "ItemId-fake-2",
+          created_at: "2026-08-18 17:56:47", amount_uzs: 245140,
+          train_number: "056ЧА", car_number: "11", car_type: "ПЛАЦ",
+          dep_station: "ТОШКЕНТ ЖАНУБИЙ", arr_station: "УРГАНЧ",
+          dep_at: "2026-08-28 21:45:00", arr_at: "2026-08-29 11:24:00",
+          seats: ["047"],
+        }, "ConfirmedTicket"),
+        leg({
+          order_id: "UX780AKEH35ARL", order_item_id: "ItemId-fake-3",
+          created_at: "2026-08-18 16:37:45", amount_uzs: 245140,
+          train_number: "056ЧА", car_number: "11", car_type: "ПЛАЦ",
+          dep_station: "ТОШКЕНТ ЖАНУБИЙ", arr_station: "УРГАНЧ",
+          dep_at: "2026-08-28 21:45:00", arr_at: "2026-08-29 11:24:00",
+          seats: ["043"],
+        }, "ConfirmedTicket"),
+        leg({
+          order_id: "UX780AGT11ZZ0P", order_item_id: "ItemId-fake-4",
+          created_at: "2026-08-20 16:40:53", amount_uzs: 312000,
+          train_number: "060Ф", car_number: "09", car_type: "ПЛАЦ",
+          dep_station: "ТОШКЕНТ ЖАНУБИЙ", arr_station: "НУКУС",
+          dep_at: "2026-09-01 16:15:00", arr_at: "2026-09-02 05:23:00",
+          seats: ["037"],
+        }, "ReturnedTicket"),
+        leg({
+          order_id: "UX780AHV72QQ4M", order_item_id: "ItemId-fake-7",
+          created_at: "2026-08-21 19:48:41", amount_uzs: 312000,
+          train_number: "060Ф", car_number: "09", car_type: "ПЛАЦ",
+          dep_station: "ТОШКЕНТ ЖАНУБИЙ", arr_station: "НУКУС",
+          dep_at: "2026-09-01 16:15:00", arr_at: "2026-09-02 05:23:00",
+          seats: ["038"],
+        }, "ConfirmedTicket"),
+      ];
+    }
+    if (month === "2026-07") {
+      return [
+        leg({
+          order_id: "UX780ADQ88M1TC", order_item_id: "ItemId-fake-5",
+          created_at: "2026-07-22 16:36:08", amount_uzs: 98000,
+          train_number: "761Ф", car_number: "03", car_type: "СИД",
+          dep_station: "САМАРКАНД", arr_station: "ТОШКЕНТ-ЙУЛОВЧИ",
+          dep_at: "2026-07-24 19:20:00", arr_at: "2026-07-24 21:30:00",
+          seats: ["044"],
+        }, "ConfirmedTicket"),
+      ];
+    }
+    return [];
   },
 
   async getTicketDetail(): Promise<TicketDetail> {

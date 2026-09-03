@@ -361,6 +361,23 @@ export type PurchasedTicket = {
   arr_at: string;
   seats: string[];
   qr_url: string | null;
+  /** From eticket's month archive rather than the active list. The detail
+   *  endpoint differs, so it is echoed back on detail / PDF calls. */
+  archived: boolean;
+  /** Per-ticket status and passenger — the list itself carries none, the
+   *  backend fetches the detail for each leg. */
+  tickets: LegTicket[];
+  /** Every ticket on the leg has been returned. */
+  returned: boolean;
+  /** False when the status lookup failed; `tickets` is then empty. */
+  status_known: boolean;
+};
+
+export type LegTicket = {
+  ticket_id: string;
+  seat: string;
+  status: string;            // ConfirmedTicket, ReturnedTicket, …
+  passenger_name: string;
 };
 
 export type TicketDetail = {
@@ -380,14 +397,27 @@ export const listTickets = () =>
     : api.get<{ tickets: PurchasedTicket[] }>("/api/v1/tickets")
         .then(r => r.data.tickets);
 
-export const getTicketDetail = (order_item_id: string, created_at: string) =>
+/** Past trips for one calendar month ("2026-08"). eticket archives a trip once
+ *  it is over and serves the archive only month by month. */
+export const listArchivedTickets = (month: string) =>
+  mockApi.isEnabled
+    ? mockApi.listArchivedTickets(month)
+    : api.get<{ month: string; tickets: PurchasedTicket[] }>(
+        "/api/v1/tickets/archive", { params: { month } },
+      ).then(r => r.data.tickets);
+
+export const getTicketDetail = (
+  order_item_id: string, created_at: string, archived = false,
+) =>
   mockApi.isEnabled
     ? mockApi.getTicketDetail()
-    : api.post<TicketDetail>("/api/v1/tickets/detail", { order_item_id, created_at })
+    : api.post<TicketDetail>("/api/v1/tickets/detail", { order_item_id, created_at, archived })
         .then(r => r.data);
 
-export const sendTicketPdf = (order_item_id: string, created_at: string) =>
+export const sendTicketPdf = (
+  order_item_id: string, created_at: string, archived = false,
+) =>
   mockApi.isEnabled
     ? Promise.resolve({ sent: true })
-    : api.post<{ sent: boolean }>("/api/v1/tickets/pdf/send", { order_item_id, created_at })
+    : api.post<{ sent: boolean }>("/api/v1/tickets/pdf/send", { order_item_id, created_at, archived })
         .then(r => r.data);

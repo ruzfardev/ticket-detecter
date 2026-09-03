@@ -151,7 +151,8 @@ export function Home() {
 
   const ordersActive = (orders.data ?? []).filter(o =>
     ["reserving", "awaiting_otp", "paying"].includes(o.status)).length;
-  const ticketCount = tickets.data?.length ?? 0;
+  // A returned ticket is still in eticket's active list; it is not a trip.
+  const ticketCount = (tickets.data ?? []).filter(t => !t.returned).length;
 
   return (
     <Screen tabbed padded>
