@@ -64,6 +64,10 @@ class Settings(BaseSettings):
     railway_cooldown_429: int = 300
     notif_log_retention_days: int = 30
     watch_groups_refresh_seconds: int = 60
+    # Trip reminders (24 h / 2 h before departure) — how often the worker sweeps
+    trip_reminder_sweep_s: int = 600
+    # Roll seat_samples up into route_car_stats this often
+    seat_stats_aggregate_every_s: int = 6 * 3600
 
     # ---- Per-user friend list sync (eticket /users/friend/list)
     friend_sync_min_interval_s: int = 30

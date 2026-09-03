@@ -44,9 +44,23 @@ async def _maybe_expire_premium(pool) -> None:
         logger.info("premium_expiry_swept", count=n)
 
 
+_last_run: dict[str, datetime] = {}
+
+
+def _due(name: str, every_s: int) -> bool:
+    """True once per `every_s` seconds for `name`, first call included."""
+    now = datetime.now(timezone.utc)
+    last = _last_run.get(name)
+    if last and now - last < timedelta(seconds=every_s):
+        return False
+    _last_run[name] = now
+    return True
+
+
 async def _main_loop() -> None:
     from app.db import get_pool
-    from app.services import autobuy_service
+    from app.services import autobuy_service, seat_stats
+    from app.tasks import trip_reminders
 
     while not _stop.is_set():
         try:
@@ -71,6 +85,18 @@ async def _main_loop() -> None:
             await _maybe_expire_premium(get_pool())
         except Exception as e:
             logger.exception("expire_premium_unhandled", error=str(e))
+        try:
+            if _due("trip_reminders", settings.trip_reminder_sweep_s):
+                n = await trip_reminders.run(get_pool())
+                if n:
+                    logger.info("trip_reminders_sent", count=n)
+        except Exception as e:
+            logger.exception("trip_reminders_unhandled", error=str(e))
+        try:
+            if _due("seat_stats", settings.seat_stats_aggregate_every_s):
+                await seat_stats.aggregate(get_pool())
+        except Exception as e:
+            logger.exception("seat_stats_unhandled", error=str(e))
         try:
             await asyncio.wait_for(_stop.wait(), timeout=settings.watcher_tick_seconds)
         except asyncio.TimeoutError:
