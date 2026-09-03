@@ -8,6 +8,7 @@ import { useHaptic } from "@/hooks/useHaptic";
 import { useWizardField } from "@/hooks/useWizardField";
 import { useWizardGuard } from "@/hooks/useWizardGuard";
 import { useWizard } from "@/store/wizard";
+import { insightText } from "@/lib/insight";
 import { dayOffset, trainTime } from "@/lib/traintime";
 import { Screen } from "@/components/Screen";
 import { StickyAction } from "@/components/StickyAction";
@@ -191,11 +192,11 @@ export function TrainPicker() {
                 {/* car types with seat counts and starting price */}
                 {t.car_types.length > 0 ? (
                   <div className="space-y-1 border-t border-hairline-soft pt-3">
-                    {t.car_types.map(c => (
-                      <div
-                        key={c.type}
-                        className="flex items-baseline justify-between gap-2 text-body-sm"
-                      >
+                    {t.car_types.map(c => {
+                      const hint = insightText(c.insight);
+                      return (
+                        <div key={c.type}>
+                          <div className="flex items-baseline justify-between gap-2 text-body-sm">
                         <span className="truncate text-body">{c.label ?? c.type}</span>
                         <span className="shrink-0 tabular-nums text-muted">
                           <b className="font-medium text-ink">{c.free_seats}</b> ta joy
@@ -209,8 +210,14 @@ export function TrainPicker() {
                             </>
                           ) : null}
                         </span>
-                      </div>
-                    ))}
+                          </div>
+                          {/* what the watcher has seen — the one thing nobody else shows */}
+                          {hint && (
+                            <div className="text-caption text-muted">{hint}</div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="border-t border-hairline-soft pt-3 text-body-sm text-muted">

@@ -56,6 +56,18 @@ export type TrainCarType = {
   /** Cheapest tariff for this car type, in so'm. */
   price_uzs?: number | null;
   supports_berth: boolean;
+  /** What the watcher has seen: this departure's trend and the route's habit. */
+  insight?: CarInsight | null;
+};
+
+export type CarInsight = {
+  /** Change in free seats over `trend_span_h` on this departure; negative = selling. */
+  trend_delta: number | null;
+  trend_span_h: number | null;
+  /** On this route, how many days before departure the car type usually sells out. */
+  sellout_days_p50: number | null;
+  sold_out_n: number;
+  instances_n: number;
 };
 
 export type Train = {
@@ -97,6 +109,9 @@ export type Subscription = {
   autobuy_payment_method: PaymentMethod | null;
   /** 'all' = everyone in one car or nothing; 'partial' = take what's there. */
   autobuy_seat_strategy?: SeatStrategy;
+  /** Children under 5 riding on a lap — no seat, not in friend_ids. */
+  autobuy_lap_child_ids?: number[] | null;
+  autobuy_lap_child_names?: string[] | null;
 };
 
 export type RailwayAccountStatus = {
@@ -287,6 +302,7 @@ export const patchAutobuy = (
     friend_ids?: number[] | null;
     payment_method?: PaymentMethod | null;
     seat_strategy?: SeatStrategy | null;
+    lap_child_ids?: number[] | null;
   },
 ) =>
   mockApi.isEnabled

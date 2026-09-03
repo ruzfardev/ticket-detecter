@@ -24,6 +24,7 @@ from app.core.errors import RailwayUnavailable, RateLimited
 from app.core.logging import logger
 from app.db import get_pool
 from app.railway import get_client
+from app.services import seat_stats
 from app.worker import matcher
 from app.worker.formatter import format_alert
 from app.worker.notifier_tg import send_alert
@@ -112,6 +113,15 @@ async def _process_group(pool: asyncpg.Pool, g: asyncpg.Record) -> None:
     if not trains:
         await _mark_polled(pool, g["id"], g["has_premium"])
         return
+
+    # Keep what we just saw — every train and car type, before any subscriber
+    # filter narrows it down. Never lets bookkeeping break the alerting.
+    try:
+        await seat_stats.record_samples(
+            pool, g["dep_code"], g["arr_code"], g["travel_date"], trains,
+        )
+    except Exception as e:
+        logger.warning("seat_samples_record_failed", group=g["id"], error=str(e)[:160])
 
     # Load all active subs for this group + their user info
     subs = await pool.fetch(

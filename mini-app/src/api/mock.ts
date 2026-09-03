@@ -5,6 +5,7 @@
  * kept in-memory so creating a subscription updates the list.
  */
 
+import { tashkentDate } from "@/lib/dates";
 import type {
   AutobuyOrder,
   Friend,
@@ -94,6 +95,20 @@ let mockOrders: AutobuyOrder[] = [
 
 const FAKE_FRIENDS_SEED: Friend[] = [
   {
+    id: 9,
+    railway_friend_id: "mock-child",
+    firstname: "Amina",
+    lastname: "Ruzmetova",
+    midname: null,
+    sex: "F",
+    birth_day: "2023-04-12",
+    doc_type: "СР",
+    doc_masked: "•••• 4412",
+    citizenship: "UZB",
+    region_id: null,
+    is_self: false,
+  },
+  {
     id: 1,
     railway_friend_id: "mock-self",
     firstname: "Farrukh",
@@ -149,7 +164,7 @@ const fakeTrains: Train[] = [
     time_on_way: "13:18",
     dep_station: "TOSHKENT", arr_station: "URGANCH",
     car_types: [
-      { type: "плацкарта", label: "Plaskartli", free_seats: 24, price_uzs: 177990, supports_berth: true },
+      { type: "плацкарта", label: "Plaskartli", insight: { trend_delta: -12, trend_span_h: 24, sellout_days_p50: 3, sold_out_n: 4, instances_n: 5 }, free_seats: 24, price_uzs: 177990, supports_berth: true },
       { type: "купе",      label: "Kupe",       free_seats: 8,  price_uzs: 243750, supports_berth: true },
     ],
     train_id: "fake-076",
@@ -360,16 +375,26 @@ export const mockApi = {
 
   async syncFriends(): Promise<Friend[]> {
     await wait(400);
+    // A sync against eticket is what first fills the list in production too.
+    if (friends.length === 0) friends = [...FAKE_FRIENDS_SEED];
     railwayAccount = { ...railwayAccount, last_sync_at: new Date().toISOString() };
     return friends;
   },
 
   async patchAutobuy(
     id: number,
-    body: { enabled: boolean; friend_ids?: number[] | null; payment_method?: PaymentMethod | null },
+    body: {
+      enabled: boolean; friend_ids?: number[] | null; payment_method?: PaymentMethod | null;
+      lap_child_ids?: number[] | null;
+    },
   ): Promise<Subscription> {
     await wait(200);
     const ids = body.enabled ? (body.friend_ids ?? []) : [];
+    const laps = body.enabled ? (body.lap_child_ids ?? []) : [];
+    const lapNames = laps
+      .map(fid => friends.find(f => f.id === fid))
+      .filter((f): f is NonNullable<typeof f> => !!f)
+      .map(f => `${f.firstname} ${f.lastname}`.trim());
     const picked = ids
       .map(fid => friends.find(f => f.id === fid))
       .filter((f): f is NonNullable<typeof f> => !!f);
@@ -387,6 +412,8 @@ export const mockApi = {
           ? picked.map(f => `${f.firstname} ${f.lastname}`.trim())
           : null,
         autobuy_payment_method: body.enabled ? body.payment_method ?? null : null,
+        autobuy_lap_child_ids: laps.length ? laps : null,
+        autobuy_lap_child_names: lapNames.length ? lapNames : null,
       };
     });
     return subscriptions.find(s => s.id === id)!;
@@ -446,6 +473,21 @@ export const mockApi = {
         archived: false, status_known: true, returned: true,
         tickets: [{ ticket_id: "77215198319906", seat: "001",
                     status: "ReturnedTicket", passenger_name: "Farrux Rozmetov" }],
+      },
+      {
+        order_id: "UX780DNR3X0L2E",
+        order_item_id: "ItemId-fake-8",
+        created_at: "2026-09-01 12:00:00",
+        final_status: "ORDER_COMPLETED_SUCCESSFULLY",
+        amount_uzs: 98000,
+        train_number: "762Ф", car_number: "05", car_type: "СИД",
+        dep_station: "ТОШКЕНТ-ЙУЛОВЧИ", arr_station: "САМАРКАНД",
+        dep_at: `${tashkentDate(1)} 07:30:00`, arr_at: `${tashkentDate(1)} 09:38:00`,
+        seats: ["014"],
+        qr_url: null,
+        archived: false, status_known: true, returned: false,
+        tickets: [{ ticket_id: "77215198430014", seat: "014",
+                    status: "ConfirmedTicket", passenger_name: "Farrux Rozmetov" }],
       },
       {
         order_id: "UX780CMQ2W9K1D",

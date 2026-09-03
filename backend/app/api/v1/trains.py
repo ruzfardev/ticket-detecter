@@ -11,8 +11,10 @@ from pydantic import BaseModel, Field
 
 from app.api.deps import current_user, db_pool
 from app.core.errors import InvalidPayload
+from app.core.logging import logger
 from app.railway import get_client
 from app.railway.models import BERTH_TYPES
+from app.services import seat_stats
 from app.services.user_service import UserRow
 
 router = APIRouter(prefix="/trains", tags=["trains"])
@@ -42,6 +44,14 @@ async def search_trains(
     client = get_client(pool)
     trains = await client.list_trains(req.dep_code, req.arr_code, req.date)
 
+    # What the watcher has seen of this departure and this route. A picker
+    # without insights is still a picker, so a failure here only logs.
+    insights: dict = {}
+    try:
+        insights = await seat_stats.insights_for(pool, req.dep_code, req.arr_code, d)
+    except Exception as exc:
+        logger.warning("train_insights_failed", error=str(exc)[:160])
+
     out = []
     for t in trains:
         car_types = []
@@ -52,6 +62,7 @@ async def search_trains(
                 "free_seats": c.free_seats,
                 "price_uzs": c.price_uzs,
                 "supports_berth": c.type in BERTH_TYPES,
+                "insight": insights.get((t.number, c.type)),
             })
         out.append({
             "number": t.number,
