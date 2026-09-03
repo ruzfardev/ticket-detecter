@@ -39,8 +39,10 @@ INVOICE_GENERATE_URL = f"{BASE_URL}/api/v1/universal-orders/invoice-generate"
 
 # Purchased tickets (the user's eticket cabinet).
 QUERY_ORDERS_LIST_URL = f"{BASE_URL}/api/v2/query/orders/list"
+QUERY_ORDERS_ARCHIVE_URL = f"{BASE_URL}/api/v2/query/orders/archive/list"
 QUERY_ORDERS_COUNT_URL = f"{BASE_URL}/api/v2/query/orders/count"
 QUERY_ORDERS_TICKETS_URL = f"{BASE_URL}/api/v2/query/orders/tickets"
+QUERY_ORDERS_ARCHIVE_TICKETS_URL = f"{BASE_URL}/api/v2/query/orders/archive/tickets"
 QUERY_ORDERS_PDF_URL = f"{BASE_URL}/api/v2/query/orders/pdf"
 
 # Gateway-specific. Phase C captures show these two are the live national-
@@ -160,6 +162,10 @@ class PurchasedTicket:
     seats: list[str]
     qr_url: str | None
     raw: dict[str, Any]
+    # From the month archive rather than the active list. The detail endpoint
+    # differs (the active one answers 204 for an archived leg), so this has
+    # to travel with the leg.
+    archived: bool = False
 
 
 @dataclass(slots=True)
@@ -193,6 +199,51 @@ def _payment_error_message(r: httpx.Response) -> str:
             if isinstance(val, str) and val.strip():
                 return val.strip()[:200]
     return f"Payment rejected by eticket (HTTP {r.status_code})"
+
+
+# eticket serves its archive month by month; a month of travel fits in a page
+# or two, and the cap keeps a runaway total from turning into a request storm.
+ARCHIVE_PAGE_LENGTH = 20
+ARCHIVE_MAX_PAGES = 5
+
+
+def parse_purchased_orders(
+    data: dict[str, Any], *, archived: bool = False,
+) -> list[PurchasedTicket]:
+    """Flatten eticket's order list into one PurchasedTicket per leg (item).
+
+    Shared by the active list and the month archive: both return
+    `data[].items[]` in the same shape, the archive merely adds
+    `currentPage` / `totalElements` alongside.
+    """
+    out: list[PurchasedTicket] = []
+    for order in (data.get("data") or []):
+        created = str(order.get("createDateTime") or "")
+        for item in (order.get("items") or []):
+            dep = item.get("departure") or {}
+            arr = item.get("arrival") or {}
+            train = item.get("train") or {}
+            car = item.get("car") or {}
+            out.append(PurchasedTicket(
+                order_id=str(order.get("orderId") or ""),
+                order_item_id=str(item.get("orderItemId") or ""),
+                created_at=created,
+                final_status=str(order.get("finalStatus") or ""),
+                amount_uzs=int(float(item.get("totalCost") or 0)),
+                train_number=str(train.get("number") or ""),
+                train_type=str(train.get("type") or ""),
+                car_number=str(car.get("number") or ""),
+                car_type=str(car.get("type") or ""),
+                dep_station=str(dep.get("stationName") or ""),
+                arr_station=str(arr.get("stationName") or ""),
+                dep_at=str(dep.get("dateTime") or ""),
+                arr_at=str(arr.get("dateTime") or ""),
+                seats=[str(t.get("seat") or "") for t in (item.get("tickets") or [])],
+                qr_url=item.get("qrCode") or None,
+                raw=item,
+                archived=archived,
+            ))
+    return out
 
 
 class RailwayUserClient:
@@ -614,49 +665,55 @@ class RailwayUserClient:
     async def list_purchased(
         self, page: int = 0, length: int = 20,
     ) -> list[PurchasedTicket]:
-        """Orders from the user's eticket cabinet, newest first."""
+        """Active orders from the user's eticket cabinet — the "Faol
+        buyurtmalar" page. eticket moves a trip to the archive once it is
+        over, so this is upcoming travel only; see `list_archived`.
+        """
         data = await self._post(
             QUERY_ORDERS_LIST_URL,
             {"page": page, "length": length},
             extra_headers={"page": str(page), "limit": str(length)},
         )
+        return parse_purchased_orders(data)
+
+    async def list_archived(self, year_month: str) -> list[PurchasedTicket]:
+        """Past orders for one calendar month ("2026-08") — the "Oldingi
+        buyurtmalar" page. eticket keys its archive by month and answers a
+        request without one with 400 "Date is null", so there is no way to
+        ask for everything at once. Follows `totalElements` across pages.
+        """
         out: list[PurchasedTicket] = []
-        for order in (data.get("data") or []):
-            created = str(order.get("createDateTime") or "")
-            for item in (order.get("items") or []):
-                dep = item.get("departure") or {}
-                arr = item.get("arrival") or {}
-                train = item.get("train") or {}
-                car = item.get("car") or {}
-                out.append(PurchasedTicket(
-                    order_id=str(order.get("orderId") or ""),
-                    order_item_id=str(item.get("orderItemId") or ""),
-                    created_at=created,
-                    final_status=str(order.get("finalStatus") or ""),
-                    amount_uzs=int(float(item.get("totalCost") or 0)),
-                    train_number=str(train.get("number") or ""),
-                    train_type=str(train.get("type") or ""),
-                    car_number=str(car.get("number") or ""),
-                    car_type=str(car.get("type") or ""),
-                    dep_station=str(dep.get("stationName") or ""),
-                    arr_station=str(arr.get("stationName") or ""),
-                    dep_at=str(dep.get("dateTime") or ""),
-                    arr_at=str(arr.get("dateTime") or ""),
-                    seats=[str(t.get("seat") or "") for t in (item.get("tickets") or [])],
-                    qr_url=item.get("qrCode") or None,
-                    raw=item,
-                ))
-        return out
+        page, length = 0, ARCHIVE_PAGE_LENGTH
+        while True:
+            data = await self._post(
+                QUERY_ORDERS_ARCHIVE_URL,
+                {"page": page, "length": length,
+                 "filterData": {"yearMonth": year_month}},
+                extra_headers={"page": str(page), "limit": str(length)},
+            )
+            got = data.get("data") or []
+            out.extend(parse_purchased_orders(data, archived=True))
+            page += 1
+            total = int(data.get("totalElements") or 0)
+            if not got or page * length >= total or page >= ARCHIVE_MAX_PAGES:
+                return out
 
     async def get_purchased_detail(
-        self, order_item_id: str, created_at: str,
+        self, order_item_id: str, created_at: str, *, archived: bool = False,
     ) -> dict[str, Any]:
         """Passengers, per-ticket status and return window for one order item.
 
         `ticket.status` is independent of the order's `finalStatus` — a returned
-        ticket still sits under an ORDER_COMPLETED_SUCCESSFULLY order.
+        ticket still sits under an ORDER_COMPLETED_SUCCESSFULLY order, and the
+        list endpoints carry no ticket status at all, so this is the only place
+        a return shows up.
+
+        Archived legs have their own endpoint: asked about one, the active
+        endpoint answers 204 with an empty body rather than an error. (The PDF
+        endpoint, by contrast, serves both.)
         """
-        return await self._post(QUERY_ORDERS_TICKETS_URL, {
+        url = QUERY_ORDERS_ARCHIVE_TICKETS_URL if archived else QUERY_ORDERS_TICKETS_URL
+        return await self._post(url, {
             "orderItemId": order_item_id,
             "createdDate": self._api_created_date(created_at),
         })
