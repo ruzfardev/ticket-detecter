@@ -145,7 +145,8 @@ async def _sweep_user(pool: asyncpg.Pool, user: asyncpg.Record) -> int:
         # The list carries no status; only the detail says whether the ticket
         # was returned. It also hands us the passenger names for the message.
         raw = await client.get_purchased_detail(
-            leg.order_item_id, leg.created_at, archived=leg.archived,
+            leg.order_item_id, leg.created_at,
+            archived=leg.archived, source=leg.source,
         )
         tickets = summarize_tickets(raw)
         if is_returned(tickets):
@@ -179,7 +180,10 @@ async def _sweep_user(pool: asyncpg.Pool, user: asyncpg.Record) -> int:
 
         pdf_ok = False
         try:
-            blob = await client.get_purchased_pdf(leg.order_item_id, leg.created_at)
+            blob = await client.get_purchased_pdf(
+                leg.order_item_id, leg.created_at,
+                source=leg.source, order_id=leg.order_id,
+            )
             pdf_ok = await send_ticket_pdf(
                 tg_user_id=user["tg_user_id"], pdf=blob,
                 filename=ticket_filename(names, leg.order_item_id),

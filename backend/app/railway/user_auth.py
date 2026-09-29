@@ -8,6 +8,7 @@ Token refresh is mutex-guarded with a per-user Postgres advisory lock.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -16,6 +17,7 @@ import asyncpg
 from app.core.errors import AppError, RailwayUnavailable
 from app.core.logging import logger
 from app.railway._auth_common import (
+    CABINET_BASE_URL,
     AuthHeaders,
     LoginResult,
     decrypt,
@@ -139,6 +141,7 @@ async def login_for_user(
             result.cookie_str, result.exp_at,
         )
 
+    drop_cabinet_session(user_id)   # credentials may have changed
     logger.info("railway_account_linked", user_id=user_id, username_masked=_mask(username))
     return _row_to_account(row)
 
@@ -224,6 +227,50 @@ async def get_or_refresh_for_user(pool: asyncpg.Pool, user_id: int) -> AuthHeade
             await conn.execute("SELECT pg_advisory_unlock($1)", lock_key)
 
 
+# ---- cabinet session (eticket.uzrailpass.uz) ----
+#
+# The purchased-tickets cabinet is read from the new host, the only one that
+# serves the v3 orders. Its token is useless on railway.uz, where auto-buy
+# still runs, so it is kept apart: in memory, per process, logged into on
+# demand with the stored credentials. Losing it on a restart costs one login.
+
+_cabinet: dict[int, AuthHeaders] = {}
+_cabinet_locks: dict[int, asyncio.Lock] = {}
+
+
+def drop_cabinet_session(user_id: int) -> None:
+    _cabinet.pop(user_id, None)
+
+
+async def get_cabinet_auth(pool: asyncpg.Pool, user_id: int) -> AuthHeaders:
+    cached = _cabinet.get(user_id)
+    if cached and not is_jwt_expiring(cached.access_token):
+        return cached
+    lock = _cabinet_locks.setdefault(user_id, asyncio.Lock())
+    async with lock:
+        cached = _cabinet.get(user_id)
+        if cached and not is_jwt_expiring(cached.access_token):
+            return cached
+        row = await _fetch_account(pool, user_id)
+        if not row or row["link_status"] != "active":
+            raise RailwayAccountRequired("Link your eticket account first")
+        try:
+            new = await login_flow(
+                row["username"], decrypt(row["password_enc"]), CABINET_BASE_URL,
+            )
+        except RuntimeError as exc:
+            # Not flipping link_status here: railway.uz is the source of truth
+            # for the stored password, and it re-checks it on its own login.
+            logger.warning("railway_cabinet_login_failed", user_id=user_id,
+                           reason=str(exc)[:120])
+            raise RailwayLoginFailed("eticket cabinet login failed")
+        auth = AuthHeaders(access_token=new.access_token,
+                           csrf_token=new.csrf_token, cookie_str=new.cookie_str)
+        _cabinet[user_id] = auth
+        logger.info("railway_cabinet_login_ok", user_id=user_id)
+        return auth
+
+
 async def store_railway_user_id(pool: asyncpg.Pool, user_id: int, railway_user_id: str) -> None:
     await pool.execute(
         "UPDATE user_railway_accounts SET railway_user_id = $1 WHERE user_id = $2",
@@ -288,6 +335,7 @@ async def revoke_user(pool: asyncpg.Pool, user_id: int) -> None:
             "DELETE FROM railway_friends_cache WHERE user_id = $1",
             user_id,
         )
+    drop_cabinet_session(user_id)
     logger.info("railway_account_unlinked", user_id=user_id)
 
 

@@ -470,7 +470,7 @@ export const mockApi = {
         dep_at: "2026-10-15 17:20:00", arr_at: "2026-10-16 00:27:00",
         seats: ["001"],
         qr_url: "https://eticket.railway.uz/pages/check-ticket?expressId=fake",
-        archived: false, status_known: true, returned: true,
+        archived: false, source: "v2", status_known: true, returned: true,
         tickets: [{ ticket_id: "77215198319906", seat: "001",
                     status: "ReturnedTicket", passenger_name: "Farrux Rozmetov" }],
       },
@@ -485,7 +485,7 @@ export const mockApi = {
         dep_at: `${tashkentDate(1)} 07:30:00`, arr_at: `${tashkentDate(1)} 09:38:00`,
         seats: ["014"],
         qr_url: null,
-        archived: false, status_known: true, returned: false,
+        archived: false, source: "v2", status_known: true, returned: false,
         tickets: [{ ticket_id: "77215198430014", seat: "014",
                     status: "ConfirmedTicket", passenger_name: "Farrux Rozmetov" }],
       },
@@ -500,7 +500,7 @@ export const mockApi = {
         dep_at: "2026-11-02 08:10:00", arr_at: "2026-11-02 12:15:00",
         seats: ["021"],
         qr_url: null,
-        archived: false, status_known: true, returned: false,
+        archived: false, source: "v2", status_known: true, returned: false,
         tickets: [{ ticket_id: "77215198420001", seat: "021",
                     status: "ConfirmedTicket", passenger_name: "Farrux Rozmetov" }],
       },
@@ -513,14 +513,14 @@ export const mockApi = {
   async listArchivedTickets(month: string): Promise<PurchasedTicket[]> {
     await wait(400);
     const leg = (
-      t: Omit<PurchasedTicket, "archived" | "status_known" | "returned" | "tickets"
+      t: Omit<PurchasedTicket, "archived" | "source" | "status_known" | "returned" | "tickets"
         | "final_status" | "qr_url">,
       status: "ConfirmedTicket" | "ReturnedTicket",
     ): PurchasedTicket => ({
       ...t,
       final_status: "ORDER_COMPLETED_SUCCESSFULLY",
       qr_url: null,
-      archived: true,
+      archived: true, source: "v2",
       status_known: true,
       returned: status === "ReturnedTicket",
       tickets: [{ ticket_id: `7${t.order_item_id.slice(-6)}`, seat: t.seats[0],

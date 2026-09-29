@@ -51,6 +51,14 @@ const TICKET_STATUS: Record<string, { text: string; tone: Tone }> = {
   ExpiredTicket:     { text: "Muddati o'tgan",  tone: "muted"   },
   DelayedTicket:     { text: "Kechiktirilgan",  tone: "muted"   },
   PaperTicket:       { text: "Qog'oz chipta",   tone: "muted"   },
+  // The v3 order system (orders since late September 2026) speaks upper case.
+  CONFIRMED:         { text: "Amal qiladi",     tone: "success" },
+  PAID:              { text: "Amal qiladi",     tone: "success" },
+  RETURNED:          { text: "Qaytarilgan",     tone: "muted"   },
+  RETURN_SUCCEEDED:  { text: "Qaytarilgan",     tone: "muted"   },
+  REFUNDED:          { text: "Qaytarilgan",     tone: "muted"   },
+  USED:              { text: "Foydalanilgan",   tone: "muted"   },
+  EXPIRED:           { text: "Muddati o'tgan",  tone: "muted"   },
 };
 
 /** Unknown value: drop the "Ticket" suffix and space out the camelCase, so a
@@ -69,7 +77,7 @@ function TicketCard({ t }: { t: PurchasedTicket }) {
   const [open, setOpen] = useState(false);
 
   const send = useMutation({
-    mutationFn: () => sendTicketPdf(t.order_item_id, t.created_at, t.archived),
+    mutationFn: () => sendTicketPdf(t),
     onSuccess: () => toast.success("PDF botga yuborildi — chatni oching"),
     onError: () => toast.error("PDF yuborib bo'lmadi"),
   });

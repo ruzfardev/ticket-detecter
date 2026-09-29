@@ -26,6 +26,12 @@ BASE_URL = "https://eticket.railway.uz"
 CSRF_URL = f"{BASE_URL}/api/v1/csrf-token"
 LOGIN_URL = f"{BASE_URL}/api/v1/auth/login"
 
+# The same eticket site under its new name. It serves the same frontend and
+# the same v2 cabinet, and is the only host with the v3 order system (orders
+# placed since late September 2026). A token is only good on the host that
+# issued it — a railway.uz token gets 401 here and vice versa.
+CABINET_BASE_URL = "https://eticket.uzrailpass.uz"
+
 COMMON_HEADERS = {
     "Origin": BASE_URL,
     "Referer": f"{BASE_URL}/uz/auth/login",
@@ -104,16 +110,26 @@ def is_jwt_expiring(token: str, buffer_seconds: int = 60) -> bool:
         return True
 
 
-async def login_flow(username: str, password: str) -> LoginResult:
-    """Run CSRF + login against eticket.railway.uz and return tokens + cookies.
+def headers_for(base_url: str) -> dict[str, str]:
+    """COMMON_HEADERS as the site on `base_url` would send them."""
+    if base_url == BASE_URL:
+        return COMMON_HEADERS
+    return {**COMMON_HEADERS, "Origin": base_url, "Referer": f"{base_url}/uz/auth/login"}
+
+
+async def login_flow(
+    username: str, password: str, base_url: str = BASE_URL,
+) -> LoginResult:
+    """Run CSRF + login against eticket and return tokens + cookies.
 
     Raises RailwayUnavailable on network/5xx; raises RuntimeError on 4xx
     (caller maps to a user-visible 'wrong credentials' error).
     """
+    common = headers_for(base_url)
     async with httpx.AsyncClient(timeout=20, follow_redirects=False) as client:
         # Step 1: CSRF
         try:
-            r = await client.get(CSRF_URL, headers=COMMON_HEADERS)
+            r = await client.get(f"{base_url}/api/v1/csrf-token", headers=common)
             r.raise_for_status()
         except httpx.HTTPError as e:
             raise RailwayUnavailable(f"csrf step failed: {e}")
@@ -132,10 +148,10 @@ async def login_flow(username: str, password: str) -> LoginResult:
         # Step 2: login
         try:
             r = await client.post(
-                LOGIN_URL,
+                f"{base_url}/api/v1/auth/login",
                 json={"username": username, "password": password},
                 headers={
-                    **COMMON_HEADERS,
+                    **common,
                     "Content-Type": "application/json",
                     "X-XSRF-TOKEN": csrf_value,
                     "Cookie": cookie_str,

@@ -10,7 +10,10 @@ JWT 'id' claim (`/users/get` returns 404 for regular accounts).
 
 from __future__ import annotations
 
+import asyncio
+import base64
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import asyncpg
@@ -18,11 +21,13 @@ import httpx
 
 from app.core.errors import AppError, RailwayUnavailable, RateLimited
 from app.core.logging import logger
-from app.railway._auth_common import BASE_URL
+from app.railway._auth_common import BASE_URL, CABINET_BASE_URL, headers_for
 from app.railway.client import get_bucket  # shared TokenBucket (per IP, not per account)
 from app.railway.user_auth import (
     RailwayAccountRequired,
     RailwayLoginFailed,
+    drop_cabinet_session,
+    get_cabinet_auth,
     get_or_refresh_for_user,
 )
 
@@ -37,13 +42,26 @@ PAYMENT_TYPE_LIST_V1_URL = f"{BASE_URL}/api/v1/payment-type/list"
 PAYMENT_SELECT_URL = f"{BASE_URL}/api/v1/payment/select-payment-type"
 INVOICE_GENERATE_URL = f"{BASE_URL}/api/v1/universal-orders/invoice-generate"
 
-# Purchased tickets (the user's eticket cabinet).
-QUERY_ORDERS_LIST_URL = f"{BASE_URL}/api/v2/query/orders/list"
-QUERY_ORDERS_ARCHIVE_URL = f"{BASE_URL}/api/v2/query/orders/archive/list"
-QUERY_ORDERS_COUNT_URL = f"{BASE_URL}/api/v2/query/orders/count"
-QUERY_ORDERS_TICKETS_URL = f"{BASE_URL}/api/v2/query/orders/tickets"
-QUERY_ORDERS_ARCHIVE_TICKETS_URL = f"{BASE_URL}/api/v2/query/orders/archive/tickets"
-QUERY_ORDERS_PDF_URL = f"{BASE_URL}/api/v2/query/orders/pdf"
+# Purchased tickets (the user's eticket cabinet), read from the new host.
+# eticket runs two order systems side by side and the site lists both: v2 is
+# what it now calls the "old" orders (ids UX…, placed until late September
+# 2026), v3 holds everything placed since (ids UO…). Neither list includes
+# the other's orders.
+QUERY_ORDERS_LIST_URL = f"{CABINET_BASE_URL}/api/v2/query/orders/list"
+QUERY_ORDERS_ARCHIVE_URL = f"{CABINET_BASE_URL}/api/v2/query/orders/archive/list"
+QUERY_ORDERS_TICKETS_URL = f"{CABINET_BASE_URL}/api/v2/query/orders/tickets"
+QUERY_ORDERS_ARCHIVE_TICKETS_URL = f"{CABINET_BASE_URL}/api/v2/query/orders/archive/tickets"
+QUERY_ORDERS_PDF_URL = f"{CABINET_BASE_URL}/api/v2/query/orders/pdf"
+
+V3_ORDERS_LIST_URL = f"{CABINET_BASE_URL}/api/v3/query/orders/list"
+V3_ORDERS_ARCHIVE_URL = f"{CABINET_BASE_URL}/api/v3/query/orders/archive/list"
+V3_ORDERS_TICKETS_URL = f"{CABINET_BASE_URL}/api/v3/query/orders/tickets"
+V3_ORDERS_ARCHIVE_TICKETS_URL = f"{CABINET_BASE_URL}/api/v3/query/orders/archive/tickets"
+V3_ORDERS_PDF_URL = f"{CABINET_BASE_URL}/api/v3/query/orders/pdf"
+# Whole-order PDF, keyed by orderId. The site falls back on it, and it has
+# answered while the v3 query/pdf above failed with "Pdf generatsiya
+# qiladigan server bilan aloqada muammo!".
+DOCUMENT_PDF_URL = f"{CABINET_BASE_URL}/api/v1/document/{{order_id}}/pdf"
 
 # Gateway-specific. Phase C captures show these two are the live national-
 # currency gateways (route-dependent — Afrosiyob → HamkorbankHold, Plaskart → Payme).
@@ -178,6 +196,9 @@ class PurchasedTicket:
     # differs (the active one answers 204 for an archived leg), so this has
     # to travel with the leg.
     archived: bool = False
+    # Which order system the leg lives in, "v2" or "v3" — picks the detail and
+    # PDF endpoints, so it travels with the leg too.
+    source: str = "v2"
 
 
 @dataclass(slots=True)
@@ -258,6 +279,72 @@ def parse_purchased_orders(
     return out
 
 
+_TASHKENT = timezone(timedelta(hours=5))
+
+
+def _tashkent_wall_clock(iso: str) -> str:
+    """`"2026-09-29T01:26:26.689804Z"` -> `"2026-09-29 06:26:26"`.
+
+    v3 stamps orders in UTC; v2, the reminders and the mini-app all speak
+    Tashkent wall clock, so v3 is brought over to that on the way in.
+    """
+    s = (iso or "").strip()
+    if not s:
+        return s
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except ValueError:
+        return s
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(_TASHKENT)
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _v3_point(p: dict[str, Any]) -> str:
+    """v3 `{date: "2026-10-08", time: "21:45:00"}` -> `"2026-10-08 21:45:00"`."""
+    date, time_ = str(p.get("date") or ""), str(p.get("time") or "")
+    return f"{date} {time_}".strip()
+
+
+def parse_v3_orders(
+    data: dict[str, Any], *, archived: bool = False,
+) -> list[PurchasedTicket]:
+    """Flatten a v3 order list into PurchasedTickets, shaped like v2's.
+
+    Same envelope as v2 (`data[].items[]`, `totalElements`), different items:
+    stations are `{code, name, date, time}` and the train sits in `trainInfo`.
+    """
+    out: list[PurchasedTicket] = []
+    for order in (data.get("data") or []):
+        created = _tashkent_wall_clock(str(order.get("createDateTime") or ""))
+        for item in (order.get("items") or []):
+            dep = item.get("departure") or {}
+            arr = item.get("arrival") or {}
+            train = item.get("trainInfo") or {}
+            out.append(PurchasedTicket(
+                order_id=str(order.get("orderId") or ""),
+                order_item_id=str(item.get("orderItemId") or ""),
+                created_at=created,
+                final_status=str(order.get("finalStatus") or ""),
+                amount_uzs=int(float(item.get("totalCost") or 0)),
+                train_number=str(train.get("trainNumber") or ""),
+                train_type=str(train.get("carType") or ""),
+                car_number=str(train.get("carNumber") or ""),
+                car_type=str(train.get("carType") or ""),
+                dep_station=str(dep.get("name") or ""),
+                arr_station=str(arr.get("name") or ""),
+                dep_at=_v3_point(dep),
+                arr_at=_v3_point(arr),
+                seats=[str(t.get("seatNumber") or t.get("seat") or "")
+                       for t in (item.get("tickets") or [])],
+                qr_url=item.get("qrCode") or None,
+                raw=item,
+                archived=archived,
+                source="v3",
+            ))
+    return out
+
+
 def passenger_body(p: PassengerArg, *, nested: bool = False) -> dict[str, Any]:
     """One passenger as eticket's create-order payload wants it.
 
@@ -281,6 +368,19 @@ def passenger_body(p: PassengerArg, *, nested: bool = False) -> dict[str, Any]:
             "studentId": "", "tariff": "", "prefix": "",
         },
     }
+
+
+def _decode_pdf(data: dict[str, Any]) -> bytes:
+    b64 = (data or {}).get("pdf")
+    if not b64:
+        raise RailwayUnavailable("eticket returned no pdf payload")
+    try:
+        blob = base64.b64decode(b64)
+    except Exception as exc:
+        raise RailwayUnavailable(f"pdf is not valid base64: {exc}")
+    if not blob.startswith(b"%PDF"):
+        raise RailwayUnavailable("decoded payload is not a PDF")
+    return blob
 
 
 class RailwayUserClient:
@@ -671,13 +771,73 @@ class RailwayUserClient:
 
     # ---- purchased tickets (eticket cabinet) ----
 
+    async def _cabinet_request(
+        self, method: str, url: str, payload: dict[str, Any] | None = None,
+        *, extra_headers: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """One call to the cabinet host, with its own session.
+
+        A 401 drops the cached cabinet token and retries once with a fresh
+        login; the railway.uz tokens auto-buy relies on are left alone.
+        """
+        for attempt in (1, 2):
+            await get_bucket().acquire()
+            auth = await get_cabinet_auth(self._pool, self._user_id)
+            headers = {
+                **headers_for(CABINET_BASE_URL),
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {auth.access_token}",
+                "X-XSRF-TOKEN": auth.csrf_token,
+                "Cookie": auth.cookie_str,
+                **(extra_headers or {}),
+            }
+            try:
+                async with httpx.AsyncClient(timeout=30, follow_redirects=False) as http:
+                    if method == "GET":
+                        r = await http.get(url, headers=headers)
+                    else:
+                        r = await http.post(url, json=payload, headers=headers)
+            except httpx.HTTPError as e:
+                raise RailwayUnavailable(f"{url} network error: {e}")
+            if r.status_code == 401 and attempt == 1:
+                drop_cabinet_session(self._user_id)
+                continue
+            break
+        short_url = url.replace(CABINET_BASE_URL, "")
+        if r.status_code == 429:
+            raise RateLimited("eticket returned 429")
+        if r.status_code == 401:
+            raise RailwayLoginFailed("eticket cabinet session invalid")
+        if not (200 <= r.status_code < 300):
+            logger.warning("railway_cabinet_unexpected_status", user_id=self._user_id,
+                           url=short_url, status=r.status_code, body=r.text[:200])
+            raise RailwayUnavailable(f"eticket {r.status_code} {short_url}")
+        # 204 No Content (an empty archive month, an unknown leg) -> {}.
+        body = (r.text or "").strip()
+        if not body:
+            return {}
+        try:
+            return r.json()
+        except ValueError:
+            raise RailwayUnavailable(f"{short_url} returned non-JSON body")
+
+    async def _cabinet_post(
+        self, url: str, payload: dict[str, Any],
+        *, extra_headers: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        return await self._cabinet_request("POST", url, payload, extra_headers=extra_headers)
+
+    async def _cabinet_get(self, url: str) -> dict[str, Any]:
+        return await self._cabinet_request("GET", url)
+
     @staticmethod
     def _api_created_date(created_at: str) -> str:
         """`"2026-08-20 11:47:55"` -> `"2026-08-20T11:47:55+05:00"`.
 
         The list endpoint returns a space-separated timestamp, but tickets/pdf
         demand ISO with the Tashkent offset — send it back as received and they
-        answer a bare 400 with no message.
+        answer a bare 400 with no message. (v3 legs are stored in the same
+        Tashkent format, see `_tashkent_wall_clock`, and v3 wants the same.)
         """
         s = (created_at or "").strip().replace(" ", "T")
         if not s:
@@ -688,82 +848,118 @@ class RailwayUserClient:
         self, page: int = 0, length: int = 20,
     ) -> list[PurchasedTicket]:
         """Active orders from the user's eticket cabinet — the "Faol
-        buyurtmalar" page. eticket moves a trip to the archive once it is
-        over, so this is upcoming travel only; see `list_archived`.
+        buyurtmalar" page, from both order systems. eticket moves a trip to
+        the archive once it is over, so this is upcoming travel only; see
+        `list_archived`.
+
+        One system failing still yields the other's trips; only when both
+        fail is it an error.
         """
-        data = await self._post(
-            QUERY_ORDERS_LIST_URL,
-            {"page": page, "length": length},
-            extra_headers={"page": str(page), "limit": str(length)},
+        async def one(url: str, parse) -> list[PurchasedTicket]:
+            data = await self._cabinet_post(
+                url, {"page": page, "length": length},
+                extra_headers={"page": str(page), "limit": str(length)},
+            )
+            return parse(data)
+
+        return await self._both(
+            "list", one(QUERY_ORDERS_LIST_URL, parse_purchased_orders),
+            one(V3_ORDERS_LIST_URL, parse_v3_orders),
         )
-        return parse_purchased_orders(data)
 
     async def list_archived(self, year_month: str) -> list[PurchasedTicket]:
         """Past orders for one calendar month ("2026-08") — the "Oldingi
-        buyurtmalar" page. eticket keys its archive by month and answers a
-        request without one with 400 "Date is null", so there is no way to
-        ask for everything at once. Follows `totalElements` across pages.
+        buyurtmalar" page, from both order systems. eticket keys its archive
+        by month and answers a request without one with 400 "Date is null",
+        so there is no way to ask for everything at once.
         """
+        return await self._both(
+            "archive",
+            self._archive_pages(QUERY_ORDERS_ARCHIVE_URL, year_month,
+                                lambda d: parse_purchased_orders(d, archived=True)),
+            self._archive_pages(V3_ORDERS_ARCHIVE_URL, year_month,
+                                lambda d: parse_v3_orders(d, archived=True)),
+        )
+
+    async def _archive_pages(self, url: str, year_month: str, parse) -> list[PurchasedTicket]:
+        """One archive month from one system, following `totalElements`."""
         out: list[PurchasedTicket] = []
         page, length = 0, ARCHIVE_PAGE_LENGTH
         while True:
-            data = await self._post(
-                QUERY_ORDERS_ARCHIVE_URL,
+            data = await self._cabinet_post(
+                url,
                 {"page": page, "length": length,
                  "filterData": {"yearMonth": year_month}},
                 extra_headers={"page": str(page), "limit": str(length)},
             )
             got = data.get("data") or []
-            out.extend(parse_purchased_orders(data, archived=True))
+            out.extend(parse(data))
             page += 1
             total = int(data.get("totalElements") or 0)
             if not got or page * length >= total or page >= ARCHIVE_MAX_PAGES:
                 return out
 
+    async def _both(self, what: str, v2, v3) -> list[PurchasedTicket]:
+        res = await asyncio.gather(v2, v3, return_exceptions=True)
+        errors = [r for r in res if isinstance(r, BaseException)]
+        if len(errors) == len(res):
+            raise errors[0]
+        for src, r in zip(("v2", "v3"), res):
+            if isinstance(r, BaseException):
+                logger.warning("railway_cabinet_source_failed", user_id=self._user_id,
+                               what=what, source=src, error=str(r)[:160])
+        return [t for r in res if not isinstance(r, BaseException) for t in r]
+
     async def get_purchased_detail(
-        self, order_item_id: str, created_at: str, *, archived: bool = False,
+        self, order_item_id: str, created_at: str, *,
+        archived: bool = False, source: str = "v2",
     ) -> dict[str, Any]:
         """Passengers, per-ticket status and return window for one order item.
 
         `ticket.status` is independent of the order's `finalStatus` — a returned
         ticket still sits under an ORDER_COMPLETED_SUCCESSFULLY order, and the
         list endpoints carry no ticket status at all, so this is the only place
-        a return shows up.
+        a return shows up. (v3 puts the status on the item instead; see
+        `summarize_tickets`.)
 
         Archived legs have their own endpoint: asked about one, the active
         endpoint answers 204 with an empty body rather than an error. (The PDF
         endpoint, by contrast, serves both.)
         """
-        url = QUERY_ORDERS_ARCHIVE_TICKETS_URL if archived else QUERY_ORDERS_TICKETS_URL
-        return await self._post(url, {
+        if source == "v3":
+            url = V3_ORDERS_ARCHIVE_TICKETS_URL if archived else V3_ORDERS_TICKETS_URL
+        else:
+            url = QUERY_ORDERS_ARCHIVE_TICKETS_URL if archived else QUERY_ORDERS_TICKETS_URL
+        return await self._cabinet_post(url, {
             "orderItemId": order_item_id,
             "createdDate": self._api_created_date(created_at),
         })
 
     async def get_purchased_pdf(
-        self, order_item_id: str, created_at: str,
+        self, order_item_id: str, created_at: str, *,
+        source: str = "v2", order_id: str = "",
     ) -> bytes:
         """The printable ticket. Returns decoded PDF bytes.
 
         Despite the endpoint name this is NOT a binary response: it answers
         `application/json` with `{"pdf": "<base64>"}`, so streaming the body
         straight through would hand the user a broken file.
+
+        A v3 leg is printed from the whole-order document first and from
+        v3 query/pdf only if that fails — see DOCUMENT_PDF_URL.
         """
-        data = await self._post(QUERY_ORDERS_PDF_URL, {
-            "orderItemId": order_item_id,
-            "createdDate": self._api_created_date(created_at),
-        })
-        b64 = (data or {}).get("pdf")
-        if not b64:
-            raise RailwayUnavailable("eticket returned no pdf payload")
-        import base64
+        body = {"orderItemId": order_item_id,
+                "createdDate": self._api_created_date(created_at)}
+        if source != "v3":
+            return _decode_pdf(await self._cabinet_post(QUERY_ORDERS_PDF_URL, body))
         try:
-            blob = base64.b64decode(b64)
-        except Exception as exc:
-            raise RailwayUnavailable(f"pdf is not valid base64: {exc}")
-        if not blob.startswith(b"%PDF"):
-            raise RailwayUnavailable("decoded payload is not a PDF")
-        return blob
+            if not order_id:
+                raise RailwayUnavailable("no orderId for the v3 document pdf")
+            return _decode_pdf(await self._cabinet_get(DOCUMENT_PDF_URL.format(order_id=order_id)))
+        except (RailwayUnavailable, RateLimited) as exc:
+            logger.info("railway_document_pdf_failed", user_id=self._user_id,
+                        order_id=order_id, error=str(exc)[:160])
+            return _decode_pdf(await self._cabinet_post(V3_ORDERS_PDF_URL, body))
 
     # ---- friends (Phase A) ----
 

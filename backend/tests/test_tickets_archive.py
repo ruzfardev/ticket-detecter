@@ -16,7 +16,10 @@ from app.services.ticket_status import is_confirmed
 from app.railway.user_client import (
     ARCHIVE_MAX_PAGES,
     QUERY_ORDERS_ARCHIVE_TICKETS_URL,
+    QUERY_ORDERS_ARCHIVE_URL,
     QUERY_ORDERS_TICKETS_URL,
+    V3_ORDERS_ARCHIVE_TICKETS_URL,
+    V3_ORDERS_TICKETS_URL,
     RailwayUserClient,
     parse_purchased_orders,
 )
@@ -75,15 +78,19 @@ def test_month_filter_is_year_dash_month(month, ok):
 
 
 def _client_with_pages(pages: list[dict]) -> tuple[RailwayUserClient, list[dict]]:
-    """A client whose `_post` replays canned archive pages, recording bodies."""
+    """A client whose v2 archive replays canned pages, recording bodies; the
+    v3 archive answers with an empty month (204)."""
     client = RailwayUserClient.__new__(RailwayUserClient)
+    client._user_id = 1
     sent: list[dict] = []
 
     async def fake_post(url, payload, **kw):
+        if url != QUERY_ORDERS_ARCHIVE_URL:
+            return {}
         sent.append(payload)
         return pages[min(len(sent) - 1, len(pages) - 1)]
 
-    client._post = fake_post  # type: ignore[method-assign]
+    client._cabinet_post = fake_post  # type: ignore[method-assign]
     return client, sent
 
 
@@ -162,10 +169,13 @@ def test_detail_endpoint_follows_the_archived_flag():
                            "createdDate": "2026-08-18T16:37:45+05:00"}
         return {}
 
-    client._post = fake_post  # type: ignore[method-assign]
-    asyncio.run(client.get_purchased_detail("ItemId-x", "2026-08-18 16:37:45"))
-    asyncio.run(client.get_purchased_detail("ItemId-x", "2026-08-18 16:37:45", archived=True))
-    assert urls == [QUERY_ORDERS_TICKETS_URL, QUERY_ORDERS_ARCHIVE_TICKETS_URL]
+    client._cabinet_post = fake_post  # type: ignore[method-assign]
+    for source in ("v2", "v3"):
+        for archived in (False, True):
+            asyncio.run(client.get_purchased_detail(
+                "ItemId-x", "2026-08-18 16:37:45", archived=archived, source=source))
+    assert urls == [QUERY_ORDERS_TICKETS_URL, QUERY_ORDERS_ARCHIVE_TICKETS_URL,
+                    V3_ORDERS_TICKETS_URL, V3_ORDERS_ARCHIVE_TICKETS_URL]
 
 
 def test_an_unpaid_reservation_is_neither_returned_nor_confirmed():

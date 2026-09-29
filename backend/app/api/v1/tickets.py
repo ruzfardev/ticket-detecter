@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import re
 import time
+from typing import Literal
 
 import asyncpg
 from fastapi import APIRouter, Body, Depends, Query
@@ -25,7 +26,7 @@ from app.core.logging import logger
 from app.railway import user_auth
 from app.railway.user_client import PurchasedTicket, RailwayUserClient
 from app.services.ticket_status import (  # noqa: F401 — re-exported for tests
-    RETURNED, TERMINAL, is_returned, summarize_tickets,
+    RETURNED, TERMINAL, is_returned, summarize_tickets, ticket_amount,
 )
 from app.services.user_service import UserRow
 
@@ -50,6 +51,8 @@ class SendPdfBody(BaseModel):
     order_item_id: str
     created_at: str          # exactly as returned by the list endpoint
     archived: bool = False   # as returned by the list endpoint, too
+    source: Literal["v2", "v3"] = "v2"   # likewise
+    order_id: str = ""       # v3 prints by order
 
 
 async def _require_linked(pool: asyncpg.Pool, user_id: int) -> None:
@@ -96,7 +99,8 @@ async def _tickets_of(
         return hit[1]
     async with sem:
         raw = await client.get_purchased_detail(
-            leg.order_item_id, leg.created_at, archived=leg.archived,
+            leg.order_item_id, leg.created_at,
+            archived=leg.archived, source=leg.source,
         )
     tickets = summarize_tickets(raw)
     settled = bool(tickets) and all(t["status"] in TERMINAL for t in tickets)
@@ -137,6 +141,7 @@ async def _with_tickets(
 def _leg(t: PurchasedTicket) -> dict:
     return {
         "archived": t.archived,
+        "source": t.source,
         "order_id": t.order_id,
         "order_item_id": t.order_item_id,
         "created_at": t.created_at,
@@ -164,20 +169,15 @@ async def ticket_detail(
     await _require_linked(pool, user.id)
     client = RailwayUserClient(pool, user.id)
     raw = await client.get_purchased_detail(
-        body.order_item_id, body.created_at, archived=body.archived,
+        body.order_item_id, body.created_at,
+        archived=body.archived, source=body.source,
     )
-    tickets = []
-    for t in (raw.get("tickets") or []):
-        p = t.get("passenger") or {}
-        tickets.append({
-            "ticket_id": str(t.get("ticketId") or ""),
-            "status": str(t.get("status") or ""),
-            "seat_number": str(t.get("seatNumber") or ""),
-            "amount_uzs": int(float(t.get("tariffAmount") or 0)),
-            "passenger_name": " ".join(
-                x for x in (p.get("firstname"), p.get("lastname")) if x
-            ).strip(),
-        })
+    tickets = [
+        {"ticket_id": s["ticket_id"], "status": s["status"],
+         "seat_number": s["seat"], "amount_uzs": ticket_amount(t),
+         "passenger_name": s["passenger_name"]}
+        for s, t in zip(summarize_tickets(raw), raw.get("tickets") or [])
+    ]
     return {
         "tickets": tickets,
         "return_available_until": raw.get("onlineReturnAvailabilityTime"),
@@ -202,21 +202,20 @@ async def send_pdf_to_chat(
     names: list[str] = []
     try:
         detail = await client.get_purchased_detail(
-            body.order_item_id, body.created_at, archived=body.archived,
+            body.order_item_id, body.created_at,
+            archived=body.archived, source=body.source,
         )
-        for t in (detail.get("tickets") or []):
-            p = t.get("passenger") or {}
-            full = " ".join(
-                str(x) for x in (p.get("firstname"), p.get("lastname")) if x
-            ).strip()
-            if full:
-                names.append(full)
+        names = [t["passenger_name"] for t in summarize_tickets(detail)
+                 if t["passenger_name"]]
     except Exception as exc:
         # Naming is a nicety; never fail the download over it.
         logger.info("ticket_pdf_name_lookup_skipped",
                     order_item_id=body.order_item_id, error=str(exc)[:120])
 
-    blob = await client.get_purchased_pdf(body.order_item_id, body.created_at)
+    blob = await client.get_purchased_pdf(
+        body.order_item_id, body.created_at,
+        source=body.source, order_id=body.order_id,
+    )
 
     from app.services.ticket_delivery import send_ticket_pdf, ticket_filename
     ok = await send_ticket_pdf(
