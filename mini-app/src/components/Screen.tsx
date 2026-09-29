@@ -69,6 +69,10 @@ export function Screen({
   const { scrollY } = useScroll();
 
   const showNav = nav ?? !!(title || actions || wizard);
+  const hasBack = !tabRoot && !inTelegram();
+  // Nothing to put in the bar but a small title: let it float over the page so
+  // the large title can sit at the top, and appear only when it is needed.
+  const overlayNav = showNav && !hasBack && !actions && !wizard;
   const navText = navTitle ?? (typeof title === "string" ? title : undefined);
 
   // Where the large title has scrolled fully under the bar.
@@ -100,7 +104,8 @@ export function Screen({
         <NavBar
           progress={progress}
           title={navText}
-          leading={!tabRoot && !inTelegram() ? <InAppBack /> : undefined}
+          overlay={overlayNav}
+          leading={hasBack ? <InAppBack /> : undefined}
           trailing={actions}
           center={wizard ? <WizardSteps current={location.pathname} /> : undefined}
         />
@@ -109,7 +114,7 @@ export function Screen({
       <div
         className={cn(
           padded && "page-frame",
-          !showNav && "pt-[calc(var(--safe-t)+14px)]",
+          (!showNav || overlayNav) && "pt-[calc(var(--safe-t)+14px)]",
           tabbed
             ? "pb-[calc(var(--tabbar-h)+var(--tabbar-gap)+var(--safe-b)+34px)]"
             : "pb-[calc(var(--safe-b)+32px)]",

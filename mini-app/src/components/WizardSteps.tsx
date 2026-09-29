@@ -50,7 +50,7 @@ export function WizardSteps({ current, className }: Props) {
                 "h-2 rounded-full transition-colors duration-300",
                 done && "bg-coral",
                 now && "bg-coral-bright shadow-[0_0_10px_hsl(var(--coral-bright)/0.7)]",
-                !done && !now && "bg-ink/12",
+                !done && !now && "bg-ink/20 dark:bg-ink/25",
               )}
             />
           );

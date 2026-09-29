@@ -1,22 +1,64 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Search, MapPin, ArrowLeftRight } from "lucide-react";
+import * as m from "motion/react-m";
+import { AnimatePresence } from "motion/react";
+import { Search, MapPin, ArrowLeftRight, Check } from "lucide-react";
 
 import { listStations, Station } from "@/api/client";
 import { useWizardField } from "@/hooks/useWizardField";
 import { useWizardGuard } from "@/hooks/useWizardGuard";
 import { useWizard } from "@/store/wizard";
+import { spring } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 import { Screen } from "@/components/Screen";
 import { StickyAction } from "@/components/StickyAction";
+import { EmptyNote } from "@/components/EmptyNote";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
 import { ListGroup, ListRow } from "@/components/ui/list";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IconTile } from "@/components/ui/tile";
 import { useHaptic } from "@/hooks/useHaptic";
 
 type Mode = "dep" | "arr";
+
+/** One end of the route: a label, the chosen station, and the lens when it is
+ *  the end currently being picked. */
+function End({
+  label, value, placeholder, active, onClick, lensId,
+}: {
+  label: string; value?: string; placeholder: string; active: boolean;
+  onClick: () => void; lensId: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className="tap relative min-w-0 rounded-[22px] px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral-bright"
+    >
+      {active && (
+        <m.span
+          layoutId={lensId}
+          transition={spring.lens}
+          className="lens-tint absolute inset-0 rounded-[22px]"
+        />
+      )}
+      <span className="relative block">
+        <span className="block text-caption font-semibold text-muted">{label}</span>
+        <span
+          className={cn(
+            "mt-0.5 block truncate text-title-md",
+            value ? "text-ink" : "text-muted-soft",
+          )}
+        >
+          {value || placeholder}
+        </span>
+      </span>
+    </button>
+  );
+}
 
 export function RoutePicker() {
   // No fields required at step 1 — this is here so a finished wizard evicts
@@ -32,6 +74,7 @@ export function RoutePicker() {
 
   const [mode, setMode] = useState<Mode>(dep_code ? "arr" : "dep");
   const [q, setQ] = useState("");
+  const [swaps, setSwaps] = useState(0);
 
   const { data: stations, isLoading } = useQuery({
     queryKey: ["stations", q],
@@ -57,7 +100,8 @@ export function RoutePicker() {
   // Swap the two ends in place. With only one end chosen the empty side moves
   // too, so the picker reopens on whichever end is now missing.
   const swap = () => {
-    haptic.selection();
+    haptic.impact("light");
+    setSwaps(n => n + 1);
     setField("dep_code", arr_code);
     setField("dep_name", arr_name);
     setField("arr_code", dep_code);
@@ -74,68 +118,93 @@ export function RoutePicker() {
         ? "Manzillar bir xil bo'lmasligi kerak"
         : undefined;
 
+  const list = (stations ?? []).slice(0, 30);
+
   return (
-    <Screen padded wizard title="Marshrut" subtitle={mode === "dep" ? "Qayerdan?" : "Qayerga?"}>
-      {/* Selected route preview */}
-      {(dep_name || arr_name) && (
-        <Card variant="feature" pad="md">
-          <div className="flex items-center gap-2 text-body-md">
-            <button
-              type="button"
-              onClick={() => setMode("dep")}
-              className={`flex-1 text-left ${mode === "dep" ? "text-ink font-medium" : "text-muted"}`}
+    <Screen
+      padded
+      wizard
+      title="Marshrut"
+      subtitle={
+        <span className="relative inline-block h-[22px] overflow-hidden align-bottom">
+          <AnimatePresence mode="popLayout" initial={false}>
+            <m.span
+              key={mode}
+              className="inline-block"
+              initial={{ y: 18, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -18, opacity: 0 }}
+              transition={spring.smooth}
             >
-              {dep_name || "Qayerdan?"}
-            </button>
-            <button
-              type="button"
-              onClick={swap}
-              aria-label="Yo'nalishni almashtirish"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-pill bg-canvas text-ink transition-transform active:scale-90 active:rotate-180"
-            >
-              <ArrowLeftRight className="h-4 w-4" strokeWidth={1.75} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("arr")}
-              className={`flex-1 text-left ${mode === "arr" ? "text-ink font-medium" : "text-muted"}`}
-            >
-              {arr_name || "Qayerga?"}
-            </button>
-          </div>
-        </Card>
-      )}
+              {mode === "dep" ? "Qayerdan?" : "Qayerga?"}
+            </m.span>
+          </AnimatePresence>
+        </span>
+      }
+    >
+      {/* The route so far — tap an end to choose it, or swap the two. */}
+      <div className="surface relative grid grid-cols-[1fr_auto_1fr] items-center p-1.5">
+        <End
+          label="Qayerdan"
+          placeholder="Tanlang"
+          value={dep_name}
+          active={mode === "dep"}
+          onClick={() => { haptic.selection(); setMode("dep"); }}
+          lensId="route-lens"
+        />
+        <m.button
+          type="button"
+          onClick={swap}
+          aria-label="Yo'nalishni almashtirish"
+          whileTap={{ scale: 0.86 }}
+          animate={{ rotate: swaps * 180 }}
+          transition={spring.bouncy}
+          className="glass tap relative z-10 mx-1 flex size-10 items-center justify-center rounded-full text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral-bright"
+        >
+          <ArrowLeftRight className="size-[18px]" strokeWidth={2.2} />
+        </m.button>
+        <End
+          label="Qayerga"
+          placeholder="Tanlang"
+          value={arr_name}
+          active={mode === "arr"}
+          onClick={() => { haptic.selection(); setMode("arr"); }}
+          lensId="route-lens"
+        />
+      </div>
 
       <Input
-        before={<Search className="h-4 w-4" strokeWidth={1.75} />}
+        before={<Search className="size-[18px]" strokeWidth={2} />}
         placeholder="Stantsiya nomi..."
         value={q}
         onChange={e => setQ(e.target.value)}
+        enterKeyHint="search"
+        autoComplete="off"
+        aria-label="Stantsiya qidirish"
       />
 
       {isLoading ? (
-        <div className="space-y-2">
-          {[1, 2, 3].map(i => (
-            <Skeleton key={i} className="h-14" />
+        <div className="space-y-px overflow-hidden rounded-[26px]">
+          {[1, 2, 3, 4].map(i => (
+            <Skeleton key={i} className="h-[60px] rounded-none" />
           ))}
         </div>
+      ) : list.length === 0 ? (
+        <EmptyNote icon={Search} title="Stantsiya topilmadi" body="Boshqa nom bilan qidirib ko'ring." />
       ) : (
         <ListGroup>
-          {(stations ?? []).slice(0, 30).map(s => {
+          {list.map(s => {
             const selected =
               (mode === "dep" && dep_code === s.code) ||
               (mode === "arr" && arr_code === s.code);
             return (
               <ListRow
                 key={s.code}
-                before={
-                  <div className="h-8 w-8 rounded-pill bg-canvas flex items-center justify-center">
-                    <MapPin className="h-4 w-4 text-ink" strokeWidth={1.75} />
-                  </div>
-                }
+                before={<IconTile icon={MapPin} tone={selected ? "coral" : "gray"} soft={!selected} />}
                 title={s.name}
                 subtitle={s.city ?? undefined}
                 selected={selected}
+                after={selected ? <Check className="pop-in size-5 text-coral-ink" strokeWidth={2.8} /> : undefined}
                 onClick={() => pick(s)}
               />
             );
@@ -146,6 +215,7 @@ export function RoutePicker() {
       <StickyAction hint={!ready ? hint : undefined}>
         <Button
           full
+          size="lg"
           disabled={!ready}
           onClick={() => {
             haptic.impact("light");

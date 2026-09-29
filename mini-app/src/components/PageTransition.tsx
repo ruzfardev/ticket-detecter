@@ -25,7 +25,8 @@ export function PageTransition({ children }: { children: ReactNode }) {
   const from = prev.current;
   useEffect(() => { prev.current = to; }, [to]);
 
-  const tabSwitch = from !== null && isTabbedRoute(from) && isTabbedRoute(to);
+  // Tab switches, and the hand-off from the launch screen, settle in place.
+  const tabSwitch = from !== null && (from === "/" || isTabbedRoute(from)) && isTabbedRoute(to);
   const initial =
     from === null ? false :
     tabSwitch ? { opacity: 0, scale: 0.985 } :

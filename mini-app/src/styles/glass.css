@@ -269,6 +269,14 @@
     radial-gradient(circle var(--notch-r) at 100% var(--notch-y, 66%), #0000 calc(100% - 0.6px), #000);
   mask-composite: intersect;
 }
+/* A ticket that matters today without shouting: a coral wash falling from the top. */
+.ticket-tint {
+  background:
+    linear-gradient(180deg, hsl(var(--coral-bright) / 0.17), hsl(var(--coral-bright) / 0) 64%),
+    hsl(var(--surface-card) / var(--surface-card-a));
+  box-shadow: inset 0 1px 0 var(--card-edge), inset 0 0 0 0.5px hsl(var(--coral-bright) / 0.28);
+}
+
 .ticket-shadow {
   filter: drop-shadow(0 10px 14px hsl(var(--shadow) / 0.16)) drop-shadow(0 1px 1.5px hsl(var(--shadow) / 0.12));
 }
@@ -509,20 +517,19 @@ html[data-fx="off"] .ambient::after { display: none; }
 }
 
 /* ── Scroll edge ──────────────────────────────────────────────────────────
-   Where content slides under a floating control, it should dissolve rather
-   than be cut: a progressive blur that fades to nothing plus a canvas veil. */
+   Where content slides under a floating control it should dissolve, not be
+   cut. A plain canvas-coloured veil does it identically in every engine — a
+   masked backdrop-filter looks better in Chromium but Safari can blur the
+   whole rectangle and draw a hard top edge, so it is not used. */
 .scrim-bottom {
   position: absolute;
-  inset: -28px 0 0 0;
+  inset: -34px 0 0 0;
   pointer-events: none;
-  background: linear-gradient(to top, hsl(var(--canvas) / 0.86), hsl(var(--canvas) / 0.55) 55%, hsl(var(--canvas) / 0));
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-  -webkit-mask-image: linear-gradient(to top, #000 55%, transparent);
-  mask-image: linear-gradient(to top, #000 55%, transparent);
-}
-html[data-fx="lite"] .scrim-bottom,
-html[data-fx="off"] .scrim-bottom {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+  background: linear-gradient(
+    to top,
+    hsl(var(--canvas) / 0.92) 0%,
+    hsl(var(--canvas) / 0.7) 42%,
+    hsl(var(--canvas) / 0.28) 74%,
+    hsl(var(--canvas) / 0) 100%
+  );
 }
