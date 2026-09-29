@@ -134,7 +134,9 @@ export function App() {
       </PageTransition>
 
       {/* Outside the page, so it survives route changes and its lens can travel. */}
-      <AnimatePresence>{tabbed && <BottomNav key="tabs" />}</AnimatePresence>
+      {/* A sheet covers the tab bar, as on iOS (otherwise its labels ghost
+          through the glass); it slides back in when the sheet closes. */}
+      <AnimatePresence>{tabbed && openSheets === 0 && <BottomNav key="tabs" />}</AnimatePresence>
     </>
   );
 }
