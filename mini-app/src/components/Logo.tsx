@@ -4,8 +4,11 @@ type Props = {
   /** Rendered size in px (square). */
   size?: number;
   className?: string;
-  /** Pulse a halo ring around the punch-dot — the app's "working" signal. */
+  /** Pulse a halo ring around the punch-dot — the app's "working" signal.
+   *  Breathes four times and rests, unless `loop`. */
   live?: boolean;
+  /** Keep pulsing until it is switched off (something is genuinely in progress). */
+  loop?: boolean;
   /** Paint the punch-dot with the error token instead of the primary. */
   tone?: "primary" | "error";
   title?: string;
@@ -26,7 +29,7 @@ type Props = {
  * variables — see public/mark.svg and public/splash-placeholder.svg, which are
  * the same path with baked colors.
  */
-export function Logo({ size = 28, className, live, tone = "primary", title = "Chiptachi" }: Props) {
+export function Logo({ size = 28, className, live, loop, tone = "primary", title = "Chiptachi" }: Props) {
   const dot = tone === "error" ? "hsl(var(--error))" : "hsl(var(--coral-bright))";
   return (
     <svg
@@ -46,7 +49,7 @@ export function Logo({ size = 28, className, live, tone = "primary", title = "Ch
       />
       {live && (
         <circle
-          className="logo-halo"
+          className={cn("logo-halo", loop && "logo-halo--loop")}
           cx="22"
           cy="32"
           r="4.25"

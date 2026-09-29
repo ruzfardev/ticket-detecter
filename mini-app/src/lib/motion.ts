@@ -22,18 +22,21 @@ export const spring = {
 export const easeIOS = [0.32, 0.72, 0, 1] as const;
 export const easeOut = [0.16, 1, 0.3, 1] as const;
 
-/** Staggered entrance for the blocks of a screen. `custom` is the block index. */
+/** Staggered entrance for the blocks of a screen. `custom` is the block index.
+ *
+ *  The budget: the first block is fully there in ~180 ms and the sixth (the
+ *  cap) in ~350 ms — a screen you pushed into never makes you wait to read it.
+ *  Vertical travel only: scaling text re-rasterises it on every frame. */
 export const reveal: Variants = {
-  hidden: { opacity: 0, y: 16, scale: 0.985 },
+  hidden: { opacity: 0, y: 14 },
   show: (i: number = 0) => {
-    const delay = Math.min(i, 8) * 0.045;
+    const delay = Math.min(i, 5) * 0.035;
     return {
       opacity: 1,
       y: 0,
-      scale: 1,
       // The fade is quick on purpose: while a block is below full opacity any
       // glass inside it cannot blur its backdrop, so keep that window short.
-      transition: { opacity: { duration: 0.2, delay }, default: { ...spring.smooth, delay } },
+      transition: { opacity: { duration: 0.16, delay }, default: { ...spring.smooth, delay } },
     };
   },
 };

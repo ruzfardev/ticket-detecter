@@ -12,6 +12,7 @@ import {
   deleteSubscription, getMe, getRailwayStatus, isReservedLeg, listOrders, listSubscriptions,
   listTickets, patchSubscription, type Subscription,
 } from "@/api/client";
+import { HOME_STALE_MS } from "@/api/warm";
 import { useWizard } from "@/store/wizard";
 import { useHaptic } from "@/hooks/useHaptic";
 import { useTelegram } from "@/hooks/useTelegram";
@@ -19,6 +20,7 @@ import { spring } from "@/lib/motion";
 import { Screen } from "@/components/Screen";
 import { StatusView } from "@/components/StatusView";
 import { HomeSkeleton } from "@/components/HomeSkeleton";
+import { Collapse, useLast } from "@/components/Collapse";
 import { Logo } from "@/components/Logo";
 import { EmptyNote } from "@/components/EmptyNote";
 import { Specular } from "@/components/glass/Specular";
@@ -102,9 +104,9 @@ export function Home() {
   const { user: tgUser, showConfirm } = useTelegram();
   const qc = useQueryClient();
   const reset = useWizard(s => s.reset);
-  const me = useQuery({ queryKey: ["me"], queryFn: getMe });
-  const subs = useQuery({ queryKey: ["subs"], queryFn: listSubscriptions });
-  const railway = useQuery({ queryKey: ["railwayAccount"], queryFn: getRailwayStatus });
+  const me = useQuery({ queryKey: ["me"], queryFn: getMe, staleTime: HOME_STALE_MS });
+  const subs = useQuery({ queryKey: ["subs"], queryFn: listSubscriptions, staleTime: HOME_STALE_MS });
+  const railway = useQuery({ queryKey: ["railwayAccount"], queryFn: getRailwayStatus, staleTime: HOME_STALE_MS });
   const linked = railway.data?.linked === true;
   const orders = useQuery({
     queryKey: ["orders"], queryFn: listOrders,
@@ -158,6 +160,11 @@ export function Home() {
       .sort((a, b) => (a.dep_at < b.dep_at ? -1 : a.dep_at > b.dep_at ? 1 : 0));
     return legs[0] ? { leg: legs[0], today: legs[0].dep_at.startsWith(today) } : null;
   }, [tickets.data]);
+
+  // Both arrive after first paint (eticket answers in seconds), so they open like
+  // drawers — and stay filled while they close.
+  const shownOtp = useLast(awaitingOtp);
+  const shownTrip = useLast(trip);
 
   // OTP countdown: tick locally between the 8 s refetches.
   const [now, setNow] = useState(() => Date.now());
@@ -257,104 +264,114 @@ export function Home() {
   // A returned ticket is still in eticket's active list; it is not a trip.
   const ticketCount = (tickets.data ?? []).filter(t => !t.returned && !isReservedLeg(t)).length;
 
-  const tripDur = trip
-    ? dayOffset(trip.leg.dep_at.replace(" ", "T"), trip.leg.arr_at.replace(" ", "T"))
+  const tripDur = shownTrip
+    ? dayOffset(shownTrip.leg.dep_at.replace(" ", "T"), shownTrip.leg.arr_at.replace(" ", "T"))
     : 0;
 
   return (
     <Screen tabbed padded>
-      {/* Top strip — the mark, then the account facts as one quiet line: tier,
-          poll cadence, eticket link. Nothing here competes with the OTP
-          banner or the CTA for attention. */}
-      <header className="flex min-h-11 items-center justify-between gap-3">
-        <h1 className="sr-only">Chiptachi</h1>
-        <div className="flex min-w-0 items-center gap-3 text-ink">
-          <Logo size={28} live={active.length > 0} />
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            <Badge variant={isFree ? "pill" : "solid"}>{isFree ? "Free" : "Premium"}</Badge>
-            {intervalS !== undefined && (
-              <span className="inline-flex items-center gap-1 text-caption font-medium text-muted">
-                {isFree
-                  ? <RefreshCw width={12} height={12} strokeWidth={2.2} />
-                  : <Zap width={12} height={12} strokeWidth={2.2} className="text-coral-ink" />}
-                har {intervalS} s
-              </span>
-            )}
-            {linked && (
-              <span className="inline-flex items-center gap-1 text-caption font-medium text-muted">
-                <CheckCircle2 width={12} height={12} strokeWidth={2.2} className="text-success" />
-                eticket
-              </span>
-            )}
-          </div>
-        </div>
-        <AvatarButton url={tgUser?.photo_url} name={name} onClick={go("/settings")} />
-      </header>
-
-      {/* Awaiting-OTP banner — the one time-critical element, always first. */}
-      {awaitingOtp && (
-        <PressCard
-          material="none"
-          onClick={() => navigate(`/order/${awaitingOtp.id}`)}
-          className="glass-prominent relative flex items-center gap-3.5 overflow-hidden rounded-[26px] p-4"
-          aria-label="SMS kodni kiriting"
-        >
-          <Specular />
-          <CountdownRing secs={otpSecs} />
-          <div className="relative min-w-0 flex-1">
-            <div className="text-title-md">SMS kodni kiriting</div>
-            <div className="truncate text-caption text-on-primary/85">
-              {awaitingOtp.train_number} · Vagon {awaitingOtp.car_number} · Joy{" "}
-              {awaitingOtp.seat_numbers?.length ? awaitingOtp.seat_numbers.join(", ") : awaitingOtp.seat_number}
+      <div>
+        {/* Top strip — the mark, then the account facts as one quiet line: tier,
+            poll cadence, eticket link. Nothing here competes with the OTP
+            banner or the CTA for attention. */}
+        <header className="flex min-h-11 items-center justify-between gap-3">
+          <h1 className="sr-only">Chiptachi</h1>
+          <div className="flex min-w-0 items-center gap-3 text-ink">
+            <Logo size={28} live={active.length > 0} />
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <Badge variant={isFree ? "pill" : "solid"}>{isFree ? "Free" : "Premium"}</Badge>
+              {intervalS !== undefined && (
+                <span className="inline-flex items-center gap-1 text-caption font-medium text-muted">
+                  {isFree
+                    ? <RefreshCw width={12} height={12} strokeWidth={2.2} />
+                    : <Zap width={12} height={12} strokeWidth={2.2} className="text-coral-ink" />}
+                  har {intervalS} s
+                </span>
+              )}
+              {linked && (
+                <span className="inline-flex items-center gap-1 text-caption font-medium text-muted">
+                  <CheckCircle2 width={12} height={12} strokeWidth={2.2} className="text-success" />
+                  eticket
+                </span>
+              )}
             </div>
           </div>
-          {otpSecs !== null && (
-            <Ticker value={mmss(otpSecs)} className="relative text-[24px] font-semibold" />
-          )}
-          <ChevronRight className="relative shrink-0 opacity-90" width={20} height={20} strokeWidth={2.4} />
-        </PressCard>
-      )}
+          <AvatarButton url={tgUser?.photo_url} name={name} onClick={go("/settings")} />
+        </header>
 
-      {/* A trip today or tomorrow outranks the counters. */}
-      {trip && (
-        <PressCard material="none" onClick={go("/tickets")} className="rounded-[26px]" aria-label="Safar chiptasi">
-          <TicketShell
-            tone="tint"
-            top={
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-caption font-semibold">
-                  <span className="inline-flex items-center gap-1.5 uppercase tracking-[0.06em] text-coral-ink">
-                    <TrainFront width={15} height={15} strokeWidth={2.2} />
-                    {trip.today ? "Bugun safar" : "Ertaga safar"}
-                  </span>
-                  <span className="tnum text-muted">{trip.leg.train_number}</span>
+        {/* Awaiting-OTP banner — the one time-critical element, always first. */}
+        <Collapse open={!!awaitingOtp}>
+          {shownOtp && (
+            <div className="pt-6">
+              <PressCard
+                material="none"
+                onClick={() => navigate(`/order/${shownOtp.id}`)}
+                className="glass-prominent relative flex items-center gap-3.5 overflow-hidden rounded-[26px] p-4"
+                aria-label="SMS kodni kiriting"
+              >
+                <Specular />
+                <CountdownRing secs={otpSecs} />
+                <div className="relative min-w-0 flex-1">
+                  <div className="text-title-md">SMS kodni kiriting</div>
+                  <div className="truncate text-caption text-on-primary/85">
+                    {shownOtp.train_number} · Vagon {shownOtp.car_number} · Joy{" "}
+                    {shownOtp.seat_numbers?.length ? shownOtp.seat_numbers.join(", ") : shownOtp.seat_number}
+                  </div>
                 </div>
-                <TripTimes
-                  tone="coral"
-                  moving
-                  dep={{ station: trip.leg.dep_station, time: trainTime(trip.leg.dep_at.replace(" ", "T")) }}
-                  arr={{
-                    station: trip.leg.arr_station,
-                    time: trainTime(trip.leg.arr_at.replace(" ", "T")),
-                    plus: tripDur,
-                  }}
+                {otpSecs !== null && (
+                  <Ticker value={mmss(otpSecs)} className="relative text-[24px] font-semibold" />
+                )}
+                <ChevronRight className="relative shrink-0 opacity-90" width={20} height={20} strokeWidth={2.4} />
+              </PressCard>
+            </div>
+          )}
+        </Collapse>
+
+        {/* A trip today or tomorrow outranks the counters. */}
+        <Collapse open={!!trip}>
+          {shownTrip && (
+            <div className="pt-6">
+              <PressCard material="none" onClick={go("/tickets")} className="rounded-[26px]" aria-label="Safar chiptasi">
+                <TicketShell
+                  tone="tint"
+                  top={
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-caption font-semibold">
+                        <span className="inline-flex items-center gap-1.5 uppercase tracking-[0.06em] text-coral-ink">
+                          <TrainFront width={15} height={15} strokeWidth={2.2} />
+                          {shownTrip.today ? "Bugun safar" : "Ertaga safar"}
+                        </span>
+                        <span className="tnum text-muted">{shownTrip.leg.train_number}</span>
+                      </div>
+                      <TripTimes
+                        tone="coral"
+                        moving
+                        dep={{ station: shownTrip.leg.dep_station, time: trainTime(shownTrip.leg.dep_at.replace(" ", "T")) }}
+                        arr={{
+                          station: shownTrip.leg.arr_station,
+                          time: trainTime(shownTrip.leg.arr_at.replace(" ", "T")),
+                          plus: tripDur,
+                        }}
+                      />
+                    </div>
+                  }
+                  bottom={
+                    <div className="flex items-center justify-between text-body-sm text-body">
+                      <span>Vagon {shownTrip.leg.car_number} · joy {shownTrip.leg.seats.join(", ") || "—"}</span>
+                      <span className="inline-flex items-center gap-0.5 font-semibold text-coral-ink">
+                        Chipta <ChevronRight width={16} height={16} strokeWidth={2.6} />
+                      </span>
+                    </div>
+                  }
                 />
-              </div>
-            }
-            bottom={
-              <div className="flex items-center justify-between text-body-sm text-body">
-                <span>Vagon {trip.leg.car_number} · joy {trip.leg.seats.join(", ") || "—"}</span>
-                <span className="inline-flex items-center gap-0.5 font-semibold text-coral-ink">
-                  Chipta <ChevronRight width={16} height={16} strokeWidth={2.6} />
-                </span>
-              </div>
-            }
-          />
-        </PressCard>
-      )}
+              </PressCard>
+            </div>
+          )}
+        </Collapse>
+      </div>
 
       {/* Hero — what the app is doing right now, and the one primary action. */}
-      <section className="glass relative overflow-hidden rounded-[30px] p-5">
+      <section className="glass glass-flat relative overflow-hidden rounded-[30px] p-5">
         <Specular />
         <div className="relative">
           <div className="flex items-start justify-between gap-4">

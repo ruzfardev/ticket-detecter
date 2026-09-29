@@ -30,6 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useHaptic } from "@/hooks/useHaptic";
 import { formatMonth, shiftMonth, tashkentMonth } from "@/lib/dates";
 import { spring } from "@/lib/motion";
+import { useEntering } from "@/lib/navEntry";
 import { dayOffset, trainTime } from "@/lib/traintime";
 
 /**
@@ -218,14 +219,16 @@ function TabCount({ n }: { n: number }) {
   return <span className="tnum opacity-60">{n}</span>;
 }
 
-/** Tickets arrive one after another, a beat apart. */
+/** Tickets arrive one after another, a beat apart — when the screen is pushed
+ *  or launched; from a tab switch they are simply there. */
 function Cards({ tickets, onOpen }: { tickets: PurchasedTicket[]; onOpen: (t: PurchasedTicket) => void }) {
+  const entering = useEntering();
   return (
     <div className="space-y-3.5">
       {tickets.map((t, i) => (
         <m.div
           key={t.order_item_id}
-          initial={{ opacity: 0, y: 14 }}
+          initial={entering ? { opacity: 0, y: 14 } : false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ ...spring.smooth, delay: Math.min(i, 6) * 0.05 }}
         >

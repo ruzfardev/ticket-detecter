@@ -10,19 +10,22 @@ import { spring } from "@/lib/motion";
  * Radix). Same look as <Segmented>: a glass lens that slides between triggers.
  * The Root tracks the active value itself so triggers know whether to draw it.
  */
-const TabsCtx = React.createContext<{ value?: string; id: string }>({ id: "" });
+const TabsCtx = React.createContext<{ value?: string; id: string; switched: boolean }>({ id: "", switched: false });
 
 const Tabs = ({
   value, defaultValue, onValueChange, ...props
 }: React.ComponentPropsWithoutRef<typeof TabsPrimitive.Root>) => {
   const [inner, setInner] = React.useState(defaultValue);
+  // A panel animates in only after the user switched tabs — never as part of
+  // the screen arriving, which already has its own entrance (or none).
+  const [switched, setSwitched] = React.useState(false);
   const current = value ?? inner;
   const id = React.useId();
   return (
-    <TabsCtx.Provider value={{ value: current, id }}>
+    <TabsCtx.Provider value={{ value: current, id, switched }}>
       <TabsPrimitive.Root
         value={current}
-        onValueChange={v => { setInner(v); onValueChange?.(v); }}
+        onValueChange={v => { setInner(v); setSwitched(true); onValueChange?.(v); }}
         {...props}
       />
     </TabsCtx.Provider>
@@ -81,13 +84,20 @@ TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
 const TabsContent = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content>
->(({ className, children, ...props }, ref) => (
-  <TabsPrimitive.Content ref={ref} className={cn("focus-visible:outline-none", className)} {...props}>
-    <m.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={spring.smooth}>
-      {children}
-    </m.div>
-  </TabsPrimitive.Content>
-));
+>(({ className, children, ...props }, ref) => {
+  const { switched } = React.useContext(TabsCtx);
+  return (
+    <TabsPrimitive.Content ref={ref} className={cn("focus-visible:outline-none", className)} {...props}>
+      <m.div
+        initial={switched ? { opacity: 0, y: 10 } : false}
+        animate={{ opacity: 1, y: 0 }}
+        transition={spring.smooth}
+      >
+        {children}
+      </m.div>
+    </TabsPrimitive.Content>
+  );
+});
 TabsContent.displayName = TabsPrimitive.Content.displayName;
 
 export { Tabs, TabsList, TabsTrigger, TabsContent };

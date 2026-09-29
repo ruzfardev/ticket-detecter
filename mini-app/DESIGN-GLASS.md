@@ -18,6 +18,16 @@ it as glass. The ticket (the punched hole of the logo) is the recurring shape.
 Apple's rule, and also what keeps blur cheap. If you are about to add
 `glass` to a card that lives in a list: don't, use `surface`.
 
+**Blur budget.** A backdrop blur is a GPU pass over the pane's whole area, redone
+on every frame anything moves, and it only shows where *content passes under
+it*. So: real blur (`.glass`, `.glass-bar`, `.glass-sheet`) for the tab bar, top
+bar, sticky action, sheets, toasts and small controls; **any pane larger than
+~10 % of the screen that sits in the page flow (hero cards) takes
+`glass glass-flat`** — identical material, no backdrop pass. Nothing but the
+ambient gradient is ever behind such a card, which blur cannot change: measured
+on the Home hero, flat vs blurred differs by 0.6 % RMSE (23 of 514 800 pixels
+visibly), and it took blurred area on Home from 36 % of the screen to 7 %.
+
 ## Tokens
 
 All colours are `H S% L%` triplets exposed as Tailwind colours (opacity
@@ -131,8 +141,21 @@ or a destructive `ListRow`, always behind `showConfirm` (Telegram native).
 
 - Springs, not curves: `spring.snappy | smooth | gentle | bouncy | lens`
   from `lib/motion.ts`. `whileTap` scale 0.96–0.97 with `spring.bouncy`.
-- Entrances: `Screen` staggers blocks; lists inside tabs use a 50 ms stagger
-  capped at 6. Animate **transform and opacity only**.
+- **A tap shows its result at once.** iOS switches tabs and reveals the
+  previous screen with no entrance, so `PageTransition` publishes how a screen
+  arrived (`useNavEntry()`: `launch | push | pop | tab`). Only `launch` and
+  `push` may stagger blocks in (`Screen` does; use `useEntering()` for a
+  screen's own staggers). A page or block that starts at opacity 0 is a blank
+  screen for the first 100 ms after a tap — measured, and it reads as lag no
+  matter how fast the frames are. Budget: first block fully there in ~180 ms,
+  the last in ~350 ms; vertical travel only (no scale on text).
+- Animate **transform and opacity only**, and never the whole page's opacity.
+- **Content that arrives after first paint** (an SMS-code banner, tomorrow's
+  ticket: eticket answers in seconds) goes in a `<Collapse open={…}>` drawer so
+  it opens on an eased curve instead of shoving the page down in one frame.
+  Keep it filled while it closes with `useLast()`.
+- The launch screen warms Home's data (`api/warm.ts`) for at most 1.2 s, so
+  Home opens on content instead of skeleton → content → late card.
 - **Never put `opacity < 1`, `filter`, or `mask` on an ancestor of a glass
   pane** — it becomes a "backdrop root" and the glass goes blind until the
   animation ends. Animate the glass element itself, or its contents.
@@ -185,7 +208,14 @@ launch.
 
 `<html data-fx="full|lite|off">` (Settings → Shisha effekti; auto by default;
 the OS "reduce transparency" forces `off`). Layout never changes between
-tiers, only material. `lite` = smaller blur, still orbs; `off` = solid panes.
+tiers, only material. `lite` = smaller blur, and the pass kept only on the
+chrome (tab bar, bars, sheets, toasts), no orb drift; `off` = solid panes.
+
+Cost model (measured, software-GL Chromium; compare ratios, not absolutes):
+with nothing animating the compositor idles at ~3 % — as soon as *anything*
+animates forever (the ambient drift, a live-dot halo) it redraws 60×/s, and
+every frame redoes each backdrop blur under the changed area. So: keep
+infinite animations few and small, and keep blur to the chrome.
 
 ## Testing notes
 

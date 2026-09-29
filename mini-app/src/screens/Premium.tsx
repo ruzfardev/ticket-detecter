@@ -152,7 +152,7 @@ export function Premium() {
   return (
     <Screen tabbed padded nav navTitle="Premium">
       {/* Hero — the one glass pane on the page, lit like dawn through a window. */}
-      <section className="glass relative overflow-hidden rounded-[30px] p-5 pb-6">
+      <section className="glass glass-flat relative overflow-hidden rounded-[30px] p-5 pb-6">
         <Specular />
         <span
           aria-hidden

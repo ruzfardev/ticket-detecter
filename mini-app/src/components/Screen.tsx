@@ -1,13 +1,14 @@
 import {
-  Children, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode,
+  Children, useEffect, useLayoutEffect, useRef, type ReactNode,
 } from "react";
 import { useLocation } from "react-router-dom";
 import * as m from "motion/react-m";
-import { useScroll, useTransform } from "motion/react";
+import { useMotionValue, useScroll, useTransform } from "motion/react";
 import { ChevronLeft } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { reveal } from "@/lib/motion";
+import { useNavEntry } from "@/lib/navEntry";
 import { isTabRoute } from "@/lib/routes";
 import { inTelegram } from "@/lib/platform";
 import { useSmartBack } from "@/hooks/useBackButton";
@@ -35,7 +36,8 @@ type Props = {
   actions?: ReactNode;
   /** Draw the top bar at all. Defaults to yes when there is a title, actions or wizard. */
   nav?: boolean;
-  /** Stagger the blocks in on arrival (default). */
+  /** Stagger the blocks in when the screen is pushed or launched (default).
+   *  Tab switches and going back never stagger: a tap shows its result at once. */
   reveal?: boolean;
   className?: string;
 };
@@ -64,9 +66,11 @@ export function Screen({
 }: Props) {
   const location = useLocation();
   const tabRoot = isTabRoute(location.pathname);
+  const entry = useNavEntry();
   const titleRef = useRef<HTMLHeadingElement>(null);
   const mainRef = useRef<HTMLElement>(null);
-  const [threshold, setThreshold] = useState(0);
+  // A motion value, not state: measuring must not re-render the whole screen.
+  const threshold = useMotionValue(0);
   const { scrollY } = useScroll();
 
   const showNav = nav ?? !!(title || actions || wizard);
@@ -88,24 +92,28 @@ export function Screen({
   // Where the large title has scrolled fully under the bar.
   useLayoutEffect(() => {
     const el = titleRef.current;
-    if (!el) { setThreshold(0); return; }
+    if (!el) { threshold.set(0); return; }
     const measure = () => {
       const r = el.getBoundingClientRect();
-      setThreshold(Math.max(0, r.bottom + window.scrollY - 52 - 8));
+      threshold.set(Math.max(0, r.bottom + window.scrollY - 52 - 8));
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [title]);
+  }, [title, threshold]);
 
-  const range = useMemo(
-    () => (title ? [Math.max(0, threshold - 26), Math.max(1, threshold)] : [0, 22]),
-    [title, threshold],
-  );
-  const progress = useTransform(scrollY, range, [0, 1], { clamp: true });
+  // 0 → 1 across the last 26 px of the large title's scroll (22 px when there
+  // is no large title).
+  const hasTitle = !!title;
+  const progress = useTransform([scrollY, threshold], ([y, th]: number[]) => {
+    const start = hasTitle ? Math.max(0, th - 26) : 0;
+    const end = hasTitle ? Math.max(1, th) : 22;
+    return Math.min(1, Math.max(0, (y - start) / (end - start)));
+  });
 
-  const blocks = stagger && !center ? Children.toArray(children) : null;
+  const animateIn = stagger && !center && (entry === "launch" || entry === "push");
+  const blocks = animateIn ? Children.toArray(children) : null;
   const longTitle = typeof title === "string" && title.length > 16;
 
   return (

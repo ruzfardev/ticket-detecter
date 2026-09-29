@@ -170,6 +170,17 @@
     inset 0 0 0 0.5px var(--g-edge);
 }
 
+/* In-page panes. Nothing ever slides under a hero card but the ambient
+   gradient, which blur cannot change (0.6 % RMSE measured on the Home hero;
+   23 of 514 800 pixels visibly different) — yet a backdrop pass over 28 % of
+   the screen, re-run on every frame anything moves, was the most expensive
+   thing on Home. Same material, minus the pass. Real blur stays where content
+   really passes underneath: the bars, the tab bar, sheets and toasts. */
+.glass.glass-flat {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 /* ── Tinted & prominent glass ─────────────────────────────────────────── */
 
 /* Tinted: the pane picks up a colour (`--tint` is an "H S% L%" triplet). */
@@ -307,8 +318,12 @@
   inset: 0;
   border-radius: inherit;
   border: 1.5px solid hsl(var(--coral-bright));
-  animation: halo 1.9s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+  /* Decorative: breathes four times, then rests. Anything that runs forever keeps
+     the compositor drawing 60 frames a second (and re-blurring what is under
+     it), so only a dot that is asking for you — `--urgent` — is allowed to loop. */
+  animation: halo 1.9s cubic-bezier(0.2, 0.6, 0.3, 1) 4;
 }
+.live-dot--urgent::after { animation-iteration-count: infinite; }
 .live-dot--still { box-shadow: none; }
 .live-dot--still::after { display: none; }
 
@@ -474,6 +489,12 @@ html[data-fx="lite"] {
   --blur-sheet: 18px;
   --sat: 1.3;
 }
+/* …and the pass itself only where content really slides underneath (bars,
+   sheets, toasts). Buttons, chips and cards keep their fill and rim. */
+html[data-fx="lite"] .glass:not(nav):not([data-sonner-toast]) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
 html[data-fx="lite"] .glass::after,
 html[data-fx="lite"] .specular { display: none; }
 html[data-fx="lite"] .ambient__orb { animation: none; }
@@ -532,4 +553,34 @@ html[data-fx="off"] .ambient::after { display: none; }
     hsl(var(--canvas) / 0.28) 74%,
     hsl(var(--canvas) / 0) 100%
   );
+}
+
+/* ── Late arrivals ────────────────────────────────────────────────────────
+   A block that shows up after first paint (an SMS-code banner, tomorrow's
+   ticket) opens like a drawer instead of shoving the page down in one frame.
+   Rows animate 0fr → 1fr, so no height is measured in script. */
+.collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.42s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.collapse[data-open="true"] { grid-template-rows: 1fr; }
+.collapse__in {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  /* Closed content is unreachable (no focus, no screen reader) — but only once
+     the drawer has actually shut, so a closing block stays visible on its way out. */
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0s 0.42s;
+}
+.collapse[data-open="true"] > .collapse__in {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.28s ease 0.08s, visibility 0s;
+}
+/* Once fully open nothing is clipped, so shadows and rims keep their full reach. */
+.collapse__in[data-settled="true"] { overflow: visible; }
+@media (prefers-reduced-motion: reduce) {
+  .collapse, .collapse__in { transition: none; }
 }

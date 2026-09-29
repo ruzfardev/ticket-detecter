@@ -1,9 +1,10 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { RotateCw } from "lucide-react";
 
 import { authTg } from "@/api/client";
+import { warmHome } from "@/api/warm";
 import { Screen } from "@/components/Screen";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
@@ -22,12 +23,21 @@ import { cn } from "@/lib/utils";
  *   - 1200 ms+  a 3 px rail appears
  * A sub-second auth therefore shows no loading motion at all.
  */
+/** The longest the launch screen waits on Home's data. */
+const WARM_CAP_MS = 1200;
+
 export function Welcome() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const started = useRef(false);
   const { mutate, isPending, error } = useMutation({
     mutationFn: authTg,
-    onSuccess: () => navigate("/home", { replace: true }),
+    // Hold the launch screen for Home's data — but only briefly: on a slow
+    // network Home takes over with its skeleton, as before.
+    onSuccess: async me => {
+      await Promise.race([warmHome(qc, me), new Promise(r => setTimeout(r, WARM_CAP_MS))]);
+      navigate("/home", { replace: true });
+    },
   });
 
   useEffect(() => {
@@ -63,7 +73,7 @@ export function Welcome() {
               error && "glass-tint [--tint:var(--error)]",
             )}
           >
-            <Logo size={64} live={isPending && !error} tone={error ? "error" : "primary"} />
+            <Logo size={64} live={isPending && !error} loop tone={error ? "error" : "primary"} />
           </div>
         </div>
 

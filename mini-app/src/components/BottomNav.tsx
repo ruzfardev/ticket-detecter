@@ -172,7 +172,7 @@ export function BottomNav() {
                         aria-label={needsYou ? "SMS kod kerak" : "Buyurtma jarayonda"}
                         className={cn(
                           "live-dot absolute -right-1 -top-0.5 !size-[9px] ring-2 ring-canvas/80",
-                          !needsYou && "live-dot--still opacity-70",
+                          needsYou ? "live-dot--urgent" : "live-dot--still opacity-70",
                         )}
                       />
                     )}

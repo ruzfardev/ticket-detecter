@@ -32,7 +32,9 @@
 .splash-rail > i { display: block; height: 100%; width: 40%; border-radius: 9999px; background: hsl(var(--coral-bright));
                    animation: splash-run 1.2s ease-in-out infinite alternate; }
 .logo-halo   { transform-box: fill-box; transform-origin: center;
-               animation: logo-halo 1.6s cubic-bezier(0.2, 0.6, 0.3, 1) 600ms infinite; }
+               animation: logo-halo 1.6s cubic-bezier(0.2, 0.6, 0.3, 1) 600ms 4; }
+/* "Working" (the launch screen while auth is pending) loops until it is done. */
+.logo-halo--loop { animation-iteration-count: infinite; }
 
 /* A calm loading ring: a conic arc that spins. */
 .ring-spin { animation: spin 0.9s linear infinite; }
