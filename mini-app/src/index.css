@@ -1,333 +1,86 @@
 @import "@fontsource/inter/400.css";
 @import "@fontsource/inter/500.css";
 @import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
 @import "@fontsource-variable/jetbrains-mono";
+
+@import "./styles/tokens.css";
+@import "./styles/glass.css";
+@import "./styles/motion.css";
+@import "./styles/calendar.css";
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  /* ── Palette system ──────────────────────────────────────────────────
-     Three palettes, each with a light (base) and dark (.dark) variant:
-       :root / .dark                      — "eticket" (default) — colors
-         lifted from eticket.railway.uz's own stylesheet (#01c3a7 turquoise
-         CTAs, #187cee action blue, #212529 text, #f0f2f7/#dde0ed blocks).
-       [data-theme="cream"]               — the original warm cream/coral.
-       [data-theme="emerald"]             — deep emerald green.
-     `--coral` is the historical name of the *primary* token (buttons,
-     links, selection) — every palette overrides it. */
-  :root {
-    /* Primary — eticket brand turquoise #01c3a7 / #019c86 (doc: CTAs,
-       brand highlights); blue #187cee is the secondary accent */
-    --coral:          171 99% 38%;
-    --coral-active:   171 99% 31%;
-    --coral-disabled: 171 45% 72%;
-
-    /* Surfaces — white + #f0f2f7 blocks, #dde0ed strong (doc palette) */
-    --canvas:               0 0% 100%;
-    --surface-soft:         220 20% 97%;
-    --surface-card:         223 30% 95%;
-    --surface-cream-strong: 229 31% 90%;
-    --surface-dark:         235 21% 20%;
-    --surface-dark-elevated:235 19% 26%;
-    --surface-dark-soft:    235 21% 23%;
-
-    /* Text — #212529 primary, #354356 secondary, #8090a0/#9ea7b8 muted */
-    --ink:         210 11% 15%;
-    --body:        215 24% 27%;
-    --body-strong: 212 16% 20%;
-    --muted:       210 14% 56%;
-    --muted-soft:  219 15% 67%;
-    --hairline:      229 31% 90%;
-    --hairline-soft: 223 30% 95%;
-    --on-primary:   0 0% 100%;
-    --on-dark:      0 0% 100%;
-    --on-dark-soft: 235 10% 75%;
-
-    /* Accents — eticket action blue #187cee + warning yellow #ffc233 */
-    --accent-teal:  212 86% 51%;
-    --accent-amber: 42 100% 50%;
-
-    /* Semantic — doc green #28a745 (primary is teal, so success = green) */
-    --success: 134 61% 41%;
-    --warning: 42 100% 42%;
-    --error:     0 53% 51%;
-
-    /* Layout */
-    --tabbar-h: 64px;
-  }
-
-  /* eticket — dark: navy family (#292b3f hue), brightened turquoise */
-  .dark {
-    color-scheme: dark;
-    --coral:          171 85% 45%;
-    --coral-active:   171 99% 38%;
-    --coral-disabled: 220 15% 30%;
-
-    --canvas:               235 21% 11%;
-    --surface-soft:         235 19% 13%;
-    --surface-card:         235 17% 17%;
-    --surface-cream-strong: 235 15% 21%;
-    --surface-dark:         235 17% 19%;
-    --surface-dark-elevated:235 15% 24%;
-    --surface-dark-soft:    235 19% 15%;
-
-    --ink:         220 30% 95%;
-    --body:        226 15% 80%;
-    --body-strong: 224 20% 89%;
-    --muted:       230 8% 62%;
-    --muted-soft:  232 7% 52%;
-    --hairline:      233 12% 25%;
-    --hairline-soft: 234 14% 20%;
-    --on-primary:   0 0% 100%;
-    --on-dark:      220 30% 95%;
-    --on-dark-soft: 230 8% 65%;
-
-    --accent-teal:  216 87% 61%;
-    --accent-amber: 42 100% 62%;
-
-    --success: 134 50% 55%;
-    --warning: 42 100% 55%;
-    --error:     0 89% 64%;
-  }
-
-  /* ── "cream" — the original Anthropic-warm palette ─────────────────── */
-  [data-theme="cream"] {
-    --coral:          16 50% 58%;
-    --coral-active:   14 46% 45%;
-    --coral-disabled: 30 26% 87%;
-
-    --canvas:               48 33% 97%;
-    --surface-soft:         37 40% 94%;
-    --surface-card:         39 34% 90%;
-    --surface-cream-strong: 38 37% 87%;
-    --surface-dark:         40  7% 9%;
-    --surface-dark-elevated:36  7% 14%;
-    --surface-dark-soft:    45  7% 11%;
-
-    --ink:         60 3% 8%;
-    --body:        60 3% 23%;
-    --body-strong: 60 3% 14%;
-    --muted:       45 4% 38%;
-    --muted-soft:  42 6% 46%;
-    --hairline:      30 26% 87%;
-    --hairline-soft: 35 26% 90%;
-    --on-primary:   0 0% 100%;
-    --on-dark:      48 33% 97%;
-    --on-dark-soft: 42 6% 61%;
-
-    --accent-teal:  170 37% 54%;
-    --accent-amber:  28 77% 63%;
-
-    --success: 132 38% 54%;
-    --warning:  44 80% 46%;
-    --error:     0 51% 52%;
-  }
-
-  .dark[data-theme="cream"] {
-    --coral:          16 60% 64%;
-    --coral-active:   14 55% 55%;
-    --coral-disabled: 30  8% 28%;
-
-    --canvas:               40 7%  9%;
-    --surface-soft:         45 7%  11%;
-    --surface-card:         36 7%  14%;
-    --surface-cream-strong: 36 7%  17%;
-    --surface-dark:         36 7%  16%;
-    --surface-dark-elevated:36 7%  20%;
-    --surface-dark-soft:    45 7%  13%;
-
-    --ink:         48 20% 94%;
-    --body:        45 12% 80%;
-    --body-strong: 45 15% 88%;
-    --muted:       42  8% 62%;
-    --muted-soft:  42  7% 52%;
-    --hairline:      40 6% 22%;
-    --hairline-soft: 40 6% 18%;
-    --on-primary:   0 0% 100%;
-    --on-dark:      48 20% 94%;
-    --on-dark-soft: 42  7% 64%;
-
-    --accent-teal:  170 42% 60%;
-    --accent-amber:  28 80% 68%;
-
-    --success: 132 40% 60%;
-    --warning:  44 78% 58%;
-    --error:     0 62% 64%;
-  }
-
-  /* ── "emerald" — deep green, gold accent (original design) ─────────── */
-  [data-theme="emerald"] {
-    --coral:          160 84% 30%;
-    --coral-active:   161 90% 24%;
-    --coral-disabled: 150 20% 78%;
-
-    --canvas:               140 25% 98%;
-    --surface-soft:         140 22% 95%;
-    --surface-card:         142 18% 91%;
-    --surface-cream-strong: 144 18% 88%;
-    --surface-dark:         168 25% 10%;
-    --surface-dark-elevated:168 20% 15%;
-    --surface-dark-soft:    168 22% 12%;
-
-    --ink:         168 30% 9%;
-    --body:        165 12% 25%;
-    --body-strong: 166 18% 16%;
-    --muted:       160 8% 40%;
-    --muted-soft:  158 7% 48%;
-    --hairline:      145 15% 85%;
-    --hairline-soft: 143 15% 89%;
-    --on-primary:   0 0% 100%;
-    --on-dark:      140 25% 97%;
-    --on-dark-soft: 150 8% 63%;
-
-    --accent-teal:  200 70% 45%;
-    --accent-amber:  38 92% 50%;
-
-    --success: 152 60% 38%;
-    --warning:  40 90% 42%;
-    --error:     4 70% 50%;
-  }
-
-  .dark[data-theme="emerald"] {
-    --coral:          158 60% 46%;
-    --coral-active:   158 65% 38%;
-    --coral-disabled: 160 8% 28%;
-
-    --canvas:               170 15% 8%;
-    --surface-soft:         168 14% 10%;
-    --surface-card:         166 12% 14%;
-    --surface-cream-strong: 165 11% 17%;
-    --surface-dark:         166 12% 16%;
-    --surface-dark-elevated:165 11% 20%;
-    --surface-dark-soft:    168 13% 12%;
-
-    --ink:         150 20% 94%;
-    --body:        150 10% 80%;
-    --body-strong: 150 14% 88%;
-    --muted:       152 7% 62%;
-    --muted-soft:  152 6% 52%;
-    --hairline:      160 10% 22%;
-    --hairline-soft: 162 10% 18%;
-    --on-primary:   0 0% 100%;
-    --on-dark:      150 20% 94%;
-    --on-dark-soft: 152 7% 65%;
-
-    --accent-teal:  190 60% 50%;
-    --accent-amber:  40 95% 60%;
-
-    --success: 152 55% 48%;
-    --warning:  42 90% 55%;
-    --error:     2 80% 62%;
-  }
-
-
-  /* Reset / base */
   * {
     @apply border-border;
     -webkit-tap-highlight-color: transparent;
   }
+
   html {
+    /* The ambient layer paints the real background; this is the flash-free
+       fallback and what shows behind the iOS rubber band. */
     background: hsl(var(--canvas));
-    overscroll-behavior: contain;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    overflow-x: clip;
+    overscroll-behavior-y: none;
   }
   html, body, #root {
-    @apply m-0 p-0 min-h-screen bg-canvas text-ink font-sans;
-    font-feature-settings: "cv11", "ss01";
-    -webkit-font-smoothing: antialiased;
+    @apply m-0 p-0 text-ink font-sans;
+    min-height: 100vh;
+    min-height: 100dvh;
   }
   body {
     @apply text-body-md;
+    background: transparent;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "kern", "calt";
   }
   h1, h2, h3 {
     @apply font-display text-ink;
   }
 
-  /* react-day-picker (v9) — fully themed to the Anthropic palette.
-     Defaults leak browser-blue for today + nav chevrons and render the
-     selected day as a ring; we re-skin everything to coral and fill the
-     selected day. All colors are var-based so dark mode adapts. */
-  .rdp-root {
-    --rdp-accent-color: hsl(var(--coral));
-    --rdp-accent-background-color: hsl(var(--coral) / 0.12);
-    --rdp-background-color: hsl(var(--coral) / 0.12);
-    --rdp-day-height: 42px;
-    --rdp-day-width: 42px;
-    font-family: inherit;
-    padding: 8px 6px 4px;
-    width: 100%;
+  a, button, [role="button"], [role="tab"], [role="switch"], input, select, textarea, label, summary {
+    touch-action: manipulation;
   }
-  .rdp-months, .rdp-month, .rdp-month_grid { width: 100%; max-width: 100%; }
-  .rdp-month_caption { padding: 0 6px 10px; }
-  .rdp-caption_label {
-    font-family: inherit;
-    font-size: 20px;
-    font-weight: 500;
-    color: hsl(var(--ink));
-  }
-  .rdp-weekday {
-    color: hsl(var(--muted));
-    font-size: 12px;
-    font-weight: 500;
-    text-transform: none;
-  }
-  .rdp-day_button {
-    border-radius: 9999px;
-    color: hsl(var(--ink));
-    font-size: 15px;
-  }
-  /* nav chevrons — ink, coral on hover (kill the default blue) */
-  .rdp-chevron { fill: hsl(var(--ink)); }
-  .rdp-button_previous:hover .rdp-chevron,
-  .rdp-button_next:hover .rdp-chevron { fill: hsl(var(--coral)); }
-  /* today — coral text instead of blue */
-  .rdp-today:not(.rdp-selected) .rdp-day_button {
-    color: hsl(var(--coral));
-    font-weight: 600;
-  }
-  /* selected — filled coral circle, white text (not a ring) */
-  .rdp-selected .rdp-day_button {
-    background: hsl(var(--coral)) !important;
-    color: hsl(var(--on-primary)) !important;
-    border: none !important;
-    font-weight: 600;
-  }
-  .rdp-disabled { opacity: 0.3; }
 
-  /* Subtle scrollbar */
+  ::selection {
+    background: hsl(var(--coral-bright) / 0.28);
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--coral-bright));
+    outline-offset: 2px;
+  }
+
+  /* Numbers that change (times, counters, prices) must not jitter. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum", "kern";
+  }
+
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: hsl(var(--hairline)); border-radius: 4px; }
+  @media (pointer: coarse) {
+    ::-webkit-scrollbar { display: none; }
+  }
 }
 
 @layer components {
   .hairline {
     @apply border border-hairline;
   }
-}
 
-/* ── Brand motion (Logo / Welcome / Home) ────────────────────────────
-   Entrance + loading choreography is CSS-only and time-gated by
-   animation-delay, so a sub-second auth shows no loading motion at all.
-   Everything here is transform/opacity only and switches off under
-   prefers-reduced-motion. */
-@keyframes splash-in   { from { opacity: 0; transform: translateY(8px) scale(.96); } to { opacity: 1; transform: none; } }
-@keyframes splash-late { from { opacity: 0; } to { opacity: 1; } }
-@keyframes splash-run  { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
-@keyframes logo-halo   { 0% { transform: scale(1); opacity: .6; } 70%, 100% { transform: scale(2.6); opacity: 0; } }
-@keyframes live-ping   { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
-
-.splash-in   { animation: splash-in 360ms cubic-bezier(.2, .8, .2, 1) both; }
-.splash-rail { width: 56px; height: 2px; border-radius: 9999px; background: hsl(var(--hairline)); overflow: hidden;
-               animation: splash-late 200ms ease-out 1200ms both; }
-.splash-rail > i { display: block; height: 100%; width: 40%; border-radius: 9999px; background: hsl(var(--coral));
-               animation: splash-run 1.2s ease-in-out infinite alternate; }
-.logo-halo   { transform-box: fill-box; transform-origin: center;
-               animation: logo-halo 1.6s cubic-bezier(.2, .6, .3, 1) 600ms infinite; }
-.live-dot    { animation: live-ping 1.6s ease-in-out infinite; }
-
-@media (prefers-reduced-motion: reduce) {
-  .splash-in, .splash-rail, .splash-rail > i, .logo-halo, .live-dot { animation: none !important; }
-  .splash-in { opacity: 1; transform: none; }
-  .logo-halo { opacity: 0; }
+  /* Page column: full width on phones, a centred column on tablets/desktop. */
+  .page-frame {
+    width: 100%;
+    max-width: 560px;
+    margin-inline: auto;
+    padding-inline: var(--page-x);
+  }
 }

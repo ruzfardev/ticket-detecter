@@ -1,0 +1,274 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Chiptachi Glass — design tokens
+
+   Three palettes, each with a light (base) and a dark (.dark) variant:
+     :root                      "cream"   — Chiptachi coral on warm cream (default)
+     [data-theme="eticket"]     "eticket" — eticket.railway.uz turquoise
+     [data-theme="emerald"]     "emerald" — deep emerald + gold
+
+   Every colour is an "H S% L%" triplet so Tailwind opacity modifiers work.
+   `--coral*` is the historical name of the palette's PRIMARY, whatever the hue.
+
+   Contrast is checked, not eyeballed: every text/fill pair below clears WCAG AA
+   (4.5:1) on both the canvas and a translucent card — 78 pairs across the six
+   variants. `--coral` is the fill that carries white text; `--coral-ink` is the
+   accent for text on the canvas; `--coral-bright` is luminous and decorative
+   only (glows, dots, gradients), never text.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Type. SF Pro on Apple devices via the system stack, Inter elsewhere. */
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --tk: 1; /* tracking scale: 0 on Apple platforms, where SF tracks itself */
+
+  /* Layout */
+  --page-x: 20px;
+  --nav-h: 52px;
+  --tabbar-h: 66px;
+  --tabbar-gap: 14px;
+  --sheet-r: 38px;
+  --safe-t: max(env(safe-area-inset-top, 0px), var(--tg-content-safe-area-inset-top, 0px));
+  --safe-b: max(env(safe-area-inset-bottom, 0px), var(--tg-content-safe-area-inset-bottom, 0px));
+
+  /* ── cream · light ─────────────────────────────────────────────────── */
+  --coral:          14 55% 46%;
+  --coral-active:   13 58% 38%;
+  --coral-bright:   15 82% 61%;
+  --coral-ink:      13 58% 39%;
+  --coral-disabled: 20 28% 78%;
+
+  --canvas:   38 36% 95%;
+  --canvas-2: 18 56% 91%;
+
+  --surface-soft:   36 30% 97%;  --surface-soft-a:   0.70;
+  --surface-card:    0  0% 100%; --surface-card-a:   0.78;
+  --surface-strong: 32 30% 93%;  --surface-strong-a: 0.90;
+  --surface-dark:          20 14% 12%;
+  --surface-dark-elevated: 20 12% 17%;
+  --surface-dark-soft:     20 12% 14%;
+
+  --ink:         20 14% 10%;
+  --body:        24  8% 26%;
+  --body-strong: 22 10% 16%;
+  --muted:       26  7% 40%;
+  --muted-soft:  28  6% 52%;
+  --hairline:      30 18% 80%;
+  --hairline-soft: 30 20% 88%;
+  --on-primary:   0  0% 100%;
+  --on-dark:     38 36% 96%;
+  --on-dark-soft:28 10% 70%;
+
+  --accent-teal:  170 42% 34%;
+  --accent-amber:  30 92% 38%;
+  --teal-bright:  168 48% 48%;
+  --amber-bright:  36 96% 55%;
+
+  --success: 142 45% 30%;
+  --warning:  38 92% 40%;
+  --error:     4 62% 46%;
+
+  --shadow: 20 40% 16%;
+
+  /* Ambient light behind the glass: three soft colour washes */
+  --orb-1: 15 86% 62%;   --orb-a1: 0.38;
+  --orb-2: 36 96% 60%;   --orb-a2: 0.34;
+  --orb-3: 168 52% 55%;  --orb-a3: 0.24;
+}
+
+/* ── cream · dark ("night train") ─────────────────────────────────────── */
+.dark {
+  color-scheme: dark;
+
+  --coral:          14 62% 46%;
+  --coral-active:   14 60% 40%;
+  --coral-bright:   15 88% 62%;
+  --coral-ink:      15 85% 70%;
+  --coral-disabled: 20 10% 30%;
+
+  --canvas:   20 12% 6%;
+  --canvas-2: 16 30% 10%;
+
+  --surface-soft:   20 10% 11%;  --surface-soft-a:   0.60;
+  --surface-card:   20 10% 17%;  --surface-card-a:   0.72;
+  --surface-strong: 20 10% 22%;  --surface-strong-a: 0.85;
+  --surface-dark:          20 14% 10%;
+  --surface-dark-elevated: 20 12% 16%;
+  --surface-dark-soft:     20 12% 12%;
+
+  --ink:         30 25% 95%;
+  --body:        28 12% 82%;
+  --body-strong: 30 18% 90%;
+  --muted:       28  8% 68%;
+  --muted-soft:  28  6% 52%;
+  --hairline:      24 10% 24%;
+  --hairline-soft: 24 10% 18%;
+  --on-primary:   0  0% 100%;
+  --on-dark:     30 25% 95%;
+  --on-dark-soft:28  8% 68%;
+
+  --accent-teal:  170 45% 62%;
+  --accent-amber:  36 90% 64%;
+  --teal-bright:  168 55% 50%;
+  --amber-bright:  36 96% 58%;
+
+  --success: 142 45% 60%;
+  --warning:  42 90% 60%;
+  --error:     4 80% 68%;
+
+  --shadow: 0 0% 0%;
+
+  --orb-1: 15 90% 58%;   --orb-a1: 0.30;
+  --orb-2: 36 96% 55%;   --orb-a2: 0.20;
+  --orb-3: 168 55% 45%;  --orb-a3: 0.16;
+}
+
+/* ── eticket · light ──────────────────────────────────────────────────── */
+[data-theme="eticket"]:not(.dark) {
+  --coral:          173 100% 25%;
+  --coral-active:   173 100% 20%;
+  --coral-bright:   171  90% 42%;
+  --coral-ink:      173 100% 22%;
+  --coral-disabled: 200  20% 80%;
+
+  --canvas:   205 40% 96%;
+  --canvas-2: 195 50% 92%;
+
+  --surface-soft:   210 30% 98%;
+  --surface-strong: 214 30% 92%;
+
+  --ink:         215 25% 12%;
+  --body:        215 16% 28%;
+  --body-strong: 215 20% 18%;
+  --muted:       215 10% 40%;
+  --muted-soft:  215  8% 52%;
+  --hairline:      214 22% 82%;
+  --hairline-soft: 214 24% 90%;
+  --on-dark:     205 40% 97%;
+
+  --accent-teal:  212 80% 42%;
+  --accent-amber:  36 96% 36%;
+  --teal-bright:  212 90% 58%;
+  --amber-bright:  42 100% 54%;
+
+  --shadow: 215 40% 16%;
+
+  --orb-1: 171 90% 48%;  --orb-a1: 0.34;
+  --orb-2: 212 90% 62%;  --orb-a2: 0.28;
+  --orb-3: 42 100% 60%;  --orb-a3: 0.20;
+}
+
+/* ── eticket · dark ───────────────────────────────────────────────────── */
+.dark[data-theme="eticket"] {
+  --coral:          172 88% 46%;
+  --coral-active:   172 88% 40%;
+  --coral-bright:   171 90% 52%;
+  --coral-ink:      171 85% 58%;
+  --coral-disabled: 220 10% 30%;
+  --on-primary:     180 70% 6%; /* dark ink on the bright turquoise */
+
+  --canvas:   232 24% 8%;
+  --canvas-2: 226 32% 11%;
+
+  --surface-soft:   232 18% 12%;
+  --surface-card:   232 16% 18%;
+  --surface-strong: 232 14% 23%;
+  --surface-dark:          232 20% 10%;
+  --surface-dark-elevated: 232 16% 17%;
+  --surface-dark-soft:     232 18% 13%;
+
+  --ink:         220 30% 96%;
+  --body:        222 15% 82%;
+  --body-strong: 220 22% 90%;
+  --muted:       224 10% 68%;
+  --muted-soft:  224  8% 52%;
+  --hairline:      232 12% 26%;
+  --hairline-soft: 232 14% 20%;
+  --on-dark:     220 30% 96%;
+  --on-dark-soft:224 10% 68%;
+
+  --accent-teal:  216 87% 68%;
+  --accent-amber:  42 100% 64%;
+  --teal-bright:  214 90% 60%;
+  --amber-bright:  42 100% 60%;
+
+  --orb-1: 171 90% 45%;  --orb-a1: 0.26;
+  --orb-2: 216 90% 60%;  --orb-a2: 0.24;
+  --orb-3: 42 100% 55%;  --orb-a3: 0.12;
+}
+
+/* ── emerald · light ──────────────────────────────────────────────────── */
+[data-theme="emerald"]:not(.dark) {
+  --coral:          160 88% 26%;
+  --coral-active:   161 90% 20%;
+  --coral-bright:   158 70% 42%;
+  --coral-ink:      161 90% 22%;
+  --coral-disabled: 150 15% 78%;
+
+  --canvas:   140 28% 96%;
+  --canvas-2: 150 34% 91%;
+
+  --surface-soft:   140 22% 98%;
+  --surface-strong: 144 20% 91%;
+
+  --ink:         168 30% 9%;
+  --body:        165 12% 26%;
+  --body-strong: 166 18% 16%;
+  --muted:       160  8% 38%;
+  --muted-soft:  158  7% 50%;
+  --hairline:      145 15% 80%;
+  --hairline-soft: 143 16% 88%;
+  --on-dark:     140 25% 97%;
+
+  --accent-teal:  200 70% 38%;
+  --accent-amber:  34 92% 36%;
+  --teal-bright:  200 75% 55%;
+  --amber-bright:  38 95% 55%;
+
+  --shadow: 168 40% 14%;
+
+  --orb-1: 158 72% 42%;  --orb-a1: 0.32;
+  --orb-2: 40 94% 58%;   --orb-a2: 0.26;
+  --orb-3: 200 78% 60%;  --orb-a3: 0.20;
+}
+
+/* ── emerald · dark ───────────────────────────────────────────────────── */
+.dark[data-theme="emerald"] {
+  --coral:          158 66% 30%;
+  --coral-active:   158 66% 25%;
+  --coral-bright:   158 66% 44%;
+  --coral-ink:      158 60% 58%;
+  --coral-disabled: 160 8% 28%;
+
+  --canvas:   170 18% 7%;
+  --canvas-2: 166 26% 10%;
+
+  --surface-soft:   168 12% 10%;
+  --surface-card:   168 12% 16%;
+  --surface-strong: 168 11% 21%;
+  --surface-dark:          168 14% 9%;
+  --surface-dark-elevated: 168 12% 15%;
+  --surface-dark-soft:     168 13% 11%;
+
+  --ink:         150 20% 95%;
+  --body:        150 10% 82%;
+  --body-strong: 150 14% 90%;
+  --muted:       152  8% 68%;
+  --muted-soft:  152  6% 52%;
+  --hairline:      160 10% 24%;
+  --hairline-soft: 162 10% 19%;
+  --on-dark:     150 20% 95%;
+  --on-dark-soft:152  8% 68%;
+
+  --accent-teal:  190 60% 62%;
+  --accent-amber:  40 95% 62%;
+  --teal-bright:  190 65% 50%;
+  --amber-bright:  40 95% 58%;
+
+  --orb-1: 158 70% 40%;  --orb-a1: 0.26;
+  --orb-2: 40 95% 55%;   --orb-a2: 0.16;
+  --orb-3: 195 70% 50%;  --orb-a3: 0.16;
+}
+
+/* Apple platforms: SF applies its own optical tracking. */
+html.apple { --tk: 0; }

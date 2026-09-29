@@ -1,63 +1,155 @@
-import { ReactNode } from "react";
+import {
+  Children, useLayoutEffect, useMemo, useRef, useState, type ReactNode,
+} from "react";
 import { useLocation } from "react-router-dom";
+import * as m from "motion/react-m";
+import { useScroll, useTransform } from "motion/react";
+import { ChevronLeft } from "lucide-react";
+
 import { cn } from "@/lib/utils";
+import { reveal } from "@/lib/motion";
+import { isTabRoute } from "@/lib/routes";
+import { inTelegram } from "@/lib/platform";
+import { useSmartBack } from "@/hooks/useBackButton";
+import { IconButton } from "@/components/ui/icon-button";
+import { NavBar } from "./NavBar";
 import { WizardSteps } from "./WizardSteps";
 
 type Props = {
   children: ReactNode;
-  /** Reserve bottom space for the tabbar. */
+  /** Reserve bottom space for the floating tab bar. */
   tabbed?: boolean;
-  /** Center contents vertically (use on Welcome / StatusView). */
+  /** Center contents vertically (Welcome / StatusView). */
   center?: boolean;
   /** Add the standard horizontal page padding. */
   padded?: boolean;
-  /** Show the wizard step indicator (auto-detects from current path). */
+  /** Show the wizard step indicator in the top bar. */
   wizard?: boolean;
-  /** Optional title shown above content as a serif display heading. */
+  /** Large title (34pt), which collapses into the top bar as you scroll. */
   title?: ReactNode;
-  /** Optional subtitle paired with the title. */
+  /** Secondary line under the large title. */
   subtitle?: ReactNode;
+  /** Small title for the top bar when `title` is not a plain string. */
+  navTitle?: string;
+  /** Controls on the right of the top bar. */
+  actions?: ReactNode;
+  /** Draw the top bar at all. Defaults to yes when there is a title, actions or wizard. */
+  nav?: boolean;
+  /** Stagger the blocks in on arrival (default). */
+  reveal?: boolean;
   className?: string;
 };
 
+/** The in-app back chevron. Inside Telegram the native Back button does this
+ *  job, so it only appears in a plain browser. */
+function InAppBack() {
+  const goBack = useSmartBack();
+  return (
+    <IconButton aria-label="Orqaga" onClick={goBack}>
+      <ChevronLeft strokeWidth={2.6} />
+    </IconButton>
+  );
+}
+
+/**
+ * The frame every screen sits in: a sticky top bar, a large title, then the
+ * screen's blocks — each one rising in with a spring, a beat after the last.
+ * Fixed chrome (tab bar, sticky actions, sheets) is deliberately NOT in here:
+ * a page that is mid-transition carries a transform, which would drag fixed
+ * children along with it.
+ */
 export function Screen({
-  children,
-  tabbed,
-  center,
-  padded = true,
-  wizard,
-  title,
-  subtitle,
-  className,
+  children, tabbed, center, padded = true, wizard, title, subtitle, navTitle,
+  actions, nav, reveal: stagger = true, className,
 }: Props) {
   const location = useLocation();
+  const tabRoot = isTabRoute(location.pathname);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const [threshold, setThreshold] = useState(0);
+  const { scrollY } = useScroll();
+
+  const showNav = nav ?? !!(title || actions || wizard);
+  const navText = navTitle ?? (typeof title === "string" ? title : undefined);
+
+  // Where the large title has scrolled fully under the bar.
+  useLayoutEffect(() => {
+    const el = titleRef.current;
+    if (!el) { setThreshold(0); return; }
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      setThreshold(Math.max(0, r.bottom + window.scrollY - 52 - 8));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [title]);
+
+  const range = useMemo(
+    () => (title ? [Math.max(0, threshold - 26), Math.max(1, threshold)] : [0, 22]),
+    [title, threshold],
+  );
+  const progress = useTransform(scrollY, range, [0, 1], { clamp: true });
+
+  const blocks = stagger && !center ? Children.toArray(children) : null;
+  const longTitle = typeof title === "string" && title.length > 20;
+
   return (
-    <div
-      className={cn(
-        "min-h-screen bg-canvas text-ink",
-        "pt-5",
-        tabbed
-          ? "pb-[calc(var(--tabbar-h,64px)+env(safe-area-inset-bottom,0px)+28px)]"
-          : "pb-[calc(env(safe-area-inset-bottom,0px)+20px)]",
-        padded && "px-4",
-        center && "flex flex-col items-center justify-center",
-        className,
+    <div className={cn("relative min-h-[100dvh]", center && "flex flex-col")}>
+      {showNav && (
+        <NavBar
+          progress={progress}
+          title={navText}
+          leading={!tabRoot && !inTelegram() ? <InAppBack /> : undefined}
+          trailing={actions}
+          center={wizard ? <WizardSteps current={location.pathname} /> : undefined}
+        />
       )}
-    >
-      {wizard && <WizardSteps current={location.pathname} className="mb-4" />}
-      {(title || subtitle) && (
-        <header className="mb-5 space-y-1">
-          {title && (
-            <h1 className="font-display text-display-md tracking-tight text-ink">
-              {title}
-            </h1>
-          )}
-          {subtitle && (
-            <p className="text-body-md text-muted">{subtitle}</p>
-          )}
-        </header>
-      )}
-      <div className="space-y-6">{children}</div>
+
+      <div
+        className={cn(
+          padded && "page-frame",
+          !showNav && "pt-[calc(var(--safe-t)+14px)]",
+          tabbed
+            ? "pb-[calc(var(--tabbar-h)+var(--tabbar-gap)+var(--safe-b)+34px)]"
+            : "pb-[calc(var(--safe-b)+32px)]",
+          center && "flex flex-1 flex-col items-center justify-center",
+          className,
+        )}
+      >
+        {(title || subtitle) && (
+          <header className="pb-5 pt-1">
+            {title && (
+              <h1
+                ref={titleRef}
+                className={cn(
+                  "font-display text-ink [text-wrap:balance]",
+                  longTitle ? "text-display-lg" : "text-display-xl",
+                )}
+              >
+                {title}
+              </h1>
+            )}
+            {subtitle && <p className="mt-1.5 text-body-md text-muted">{subtitle}</p>}
+          </header>
+        )}
+
+        {blocks ? (
+          <m.div initial="hidden" animate="show" className="space-y-6">
+            {blocks.map((child, i) => (
+              <m.div
+                key={(child as { key?: string }).key ?? i}
+                variants={reveal}
+                custom={i}
+              >
+                {child}
+              </m.div>
+            ))}
+          </m.div>
+        ) : (
+          <div className={cn(!center && "space-y-6", center && "w-full")}>{children}</div>
+        )}
+      </div>
     </div>
   );
 }

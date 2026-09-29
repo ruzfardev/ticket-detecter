@@ -1,13 +1,13 @@
 import * as React from "react";
 import { ChevronRight } from "lucide-react";
+
 import { cn } from "@/lib/utils";
+import { useHaptic } from "@/hooks/useHaptic";
 
 /**
- * A grouped list pattern: <ListGroup> (with optional label/footer) wraps a
- * cream-card surface; <ListRow> renders an interactive row inside.
- *
- * The cream card surface + interior hairline-soft dividers match the
- * Anthropic editorial pacing — no shadows, color-block first.
+ * Inset grouped lists — Apple's Settings pattern. A <ListGroup> is one rounded
+ * surface holding <ListRow>s; hairlines between rows start where the text
+ * does (after the icon tile), not at the card's edge.
  */
 
 type GroupProps = React.HTMLAttributes<HTMLDivElement> & {
@@ -19,20 +19,18 @@ const ListGroup = React.forwardRef<HTMLDivElement, GroupProps>(
   ({ className, label, footer, children, ...props }, ref) => (
     <div ref={ref} className={cn("space-y-2", className)} {...props}>
       {label && (
-        <div className="px-4 text-caption-upper uppercase text-muted">{label}</div>
+        <div className="px-5 text-caption font-semibold text-muted">{label}</div>
       )}
-      <div className="bg-surface-card rounded-lg overflow-hidden divide-y divide-hairline-soft">
-        {children}
-      </div>
+      <div className="surface overflow-hidden">{children}</div>
       {footer && (
-        <div className="px-4 text-body-sm text-muted">{footer}</div>
+        <div className="px-5 text-caption text-muted">{footer}</div>
       )}
     </div>
   ),
 );
 ListGroup.displayName = "ListGroup";
 
-type RowProps = React.HTMLAttributes<HTMLDivElement> & {
+type RowProps = Omit<React.HTMLAttributes<HTMLDivElement>, "title"> & {
   before?: React.ReactNode;
   after?: React.ReactNode;
   title: React.ReactNode;
@@ -41,6 +39,8 @@ type RowProps = React.HTMLAttributes<HTMLDivElement> & {
   selected?: boolean;
   destructive?: boolean;
   disabled?: boolean;
+  /** Where the hairline under this row starts, px. Defaults to the text edge. */
+  inset?: number;
 };
 
 const ListRow = React.forwardRef<HTMLDivElement, RowProps>(
@@ -55,21 +55,30 @@ const ListRow = React.forwardRef<HTMLDivElement, RowProps>(
       selected,
       destructive,
       disabled,
+      inset,
       onClick,
       ...props
     },
     ref,
   ) => {
+    const haptic = useHaptic();
     const interactive = !!onClick && !disabled;
+    const start = inset ?? (before ? 60 : 20);
+
     return (
       <div
         ref={ref}
         role={interactive ? "button" : undefined}
         tabIndex={interactive ? 0 : undefined}
-        onClick={disabled ? undefined : onClick}
+        aria-disabled={disabled || undefined}
+        onClick={
+          interactive
+            ? e => { haptic.selection(); onClick?.(e); }
+            : undefined
+        }
         onKeyDown={
           interactive
-            ? (e) => {
+            ? e => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
                   onClick?.(e as unknown as React.MouseEvent<HTMLDivElement>);
@@ -77,32 +86,35 @@ const ListRow = React.forwardRef<HTMLDivElement, RowProps>(
               }
             : undefined
         }
+        style={{ ["--inset" as string]: `${start}px` }}
         className={cn(
-          "flex items-center gap-3 px-4 py-3 min-h-[56px]",
-          interactive && "cursor-pointer active:bg-hairline-soft transition-colors",
-          selected && "bg-hairline-soft",
+          "relative flex min-h-[52px] items-center gap-3.5 px-4 py-2.5",
+          // hairline: starts at the text edge, absent under the last row
+          "after:pointer-events-none after:absolute after:bottom-0 after:right-0 after:left-[var(--inset)] after:h-px after:bg-hairline-soft last:after:hidden",
+          interactive && "tap cursor-pointer transition-colors duration-150 active:bg-[color:var(--row-press)] focus-visible:outline-none focus-visible:bg-[color:var(--row-press)]",
+          selected && "bg-coral-bright/10",
           disabled && "opacity-50",
           className,
         )}
         {...props}
       >
-        {before && <div className="flex-shrink-0 flex items-center justify-center">{before}</div>}
-        <div className="flex-1 min-w-0">
+        {before && <div className="flex shrink-0 items-center justify-center">{before}</div>}
+        <div className="min-w-0 flex-1">
           <div
             className={cn(
-              "text-body-md font-medium truncate",
+              "truncate text-body-md",
               destructive ? "text-error" : "text-ink",
             )}
           >
             {title}
           </div>
           {subtitle && (
-            <div className="text-body-sm text-muted truncate mt-0.5">{subtitle}</div>
+            <div className="mt-px truncate text-body-sm text-muted">{subtitle}</div>
           )}
         </div>
-        {after && <div className="flex-shrink-0 flex items-center">{after}</div>}
+        {after && <div className="flex shrink-0 items-center gap-2">{after}</div>}
         {chevron && (
-          <ChevronRight className="h-5 w-5 text-muted-soft flex-shrink-0" strokeWidth={1.75} />
+          <ChevronRight className="size-[18px] shrink-0 text-muted-soft" strokeWidth={2.2} />
         )}
       </div>
     );

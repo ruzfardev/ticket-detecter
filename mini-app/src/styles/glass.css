@@ -1,0 +1,528 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Liquid Glass materials
+
+   Glass is reserved for the navigation layer — the tab bar, the top bar,
+   floating actions, sheets, toasts, a few hero controls — floating over
+   content that sits on quiet, opaque-ish surfaces. That is Apple's own rule
+   (glass is the controls' material, not the content's), and it is also what
+   keeps blur cheap: at most a handful of backdrop-filters are ever on screen.
+
+   What makes a pane read as glass rather than as a blurred rectangle:
+     1. backdrop blur + saturation boost (light bending through the pane)
+     2. a fill that is a diagonal gradient, not a flat tint
+     3. a "rim light": a 1px gradient stroke, bright top-left / faint bottom-right
+     4. inset highlights along the edges (thickness)
+     5. a soft sheen painted into the fill, a warm coloured shadow below
+
+   Quality tiers (html[data-fx]) trade all of this down, see the bottom.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --blur-bar: 26px;
+  --blur-card: 20px;
+  --blur-sheet: 38px;
+  --sat: 1.75;
+
+  /* pane fill */
+  --g-fill-1: rgb(255 255 255 / 0.66);
+  --g-fill-2: rgb(255 255 255 / 0.38);
+  --g-sheen-1: rgb(255 255 255 / 0.55);
+  --g-sheen-2: rgb(255 255 255 / 0.16);
+  /* edges */
+  --g-rim-1: rgb(255 255 255 / 0.95);
+  --g-rim-2: rgb(255 255 255 / 0.38);
+  --g-edge: rgb(70 35 15 / 0.09);
+  --g-inner: rgb(255 255 255 / 0.7);
+  --g-inner-low: rgb(255 255 255 / 0.28);
+  --g-shadow: 0 12px 30px -12px hsl(var(--shadow) / 0.32), 0 2px 8px hsl(var(--shadow) / 0.09);
+  /* bars (full-width) and sheets are denser than floating controls */
+  --bar-fill-1: rgb(255 255 255 / 0.78);
+  --bar-fill-2: rgb(255 255 255 / 0.62);
+  --sheet-fill-1: rgb(255 255 255 / 0.84);
+  --sheet-fill-2: rgb(255 255 255 / 0.74);
+  /* solid stand-in when blur is unavailable / switched off */
+  --g-solid: hsl(var(--canvas) / 0.96);
+
+  /* content surfaces */
+  --card-edge: rgb(255 255 255 / 0.85);
+  --card-shadow: 0 1px 2px hsl(var(--shadow) / 0.05), 0 10px 26px -14px hsl(var(--shadow) / 0.2);
+  --row-press: hsl(var(--ink) / 0.06);
+  --noise-o: 0.05;
+}
+
+.dark {
+  --g-fill-1: rgb(255 255 255 / 0.15);
+  --g-fill-2: rgb(255 255 255 / 0.05);
+  --g-sheen-1: rgb(255 255 255 / 0.16);
+  --g-sheen-2: rgb(255 255 255 / 0.04);
+  --g-rim-1: rgb(255 255 255 / 0.6);
+  --g-rim-2: rgb(255 255 255 / 0.12);
+  --g-edge: rgb(0 0 0 / 0.5);
+  --g-inner: rgb(255 255 255 / 0.16);
+  --g-inner-low: rgb(255 255 255 / 0.05);
+  --g-shadow: 0 16px 38px -12px rgb(0 0 0 / 0.78), 0 2px 10px rgb(0 0 0 / 0.45);
+  --bar-fill-1: rgb(30 26 24 / 0.74);
+  --bar-fill-2: rgb(22 19 17 / 0.62);
+  --sheet-fill-1: rgb(38 33 30 / 0.86);
+  --sheet-fill-2: rgb(28 24 22 / 0.8);
+  --g-solid: hsl(var(--surface-dark-elevated) / 0.97);
+
+  --card-edge: rgb(255 255 255 / 0.07);
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 28px -14px rgb(0 0 0 / 0.6);
+  --row-press: hsl(var(--ink) / 0.08);
+  --noise-o: 0.07;
+}
+
+/* ── The pane ─────────────────────────────────────────────────────────── */
+
+.glass,
+.glass-bar,
+.glass-sheet {
+  position: relative;
+  isolation: isolate;
+  -webkit-backdrop-filter: blur(var(--blur-bar)) saturate(var(--sat));
+  backdrop-filter: blur(var(--blur-bar)) saturate(var(--sat));
+}
+
+.glass {
+  background:
+    radial-gradient(130% 95% at 14% -12%, var(--g-sheen-1), transparent 58%),
+    radial-gradient(90% 70% at 92% 118%, var(--g-sheen-2), transparent 62%),
+    linear-gradient(135deg, var(--g-fill-1), var(--g-fill-2));
+  box-shadow:
+    var(--g-shadow),
+    inset 0 1px 0.5px var(--g-inner),
+    inset 0 -1px 1px var(--g-inner-low),
+    inset 0 0 0 0.5px var(--g-edge);
+}
+
+/* Rim light — a gradient stroke, bright where the light hits. `--rim-angle`
+   is nudged by the light source (device tilt / scroll) for hero surfaces. */
+.glass::before,
+.glass-sheet::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    var(--rim-angle, 140deg),
+    var(--g-rim-1) 0%,
+    rgb(255 255 255 / 0) 36%,
+    rgb(255 255 255 / 0) 62%,
+    var(--g-rim-2) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+/* Press illumination: a glow blooms from the touch point, under the label. */
+.glass::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    62% 140% at var(--px, 50%) var(--py, 50%),
+    rgb(255 255 255 / 0.75),
+    transparent 72%
+  );
+  transition: opacity 0.42s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.dark .glass::after {
+  background: radial-gradient(
+    62% 140% at var(--px, 50%) var(--py, 50%),
+    rgb(255 255 255 / 0.3),
+    transparent 72%
+  );
+}
+.glass[data-pressed="true"]::after {
+  opacity: 1;
+  transition-duration: 0.06s;
+}
+
+/* Bars run edge to edge: a denser fill, a hairline instead of a rim. */
+.glass-bar {
+  background: linear-gradient(180deg, var(--bar-fill-1), var(--bar-fill-2));
+  -webkit-backdrop-filter: blur(var(--blur-bar)) saturate(1.7);
+  backdrop-filter: blur(var(--blur-bar)) saturate(1.7);
+  box-shadow: 0 0.5px 0 var(--g-edge), 0 10px 28px -16px hsl(var(--shadow) / 0.34);
+}
+
+/* Sheets: the densest pane — text sits on it for minutes at a time. */
+.glass-sheet {
+  background:
+    radial-gradient(120% 60% at 20% -10%, var(--g-sheen-2), transparent 60%),
+    linear-gradient(180deg, var(--sheet-fill-1), var(--sheet-fill-2));
+  -webkit-backdrop-filter: blur(var(--blur-sheet)) saturate(1.8);
+  backdrop-filter: blur(var(--blur-sheet)) saturate(1.8);
+  box-shadow:
+    0 -12px 50px -14px hsl(var(--shadow) / 0.34),
+    0 24px 60px -20px hsl(var(--shadow) / 0.4),
+    inset 0 1px 0.5px var(--g-inner),
+    inset 0 0 0 0.5px var(--g-edge);
+}
+
+/* ── Tinted & prominent glass ─────────────────────────────────────────── */
+
+/* Tinted: the pane picks up a colour (`--tint` is an "H S% L%" triplet). */
+.glass-tint {
+  --tint: var(--coral-bright);
+  background:
+    radial-gradient(130% 95% at 14% -12%, var(--g-sheen-1), transparent 58%),
+    linear-gradient(135deg, hsl(var(--tint) / 0.34), hsl(var(--tint) / 0.14)),
+    linear-gradient(135deg, var(--g-fill-1), var(--g-fill-2));
+}
+
+/* Prominent: the primary action. A luminous coral pane — bright at the top
+   where the light lands, deeper below — with a coral-coloured glow. */
+.glass-prominent {
+  position: relative;
+  isolation: isolate;
+  color: hsl(var(--on-primary));
+  background:
+    radial-gradient(120% 110% at 18% -25%, rgb(255 255 255 / 0.5), transparent 56%),
+    linear-gradient(180deg, hsl(var(--coral-bright) / 0.96) 0%, hsl(var(--coral)) 100%);
+  box-shadow:
+    0 12px 26px -10px hsl(var(--coral-bright) / 0.6),
+    0 2px 6px hsl(var(--coral) / 0.35),
+    inset 0 1px 0.5px rgb(255 255 255 / 0.7),
+    inset 0 -1.5px 1px rgb(0 0 0 / 0.14),
+    inset 0 0 0 0.5px hsl(var(--coral-active) / 0.55);
+  text-shadow: 0 1px 1px rgb(0 0 0 / 0.16);
+}
+.glass-prominent::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(60% 140% at var(--px, 50%) var(--py, 50%), rgb(255 255 255 / 0.55), transparent 72%);
+  transition: opacity 0.42s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.glass-prominent[data-pressed="true"]::after {
+  opacity: 1;
+  transition-duration: 0.06s;
+}
+
+/* A moving highlight for hero panes. Position comes from motion values. */
+.specular {
+  position: absolute;
+  z-index: 0;
+  width: 70%;
+  height: 160%;
+  left: 15%;
+  top: -30%;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(closest-side, rgb(255 255 255 / 0.5), rgb(255 255 255 / 0));
+  opacity: 0.55;
+  will-change: transform;
+}
+.dark .specular { opacity: 0.22; }
+
+/* ── Content surfaces (no blur) ───────────────────────────────────────── */
+
+.surface {
+  position: relative;
+  background: hsl(var(--surface-card) / var(--surface-card-a));
+  border-radius: 26px;
+  box-shadow: var(--card-shadow), inset 0 1px 0 var(--card-edge);
+}
+.surface-soft {
+  background: hsl(var(--surface-soft) / var(--surface-soft-a));
+  border-radius: 20px;
+  box-shadow: inset 0 0 0 0.5px hsl(var(--hairline) / 0.6);
+}
+
+/* Selected state for cards: a coral ring drawn inside the surface. */
+.ring-select {
+  box-shadow:
+    var(--card-shadow),
+    inset 0 1px 0 var(--card-edge),
+    0 0 0 2px hsl(var(--coral-bright) / 0.95),
+    0 0 26px -2px hsl(var(--coral-bright) / 0.38);
+}
+
+/* ── Ticket ───────────────────────────────────────────────────────────── */
+
+/* The perforation: two half-round bites out of the sides at `--notch-y`,
+   the punched-ticket motif of the Chiptachi mark. Masks clip shadows, so the
+   shadow lives on a wrapper (.ticket-shadow), not on the ticket itself. */
+.ticket-notch {
+  --notch-r: 11px;
+  -webkit-mask:
+    radial-gradient(circle var(--notch-r) at 0 var(--notch-y, 66%), #0000 calc(100% - 0.6px), #000) ,
+    radial-gradient(circle var(--notch-r) at 100% var(--notch-y, 66%), #0000 calc(100% - 0.6px), #000);
+  -webkit-mask-composite: source-in;
+  mask:
+    radial-gradient(circle var(--notch-r) at 0 var(--notch-y, 66%), #0000 calc(100% - 0.6px), #000),
+    radial-gradient(circle var(--notch-r) at 100% var(--notch-y, 66%), #0000 calc(100% - 0.6px), #000);
+  mask-composite: intersect;
+}
+.ticket-shadow {
+  filter: drop-shadow(0 10px 14px hsl(var(--shadow) / 0.16)) drop-shadow(0 1px 1.5px hsl(var(--shadow) / 0.12));
+}
+.dark .ticket-shadow {
+  filter: drop-shadow(0 12px 16px rgb(0 0 0 / 0.5)) drop-shadow(0 1px 1.5px rgb(0 0 0 / 0.4));
+}
+.perf {
+  height: 0;
+  border-top: 1.5px dashed hsl(var(--hairline));
+  opacity: 0.9;
+}
+
+/* ── Small parts ──────────────────────────────────────────────────────── */
+
+/* The Chiptachi "live" dot: a solid dot with a halo that breathes out. */
+.live-dot {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: hsl(var(--coral-bright));
+  box-shadow: 0 0 10px hsl(var(--coral-bright) / 0.7);
+}
+.live-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1.5px solid hsl(var(--coral-bright));
+  animation: halo 1.9s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+}
+.live-dot--still { box-shadow: none; }
+.live-dot--still::after { display: none; }
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  background: hsl(var(--surface-card) / 0.66);
+  box-shadow: inset 0 0 0 0.5px hsl(var(--hairline) / 0.5);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 0.6) 46%, transparent 72%);
+  background-size: 220% 100%;
+  animation: shimmer 1.7s linear infinite;
+}
+.dark .skeleton::after {
+  background: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 0.09) 46%, transparent 72%);
+  background-size: 220% 100%;
+}
+
+.tap {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+/* ── Icon tiles (Settings-style rounded squares) ─────────────────────── */
+
+.tile {
+  --tile: var(--coral-bright);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  color: #fff;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.26), rgb(0 0 0 / 0.1)),
+    hsl(var(--tile));
+  box-shadow:
+    inset 0 1px 0.5px rgb(255 255 255 / 0.55),
+    inset 0 -1px 1px rgb(0 0 0 / 0.14),
+    0 1px 2px hsl(var(--shadow) / 0.18);
+}
+.tile--coral  { --tile: var(--coral-bright); }
+.tile--teal   { --tile: var(--teal-bright); }
+.tile--amber  { --tile: var(--amber-bright); }
+.tile--green  { --tile: 142 52% 40%; }
+.tile--red    { --tile: 4 72% 56%; }
+.tile--blue   { --tile: 212 90% 56%; }
+.tile--violet { --tile: 262 58% 60%; }
+.tile--pink   { --tile: 338 76% 60%; }
+.tile--gray   { --tile: 220 8% 56%; }
+.tile--ink    { --tile: var(--surface-dark-elevated); }
+/* soft: a quiet tinted square with a coloured glyph */
+.tile--soft {
+  color: hsl(var(--tile));
+  background: hsl(var(--tile) / 0.15);
+  box-shadow: inset 0 0 0 0.5px hsl(var(--tile) / 0.28);
+}
+.tile--soft.tile--amber { color: hsl(var(--accent-amber)); }
+.dark .tile--soft.tile--amber { color: hsl(var(--amber-bright)); }
+
+/* ── The lens: a raised glass capsule that slides under the selection ─── */
+
+.lens {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.98), rgb(255 255 255 / 0.8));
+  box-shadow:
+    0 2px 8px hsl(var(--shadow) / 0.2),
+    0 0.5px 1px hsl(var(--shadow) / 0.22),
+    inset 0 1px 0 rgb(255 255 255 / 1);
+}
+.dark .lens {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.26), rgb(255 255 255 / 0.12));
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.5), inset 0 1px 0.5px rgb(255 255 255 / 0.32);
+}
+/* the tab bar's lens: same pane, picking up the palette's colour */
+.lens-tint {
+  background:
+    radial-gradient(120% 90% at 20% -10%, rgb(255 255 255 / 0.7), transparent 60%),
+    linear-gradient(180deg, hsl(var(--coral-bright) / 0.3), hsl(var(--coral-bright) / 0.14));
+  box-shadow:
+    0 4px 14px -4px hsl(var(--coral-bright) / 0.45),
+    inset 0 1px 0.5px rgb(255 255 255 / 0.9),
+    inset 0 -1px 1px rgb(255 255 255 / 0.25),
+    inset 0 0 0 0.5px hsl(var(--coral-bright) / 0.4);
+}
+.dark .lens-tint {
+  background:
+    radial-gradient(120% 90% at 20% -10%, rgb(255 255 255 / 0.22), transparent 60%),
+    linear-gradient(180deg, hsl(var(--coral-bright) / 0.4), hsl(var(--coral-bright) / 0.18));
+  box-shadow:
+    0 4px 16px -4px hsl(var(--coral-bright) / 0.5),
+    inset 0 1px 0.5px rgb(255 255 255 / 0.4),
+    inset 0 0 0 0.5px hsl(var(--coral-bright) / 0.5);
+}
+
+/* Something just got selected / checked: it pops. */
+@keyframes pop-in { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.18); opacity: 1; } 100% { transform: scale(1); } }
+.pop-in { animation: pop-in 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@media (prefers-reduced-motion: reduce) { .pop-in { animation: none; } }
+
+/* ── Ambient light ────────────────────────────────────────────────────── */
+
+.ambient {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+  background: linear-gradient(180deg, hsl(var(--canvas)) 0%, hsl(var(--canvas-2)) 100%);
+}
+.ambient__stage {
+  position: absolute;
+  inset: -12%;
+  will-change: transform;
+}
+.ambient__orb {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform;
+}
+.ambient__orb--1 {
+  width: 130vw; height: 130vw; max-width: 820px; max-height: 820px;
+  left: -34%; top: -16%;
+  background: radial-gradient(closest-side, hsl(var(--orb-1) / var(--orb-a1)), hsl(var(--orb-1) / 0));
+  animation: orb-a 52s ease-in-out infinite alternate;
+}
+.ambient__orb--2 {
+  width: 120vw; height: 120vw; max-width: 780px; max-height: 780px;
+  right: -40%; bottom: -14%;
+  background: radial-gradient(closest-side, hsl(var(--orb-2) / var(--orb-a2)), hsl(var(--orb-2) / 0));
+  animation: orb-b 64s ease-in-out infinite alternate;
+}
+.ambient__orb--3 {
+  width: 90vw; height: 90vw; max-width: 600px; max-height: 600px;
+  left: 4%; top: 46%;
+  background: radial-gradient(closest-side, hsl(var(--orb-3) / var(--orb-a3)), hsl(var(--orb-3) / 0));
+  animation: orb-c 58s ease-in-out infinite alternate;
+}
+/* Grain: breaks up gradient banding and gives the glass something to blur. */
+.ambient::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: var(--noise-o);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ── Quality tiers ────────────────────────────────────────────────────────
+   Set on <html data-fx="…"> by useFx(): "full" (default), "lite" for modest
+   devices, "off" when blur is unavailable, unwanted, or the OS asks for less
+   transparency. Layout never changes between tiers — only material.       */
+
+html[data-fx="lite"] {
+  --blur-bar: 12px;
+  --blur-card: 10px;
+  --blur-sheet: 18px;
+  --sat: 1.3;
+}
+html[data-fx="lite"] .glass::after,
+html[data-fx="lite"] .specular { display: none; }
+html[data-fx="lite"] .ambient__orb { animation: none; }
+html[data-fx="lite"] .ambient::after { display: none; }
+
+html[data-fx="off"] .glass,
+html[data-fx="off"] .glass-bar,
+html[data-fx="off"] .glass-sheet {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: var(--g-solid);
+}
+html[data-fx="off"] .glass-tint {
+  background:
+    linear-gradient(135deg, hsl(var(--tint) / 0.3), hsl(var(--tint) / 0.14)),
+    var(--g-solid);
+}
+html[data-fx="off"] .specular,
+html[data-fx="off"] .glass::after { display: none; }
+html[data-fx="off"] .ambient__orb { animation: none; }
+html[data-fx="off"] .ambient::after { display: none; }
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass, .glass-bar, .glass-sheet { background: var(--g-solid); }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  html[data-fx] .glass,
+  html[data-fx] .glass-bar,
+  html[data-fx] .glass-sheet {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--g-solid);
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root { --g-edge: rgb(0 0 0 / 0.4); }
+  .dark { --g-edge: rgb(255 255 255 / 0.5); }
+  .surface { box-shadow: var(--card-shadow), inset 0 0 0 1px hsl(var(--hairline)); }
+}
+
+/* ── Scroll edge ──────────────────────────────────────────────────────────
+   Where content slides under a floating control, it should dissolve rather
+   than be cut: a progressive blur that fades to nothing plus a canvas veil. */
+.scrim-bottom {
+  position: absolute;
+  inset: -28px 0 0 0;
+  pointer-events: none;
+  background: linear-gradient(to top, hsl(var(--canvas) / 0.86), hsl(var(--canvas) / 0.55) 55%, hsl(var(--canvas) / 0));
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  -webkit-mask-image: linear-gradient(to top, #000 55%, transparent);
+  mask-image: linear-gradient(to top, #000 55%, transparent);
+}
+html[data-fx="lite"] .scrim-bottom,
+html[data-fx="off"] .scrim-bottom {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}

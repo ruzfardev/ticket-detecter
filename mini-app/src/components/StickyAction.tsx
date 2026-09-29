@@ -1,5 +1,9 @@
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
+import * as m from "motion/react-m";
+
 import { cn } from "@/lib/utils";
+import { spring } from "@/lib/motion";
 
 type Props = {
   children: ReactNode;
@@ -9,33 +13,41 @@ type Props = {
 };
 
 /**
- * A fixed/sticky bottom action bar. Used on wizard screens so the primary CTA
- * stays in the thumb zone regardless of scroll position. Respects bottom
- * safe-area; a top fade-mask hints at content scrolling underneath.
+ * The screen's one primary action, floating at the bottom in the thumb zone.
+ * No bar around it: content dissolves under a progressive blur (the scroll
+ * edge) and the button floats as a glass capsule. A hint, if any, rides above
+ * it in its own small pane — the reason the button is disabled, in words.
+ *
+ * Portalled to <body> and fixed: pages carry a transform while they arrive,
+ * which would otherwise pin this to the page instead of to the screen.
  */
 export function StickyAction({ children, hint, className }: Props) {
   return (
     <>
-      {/* Spacer so the last bit of content isn't hidden under the bar. */}
-      <div aria-hidden className="h-24" />
-      <div
-        className={cn(
-          "fixed inset-x-0 bottom-0 z-30 pointer-events-none",
-          className,
-        )}
-      >
-        {/* Fade mask — soft gradient from transparent to cream */}
-        <div className="h-4 bg-gradient-to-b from-transparent to-canvas" aria-hidden />
-        <div
-          className="pointer-events-auto bg-canvas px-4 pt-2"
-          style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)" }}
+      {/* Keep the last block of content clear of the floating action. */}
+      <div aria-hidden className="h-[124px]" />
+      {createPortal(
+        <m.div
+          className={cn("pointer-events-none fixed inset-x-0 bottom-0 z-40", className)}
+          initial={{ y: 90, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={spring.smooth}
         >
-          {hint && (
-            <p className="text-body-sm text-muted text-center mb-2">{hint}</p>
-          )}
-          {children}
-        </div>
-      </div>
+          <div className="scrim-bottom" aria-hidden />
+          <div className="page-frame pointer-events-auto relative pb-[calc(var(--safe-b)+14px)] pt-3">
+            {hint && (
+              <div
+                role="status"
+                className="glass mx-auto mb-3 w-fit max-w-full rounded-[18px] px-4 py-2 text-center text-caption text-body"
+              >
+                {hint}
+              </div>
+            )}
+            {children}
+          </div>
+        </m.div>,
+        document.body,
+      )}
     </>
   );
 }

@@ -3,13 +3,39 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
-    <!-- Canvas colour, not brand colour: the browser chrome should match the page ground. -->
-    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#161722" media="(prefers-color-scheme: dark)" />
+    <!-- Canvas colour, not brand colour: the browser chrome should match the page ground.
+         useThemeSync rewrites these to the active palette. -->
+    <meta name="theme-color" content="#f7f3ee" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#110f0d" media="(prefers-color-scheme: dark)" />
     <link rel="icon" type="image/svg+xml" href="/mark.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Chiptachi</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+      /* Set the look before first paint so the app never flashes the wrong
+         theme, palette or glass quality. useThemeSync / useFx take over after. */
+      (function () {
+        try {
+          var d = document.documentElement, s = {};
+          try { s = (JSON.parse(localStorage.getItem("td-theme") || "{}").state) || {}; } catch (e) {}
+          var tg = window.Telegram && window.Telegram.WebApp;
+          var inTg = !!(tg && tg.initData);
+          var mode = s.mode || "system";
+          var dark = mode === "dark" ||
+            (mode === "system" && (inTg ? tg.colorScheme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches));
+          d.classList.toggle("dark", dark);
+          d.setAttribute("data-theme", s.palette || "cream");
+          if (/iPhone|iPad|iPod|Macintosh|Mac OS X/.test(navigator.userAgent)) d.classList.add("apple");
+          var fx = s.fx === "full" || s.fx === "lite" ? s.fx : localStorage.getItem("td-fx-auto");
+          if (!fx) {
+            var weak = (navigator.deviceMemory && navigator.deviceMemory <= 2) ||
+              (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4 && /Android/.test(navigator.userAgent));
+            fx = weak ? "lite" : "full";
+          }
+          d.setAttribute("data-fx", fx);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

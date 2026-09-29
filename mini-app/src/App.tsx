@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { AnimatePresence } from "motion/react";
 
 import { Welcome } from "./screens/Welcome";
 import { Home } from "./screens/Home";
@@ -20,48 +21,63 @@ import { CardAdd } from "./screens/CardAdd";
 import { Orders } from "./screens/Orders";
 import { Tickets } from "./screens/Tickets";
 import { OrderDetail } from "./screens/OrderDetail";
+import { Ambient } from "./components/Ambient";
 import { BottomNav } from "./components/BottomNav";
+import { PageTransition } from "./components/PageTransition";
 import { useBackButton } from "./hooks/useBackButton";
+import { useFx } from "./hooks/useFx";
+import { useScrollRestoration } from "./hooks/useScrollRestoration";
 import { useThemeSync } from "./hooks/useThemeSync";
-
-const TABBED_ROUTES = new Set(["/home", "/tickets", "/orders", "/premium", "/settings"]);
-const ROOT_ROUTES = new Set(["/"]);
-
-const tabbed = (el: JSX.Element) => <BottomNav>{el}</BottomNav>;
+import { isTabbedRoute } from "./lib/routes";
+import { useOverlays } from "./store/overlays";
 
 export function App() {
   useThemeSync();
-  const location = useLocation();
-  const hideBack =
-    TABBED_ROUTES.has(location.pathname) || ROOT_ROUTES.has(location.pathname);
-  useBackButton(!hideBack);
+  useFx();
+  useScrollRestoration();
+
+  const { pathname } = useLocation();
+  const tabbed = isTabbedRoute(pathname);
+  const openSheets = useOverlays(s => s.stack.length);
+  // Telegram's Back button: hidden on the tab roots, but shown whenever a
+  // sheet is open so it can close the sheet.
+  useBackButton(!(tabbed || pathname === "/") || openSheets > 0);
 
   return (
-    <Routes>
-      <Route path="/"           element={<Welcome />} />
+    <>
+      <Ambient />
 
-      <Route path="/home"     element={tabbed(<Home />)} />
-      <Route path="/orders"   element={tabbed(<Orders />)} />
-      <Route path="/premium"  element={tabbed(<Premium />)} />
-      <Route path="/settings" element={tabbed(<Settings />)} />
+      <PageTransition>
+        <Routes>
+          <Route path="/"           element={<Welcome />} />
 
-      <Route path="/new"            element={<RoutePicker />} />
-      <Route path="/new/date"       element={<DateScreen />} />
-      <Route path="/new/train"      element={<TrainPicker />} />
-      <Route path="/new/car-type"   element={<CarTypePicker />} />
-      <Route path="/new/berth"      element={<BerthPicker />} />
-      <Route path="/new/confirm"    element={<Confirm />} />
-      <Route path="/sub/:id"          element={<SubDetails />} />
-      <Route path="/sub/:id/autobuy"  element={<AutobuyConfig />} />
-      <Route path="/railway-link"     element={<RailwayLink />} />
-      <Route path="/friends"          element={<Friends />} />
-      <Route path="/cards/add"        element={<CardAdd />} />
-      <Route path="/order/:id"        element={<OrderDetail />} />
-      <Route path="/tickets"          element={tabbed(<Tickets />)} />
-      <Route path="/donate"         element={<Donate />} />
-      <Route path="/donate/custom"  element={<DonateCustom />} />
+          <Route path="/home"     element={<Home />} />
+          <Route path="/orders"   element={<Orders />} />
+          <Route path="/premium"  element={<Premium />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/tickets"  element={<Tickets />} />
 
-      <Route path="*" element={<Navigate to="/home" replace />} />
-    </Routes>
+          <Route path="/new"            element={<RoutePicker />} />
+          <Route path="/new/date"       element={<DateScreen />} />
+          <Route path="/new/train"      element={<TrainPicker />} />
+          <Route path="/new/car-type"   element={<CarTypePicker />} />
+          <Route path="/new/berth"      element={<BerthPicker />} />
+          <Route path="/new/confirm"    element={<Confirm />} />
+          <Route path="/sub/:id"          element={<SubDetails />} />
+          <Route path="/sub/:id/autobuy"  element={<AutobuyConfig />} />
+          <Route path="/railway-link"     element={<RailwayLink />} />
+          <Route path="/friends"          element={<Friends />} />
+          <Route path="/cards/add"        element={<CardAdd />} />
+          <Route path="/order/:id"        element={<OrderDetail />} />
+          <Route path="/donate"         element={<Donate />} />
+          <Route path="/donate/custom"  element={<DonateCustom />} />
+
+          <Route path="*" element={<Navigate to="/home" replace />} />
+        </Routes>
+      </PageTransition>
+
+      {/* Outside the page, so it survives route changes and its lens can travel. */}
+      <AnimatePresence>{tabbed && <BottomNav key="tabs" />}</AnimatePresence>
+    </>
   );
 }

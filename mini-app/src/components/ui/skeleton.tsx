@@ -1,12 +1,8 @@
 import { cn } from "@/lib/utils";
 
+/** A placeholder with a soft light sweeping across it (styles/glass.css). */
 function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div
-      className={cn("animate-pulse motion-reduce:animate-none rounded-md bg-surface-card", className)}
-      {...props}
-    />
-  );
+  return <div aria-hidden className={cn("skeleton", className)} {...props} />;
 }
 
 export { Skeleton };

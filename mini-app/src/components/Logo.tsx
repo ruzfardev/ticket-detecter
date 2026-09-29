@@ -27,7 +27,7 @@ type Props = {
  * the same path with baked colors.
  */
 export function Logo({ size = 28, className, live, tone = "primary", title = "Chiptachi" }: Props) {
-  const dot = tone === "error" ? "hsl(var(--error))" : "hsl(var(--coral))";
+  const dot = tone === "error" ? "hsl(var(--error))" : "hsl(var(--coral-bright))";
   return (
     <svg
       viewBox="0 0 64 64"

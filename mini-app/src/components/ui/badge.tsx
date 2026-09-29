@@ -4,26 +4,26 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex items-center gap-1 rounded-pill px-3 py-1 font-medium",
+  "inline-flex items-center gap-1 whitespace-nowrap rounded-pill px-2.5 py-[3px] text-[12px] font-semibold leading-4",
   {
     variants: {
       variant: {
-        // Default cream pill — feature labels
-        pill:    "bg-surface-card text-ink text-caption",
-        // Coral signature — "NEW", "BETA"
-        coral:   "bg-coral text-on-primary text-caption-upper uppercase",
-        // Dark — counterpoint on cream
-        dark:    "bg-surface-dark text-on-dark text-caption",
-        // Soft outline on cream
-        outline: "bg-canvas text-ink hairline text-caption",
-        // Status — small semantic dots
-        success: "bg-success/15 text-success text-caption",
-        warning: "bg-warning/15 text-warning text-caption",
-        muted:   "bg-surface-soft text-muted text-caption",
+        // Neutral pill — feature labels
+        pill:    "bg-surface-strong text-ink",
+        // Tinted coral — the state you should notice ("Faol", "Bron")
+        coral:   "bg-coral-bright/16 text-coral-ink",
+        // Luminous coral — "Premium", "Eng tejamli"
+        solid:   "glass-prominent",
+        dark:    "bg-surface-dark text-on-dark",
+        outline: "bg-transparent text-ink ring-1 ring-inset ring-hairline",
+        success: "bg-success/14 text-success",
+        warning: "bg-warning/16 text-warning",
+        error:   "bg-error/14 text-error",
+        muted:   "bg-ink/6 text-muted",
       },
     },
     defaultVariants: { variant: "pill" },
-  }
+  },
 );
 
 export interface BadgeProps
