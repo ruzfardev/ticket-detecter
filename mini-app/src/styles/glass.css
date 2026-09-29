@@ -558,11 +558,13 @@ html[data-fx="off"] .ambient::after { display: none; }
 /* ── Late arrivals ────────────────────────────────────────────────────────
    A block that shows up after first paint (an SMS-code banner, tomorrow's
    ticket) opens like a drawer instead of shoving the page down in one frame.
-   Rows animate 0fr → 1fr, so no height is measured in script. */
+   Rows animate 0fr → 1fr, so no height is measured in script.
+   The curve starts gently on purpose: an iOS-style ease-out moves 35 px in its
+   fourth frame, which reads as a lurch; this one peaks at ~16 px per frame. */
 .collapse {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 0.42s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: grid-template-rows 0.55s cubic-bezier(0.3, 0.1, 0.2, 1);
 }
 .collapse[data-open="true"] { grid-template-rows: 1fr; }
 .collapse__in {
@@ -572,12 +574,12 @@ html[data-fx="off"] .ambient::after { display: none; }
   /* Closed content is unreachable (no focus, no screen reader) — but only once
      the drawer has actually shut, so a closing block stays visible on its way out. */
   visibility: hidden;
-  transition: opacity 0.2s ease, visibility 0s 0.42s;
+  transition: opacity 0.2s ease, visibility 0s 0.55s;
 }
 .collapse[data-open="true"] > .collapse__in {
   opacity: 1;
   visibility: visible;
-  transition: opacity 0.28s ease 0.08s, visibility 0s;
+  transition: opacity 0.4s ease-out 0.1s, visibility 0s;
 }
 /* Once fully open nothing is clipped, so shadows and rims keep their full reach. */
 .collapse__in[data-settled="true"] { overflow: visible; }
