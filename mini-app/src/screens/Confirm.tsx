@@ -1,35 +1,27 @@
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import * as m from "motion/react-m";
-import { AnimatePresence } from "motion/react";
 import {
   MapPin, CalendarDays, TrainFront, Armchair, ArrowDownToLine, ArrowUpToLine,
-  CreditCard, Link2, Zap,
+  Check, CreditCard, Link2, Zap,
 } from "lucide-react";
 
 import {
   createSubscription, getCard, getFriends, getRailwayStatus, patchAutobuy,
 } from "@/api/client";
 import { carTypeLabels } from "@/lib/cartypes";
-import { spring } from "@/lib/motion";
-import { passengerProblem } from "@/lib/passengers";
+import { MAX_SEATED, passengerProblem } from "@/lib/passengers";
 import { useHaptic } from "@/hooks/useHaptic";
 import { useWizardGuard } from "@/hooks/useWizardGuard";
 import { useWizard } from "@/store/wizard";
-import { PassengerPicker, SeatStrategyGroup } from "@/components/PassengerPicker";
+import { PassengerPicker } from "@/components/PassengerPicker";
 import { Screen } from "@/components/Screen";
 import { StickyAction } from "@/components/StickyAction";
 import { Button } from "@/components/ui/button";
 import { ListGroup, ListRow } from "@/components/ui/list";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
-import { IconTile } from "@/components/ui/tile";
+import { Spinner } from "@/components/ui/spinner";
 
-/** A text line's stand-in while its value loads. */
-const Bar = ({ w }: { w: string }) => (
-  <Skeleton className="my-[3px] h-3.5 rounded-full bg-ink/[0.07]" style={{ width: w }} />
-);
+const MAX_PASSENGERS = MAX_SEATED;
 
 export function Confirm() {
   useWizardGuard(["dep_code", "arr_code", "travel_date", "train_numbers", "car_types"]);
@@ -124,33 +116,30 @@ export function Confirm() {
       title="Tasdiqlash"
       subtitle="O'zgartirish uchun qatorga bosing"
     >
-      {/* What will be watched. Every row jumps back to the step that set it.
-          Tile tones are fixed hues except route (primary) and car (amber), so
-          no two rows share a colour in any palette. */}
-      <ListGroup footer="Bo'sh joy paydo bo'lganda Telegram orqali darhol xabar olasiz.">
+      <ListGroup>
         <ListRow
-          before={<IconTile icon={MapPin} tone="coral" />}
+          before={<MapPin className="h-5 w-5 text-ink" strokeWidth={1.75} />}
           title={`${w.dep_name} → ${w.arr_name}`}
           subtitle="Marshrut"
           chevron
           onClick={() => navigate("/new")}
         />
         <ListRow
-          before={<IconTile icon={CalendarDays} tone="blue" />}
-          title={<span className="tnum">{w.travel_date ?? ""}</span>}
+          before={<CalendarDays className="h-5 w-5 text-ink" strokeWidth={1.75} />}
+          title={w.travel_date ?? ""}
           subtitle="Sana"
           chevron
           onClick={() => navigate("/new/date")}
         />
         <ListRow
-          before={<IconTile icon={TrainFront} tone="violet" />}
+          before={<TrainFront className="h-5 w-5 text-ink" strokeWidth={1.75} />}
           title={w.train_numbers.length ? w.train_numbers.join(", ") : "Har qanday"}
           subtitle={w.train_numbers.length > 1 ? `Poyezdlar · ${w.train_numbers.length} ta` : "Poyezd"}
           chevron
           onClick={() => navigate("/new/train")}
         />
         <ListRow
-          before={<IconTile icon={Armchair} tone="amber" />}
+          before={<Armchair className="h-5 w-5 text-ink" strokeWidth={1.75} />}
           title={carTypeLabels(w.car_types)}
           subtitle="Vagon turi"
           chevron
@@ -158,7 +147,7 @@ export function Confirm() {
         />
         {berthLabel && (
           <ListRow
-            before={<IconTile icon={BerthIcon} tone="pink" />}
+            before={<BerthIcon className="h-5 w-5 text-ink" strokeWidth={1.75} />}
             title={berthLabel}
             subtitle="Joy turi"
             chevron
@@ -167,102 +156,118 @@ export function Confirm() {
         )}
       </ListGroup>
 
-      {/* Auto-buy. Off, it is one switch; on, what it needs rises in below. */}
-      <div className="space-y-6">
-        <ListGroup
-          label="Avto sotib olish"
-          footer={
-            autobuy
-              ? undefined
-              : "Yoqilsa, joy topilgan zahoti chipta o'zi bron qilinadi — sizga faqat SMS kod kerak bo'ladi."
+      <ListGroup
+        label="Avto sotib olish"
+        footer={
+          autobuy
+            ? undefined
+            : "Yoqilsa, joy topilgan zahoti chipta o'zi bron qilinadi — sizga faqat SMS kod kerak bo'ladi."
+        }
+      >
+        <ListRow
+          before={
+            <Zap
+              className={`h-5 w-5 ${autobuy ? "text-coral" : "text-muted-soft"}`}
+              strokeWidth={1.75}
+            />
           }
-        >
+          title="Avtomatik sotib olish"
+          subtitle={autobuy ? "Yoqilgan" : "Faqat xabar yuboriladi"}
+          after={
+            <input
+              type="checkbox"
+              checked={autobuy}
+              onChange={e => w.setField("autobuy_enabled", e.target.checked)}
+              className="h-5 w-5 accent-coral"
+              aria-label="Avto sotib olish"
+            />
+          }
+        />
+      </ListGroup>
+
+      {autobuy && !linked && (
+        <ListGroup label="eticket akkount" footer="Auto-buy uchun akkount ulanishi shart.">
           <ListRow
-            before={<IconTile icon={Zap} tone={autobuy ? "coral" : "gray"} />}
-            title="Avtomatik sotib olish"
-            subtitle={autobuy ? "Yoqilgan" : "Faqat xabar yuboriladi"}
-            after={
-              <Switch
-                checked={autobuy}
-                onCheckedChange={v => w.setField("autobuy_enabled", v)}
-                aria-label="Avto sotib olish"
-              />
-            }
+            before={<Link2 className="h-5 w-5 text-coral" strokeWidth={1.75} />}
+            title="Akkountni ulash"
+            subtitle="eticket.railway.uz"
+            onClick={() => navigate("/railway-link")}
+            chevron
           />
         </ListGroup>
+      )}
 
-        <AnimatePresence initial={false}>
-          {autobuy && (
-            <m.div
-              key="autobuy"
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0, transition: spring.smooth }}
-              exit={{ opacity: 0, y: 8, transition: spring.snappy }}
-              className="space-y-6"
+      {autobuy && linked && (
+        <>
+          <ListGroup label="To'lov kartasi">
+            <ListRow
+              before={
+                <CreditCard
+                  className={`h-5 w-5 ${hasCard ? "text-coral" : "text-muted-soft"}`}
+                  strokeWidth={1.75}
+                />
+              }
+              title={hasCard ? `•••• ${cardQ.data!.last4}` : "Karta saqlanmagan"}
+              subtitle={hasCard ? "Saqlangan" : "Qo'shish uchun bosing"}
+              onClick={() => navigate("/cards/add")}
+              chevron
+            />
+          </ListGroup>
+
+          <PassengerPicker
+            friends={friends}
+            travelDate={w.travel_date}
+            seatedIds={friendIds}
+            lapIds={lapIds}
+            loading={friendsQ.isLoading}
+            onChange={(seated, lap) => {
+              w.setField("autobuy_friend_ids", seated);
+              w.setField("autobuy_lap_child_ids", lap);
+            }}
+            onAddFriend={() => navigate("/friends")}
+          />
+
+          {validCount > 1 && (
+            <ListGroup
+              label="Joy yetmasa"
+              footer={
+                w.autobuy_seat_strategy === "partial"
+                  ? "Nechta joy bo'lsa, shuncha olinadi. Qolganlari uchun kuzatuv davom etadi."
+                  : "Hamma yo'lovchiga bitta vagondan joy topilmaguncha kutiladi."
+              }
             >
-              {accountQ.isLoading ? (
-                <ListGroup aria-busy="true">
-                  <ListRow
-                    before={<IconTile icon={Link2} tone="gray" soft />}
-                    title={<Bar w="8rem" />}
-                    subtitle={<Bar w="6rem" />}
-                  />
-                </ListGroup>
-              ) : !linked ? (
-                <ListGroup label="eticket akkount" footer="Auto-buy uchun akkount ulanishi shart.">
-                  <ListRow
-                    before={<IconTile icon={Link2} tone="coral" />}
-                    title="Akkountni ulash"
-                    subtitle="eticket.railway.uz"
-                    onClick={() => navigate("/railway-link")}
-                    chevron
-                  />
-                </ListGroup>
-              ) : (
-                <>
-                  <ListGroup label="To'lov kartasi">
-                    <ListRow
-                      before={<IconTile icon={CreditCard} tone={hasCard ? "coral" : "gray"} />}
-                      title={
-                        cardQ.isLoading ? <Bar w="7rem" />
-                          : hasCard ? <span className="tnum">{`•••• ${cardQ.data!.last4}`}</span>
-                          : "Karta saqlanmagan"
-                      }
-                      subtitle={
-                        cardQ.isLoading ? <Bar w="5rem" />
-                          : hasCard ? "Saqlangan"
-                          : "Qo'shish uchun bosing"
-                      }
-                      onClick={() => navigate("/cards/add")}
-                      chevron
-                    />
-                  </ListGroup>
-
-                  <PassengerPicker
-                    friends={friends}
-                    travelDate={w.travel_date}
-                    seatedIds={friendIds}
-                    lapIds={lapIds}
-                    loading={friendsQ.isLoading}
-                    onChange={(seated, lap) => {
-                      w.setField("autobuy_friend_ids", seated);
-                      w.setField("autobuy_lap_child_ids", lap);
-                    }}
-                    onAddFriend={() => navigate("/friends")}
-                  />
-
-                  {validCount > 1 && (
-                    <SeatStrategyGroup
-                      value={w.autobuy_seat_strategy}
-                      onChange={v => w.setField("autobuy_seat_strategy", v)}
-                    />
-                  )}
-                </>
-              )}
-            </m.div>
+              {([
+                { v: "all" as const, t: "Hammasi birga", d: "Yoki hech nima — guruh ajralmaydi" },
+                { v: "partial" as const, t: "Nechta bo'lsa, shuncha", d: "Kamida bittasini kafolatlash" },
+              ]).map(o => (
+                <ListRow
+                  key={o.v}
+                  before={
+                    <span
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-pill border ${
+                        w.autobuy_seat_strategy === o.v
+                          ? "border-coral bg-coral text-on-primary"
+                          : "border-muted-soft"
+                      }`}
+                      aria-hidden
+                    >
+                      {w.autobuy_seat_strategy === o.v && <Check className="h-3 w-3" strokeWidth={3} />}
+                    </span>
+                  }
+                  title={o.t}
+                  subtitle={o.d}
+                  selected={w.autobuy_seat_strategy === o.v}
+                  onClick={() => w.setField("autobuy_seat_strategy", o.v)}
+                />
+              ))}
+            </ListGroup>
           )}
-        </AnimatePresence>
-      </div>
+        </>
+      )}
+
+      <p className="text-body-sm text-muted px-1">
+        Bo'sh joy paydo bo'lganda Telegram orqali darhol xabar olasiz.
+      </p>
 
       <StickyAction
         hint={
@@ -275,16 +280,19 @@ export function Confirm() {
       >
         <Button
           full
-          size="lg"
-          loading={mutation.isPending}
-          disabled={!autobuyReady}
+          disabled={mutation.isPending || !autobuyReady}
           onClick={() => mutation.mutate()}
         >
-          {mutation.isPending
-            ? "Saqlanmoqda..."
-            : autobuy
-              ? "Saqlash va yoqish"
-              : "Saqlash"}
+          {mutation.isPending ? (
+            <span className="inline-flex items-center gap-2">
+              <Spinner size="sm" className="text-on-primary" />
+              Saqlanmoqda...
+            </span>
+          ) : autobuy ? (
+            "Saqlash va yoqish"
+          ) : (
+            "Saqlash"
+          )}
         </Button>
       </StickyAction>
     </Screen>

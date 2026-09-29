@@ -1,7 +1,4 @@
-import * as m from "motion/react-m";
-
 import { cn } from "@/lib/utils";
-import { spring } from "@/lib/motion";
 
 const STEPS = [
   { path: "/new",          label: "Marshrut" },
@@ -18,47 +15,29 @@ type Props = {
 };
 
 /**
- * Six capsules in the nav bar: finished steps are solid coral, the current one
- * is wider and glows, the rest are hollow. Widths spring, so moving on feels
- * like the row breathing. The label under it says where you are in words.
+ * Minimal coral progress bar — shows wizard step out of total. Kept slim so
+ * it doesn't compete with the Anthropic serif title underneath.
  */
 export function WizardSteps({ current, className }: Props) {
   const idx = STEPS.findIndex(s => s.path === current);
+  const total = STEPS.length;
   const step = idx >= 0 ? idx + 1 : 1;
   const label = idx >= 0 ? STEPS[idx].label : "";
+  const pct = (step / total) * 100;
 
   return (
-    <div
-      className={cn("flex flex-col items-center gap-1", className)}
-      role="progressbar"
-      aria-valuemin={1}
-      aria-valuemax={STEPS.length}
-      aria-valuenow={step}
-      aria-label={`${step}/${STEPS.length} · ${label}`}
-    >
-      <div className="flex items-center gap-1.5">
-        {STEPS.map((s, i) => {
-          const done = i < idx;
-          const now = i === idx;
-          return (
-            <m.span
-              key={s.path}
-              initial={false}
-              animate={{ width: now ? 26 : 8 }}
-              transition={spring.bouncy}
-              className={cn(
-                "h-2 rounded-full transition-colors duration-300",
-                done && "bg-coral",
-                now && "bg-coral-bright shadow-[0_0_10px_hsl(var(--coral-bright)/0.7)]",
-                !done && !now && "bg-ink/20 dark:bg-ink/25",
-              )}
-            />
-          );
-        })}
+    <div className={cn("space-y-2", className)}>
+      <div className="flex items-center justify-between text-caption-upper uppercase text-muted">
+        <span>
+          {step}/{total} · {label}
+        </span>
       </div>
-      <span className="tnum text-[12px] font-semibold leading-none text-muted">
-        {step}/{STEPS.length} · {label}
-      </span>
+      <div className="h-1 rounded-pill bg-surface-card overflow-hidden">
+        <div
+          className="h-full bg-coral transition-all duration-300"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
     </div>
   );
 }

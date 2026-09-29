@@ -2,44 +2,39 @@ import { useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import * as m from "motion/react-m";
-import { AnimatePresence } from "motion/react";
 import {
   Armchair, CalendarDays, ChevronLeft, ChevronRight, FileDown, Link2, TrainFront,
-  Ticket as TicketIcon, Archive, Undo2,
 } from "lucide-react";
 
 import {
   isReservedLeg, listArchivedTickets, listTickets, sendTicketPdf,
   type PurchasedTicket,
 } from "@/api/client";
-import { EmptyNote } from "@/components/EmptyNote";
 import { Screen } from "@/components/Screen";
 import { StatusView } from "@/components/StatusView";
-import { TicketShell } from "@/components/trip/TicketShell";
-import { TripTimes } from "@/components/trip/TripTimes";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
-import { ListGroup, ListRow } from "@/components/ui/list";
-import { PressCard } from "@/components/ui/press-card";
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useHaptic } from "@/hooks/useHaptic";
 import { formatMonth, shiftMonth, tashkentMonth } from "@/lib/dates";
-import { spring } from "@/lib/motion";
-import { useEntering } from "@/lib/navEntry";
 import { dayOffset, trainTime } from "@/lib/traintime";
+import { cn } from "@/lib/utils";
+
+/** eticket sends "2026-10-15 17:20:00" — Tashkent wall clock, no offset. */
+function dateOf(raw: string): string {
+  return (raw ?? "").slice(0, 10);
+}
+function hhmm(raw: string): string {
+  return trainTime((raw ?? "").replace(" ", "T"));
+}
 
 /**
  * Per-ticket status. Independent of the order's status — a returned ticket
  * still sits under an ORDER_COMPLETED_SUCCESSFULLY order.
  *
  * Values taken from eticket's own bundle, plus `ReturnedTicket`, which the live
- * API returns even though the bundle spells it `ReturnTicket`. The v3 order
- * system (orders since late September 2026) speaks upper case.
+ * API returns even though the bundle spells it `ReturnTicket`.
  */
 type Tone = "success" | "muted" | "coral";
 
@@ -56,6 +51,7 @@ const TICKET_STATUS: Record<string, { text: string; tone: Tone }> = {
   ExpiredTicket:     { text: "Muddati o'tgan",  tone: "muted"   },
   DelayedTicket:     { text: "Kechiktirilgan",  tone: "muted"   },
   PaperTicket:       { text: "Qog'oz chipta",   tone: "muted"   },
+  // The v3 order system (orders since late September 2026) speaks upper case.
   CONFIRMED:         { text: "Amal qiladi",     tone: "success" },
   PAID:              { text: "Amal qiladi",     tone: "success" },
   RETURNED:          { text: "Qaytarilgan",     tone: "muted"   },
@@ -65,13 +61,6 @@ const TICKET_STATUS: Record<string, { text: string; tone: Tone }> = {
   EXPIRED:           { text: "Muddati o'tgan",  tone: "muted"   },
 };
 
-/** eticket sends "2026-10-15 17:20:00" — Tashkent wall clock, no offset. */
-function dateOf(raw: string): string {
-  return (raw ?? "").slice(0, 10);
-}
-function hhmm(raw: string): string {
-  return trainTime((raw ?? "").replace(" ", "T"));
-}
 /** Unknown value: drop the "Ticket" suffix and space out the camelCase, so a
  *  status we have not seen still reads as words rather than "ConfirmedTicket". */
 function statusOf(raw: string): { text: string; tone: Tone } {
@@ -83,126 +72,115 @@ function statusOf(raw: string): { text: string; tone: Tone } {
     .trim();
   return { text: text || "—", tone: "muted" };
 }
-const som = (n: number) => n.toLocaleString("ru-RU").replace(/ /g, " ");
 
-/* ── One ticket ──────────────────────────────────────────────────────── */
+function TicketCard({ t }: { t: PurchasedTicket }) {
+  const [open, setOpen] = useState(false);
 
-function TicketCard({ t, onOpen }: { t: PurchasedTicket; onOpen: () => void }) {
-  const plus = dayOffset(t.dep_at.replace(" ", "T"), t.arr_at.replace(" ", "T"));
-  const reserved = isReservedLeg(t);
-
-  return (
-    <PressCard
-      material="none"
-      onClick={onOpen}
-      className="rounded-[26px]"
-      aria-label={`${t.train_number}, ${t.dep_station} — ${t.arr_station}, ${dateOf(t.dep_at)}`}
-    >
-      <TicketShell
-        top={
-          <div className="space-y-3.5">
-            <div className="flex items-center gap-2">
-              <TrainFront className="size-[18px] text-muted" strokeWidth={2} />
-              <span className="font-display text-title-lg text-ink">{t.train_number}</span>
-              {t.returned && <Badge variant="muted">Qaytarilgan</Badge>}
-              {reserved && <Badge variant="coral">Bron</Badge>}
-              <span className="tnum ml-auto text-body-sm text-muted">{som(t.amount_uzs)} so'm</span>
-            </div>
-            <TripTimes
-              tone={t.returned ? "muted" : "ink"}
-              dep={{ station: t.dep_station, time: hhmm(t.dep_at) }}
-              arr={{ station: t.arr_station, time: hhmm(t.arr_at), plus }}
-            />
-          </div>
-        }
-        bottom={
-          <div className="flex items-center gap-x-4 gap-y-1 text-body-sm text-muted">
-            <span className="inline-flex items-center gap-1.5">
-              <CalendarDays className="size-4" strokeWidth={1.9} />
-              {dateOf(t.dep_at)}
-            </span>
-            <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
-              <Armchair className="size-4 shrink-0" strokeWidth={1.9} />
-              Vagon {t.car_number} · joy {t.seats.join(", ") || "—"}
-            </span>
-            <ChevronRight className="ml-auto size-[18px] shrink-0 text-muted-soft" strokeWidth={2.2} />
-          </div>
-        }
-      />
-    </PressCard>
-  );
-}
-
-/** Everything about one ticket, in a sheet: who travels, their status, the PDF. */
-function TicketSheet({
-  leg, open, onOpenChange,
-}: { leg: PurchasedTicket | null; open: boolean; onOpenChange: (o: boolean) => void }) {
-  const haptic = useHaptic();
   const send = useMutation({
-    mutationFn: (t: PurchasedTicket) => sendTicketPdf(t),
-    onSuccess: () => { haptic.notify("success"); toast.success("PDF botga yuborildi — chatni oching"); },
-    onError: () => { haptic.notify("error"); toast.error("PDF yuborib bo'lmadi"); },
+    mutationFn: () => sendTicketPdf(t),
+    onSuccess: () => toast.success("PDF botga yuborildi — chatni oching"),
+    onError: () => toast.error("PDF yuborib bo'lmadi"),
   });
 
+  const plus = dayOffset(
+    t.dep_at.replace(" ", "T"),
+    t.arr_at.replace(" ", "T"),
+  );
+  const reserved = isReservedLeg(t);
+  const timeTone = t.returned ? "text-muted" : "text-coral";
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent>
-        {leg && (
-          <div className="space-y-5 pb-1">
-            <div>
-              <SheetTitle>{leg.train_number} · {dateOf(leg.dep_at)}</SheetTitle>
-              <SheetDescription>Vagon {leg.car_number} · joy {leg.seats.join(", ") || "—"}</SheetDescription>
+    <div className="overflow-hidden rounded-2xl border border-hairline-soft bg-surface-card">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="w-full space-y-3 p-4 text-left transition-colors active:bg-surface-cream-strong"
+      >
+        <div className="flex items-center gap-2">
+          <TrainFront className="h-4 w-4 text-muted" strokeWidth={1.75} />
+          <span className="font-display text-display-sm text-ink">{t.train_number}</span>
+          {t.returned && <Badge variant="muted">Qaytarilgan</Badge>}
+          {reserved && <Badge variant="coral">Bron</Badge>}
+          <span className="ml-auto text-body-sm tabular-nums text-muted">
+            {t.amount_uzs.toLocaleString("ru-RU").replace(/ /g, " ")} so'm
+          </span>
+        </div>
+
+        <div className="flex items-end gap-2">
+          <div className="min-w-0">
+            <div className="truncate text-caption-upper uppercase text-muted">
+              {t.dep_station}
             </div>
-
-            <TripTimes
-              tone={leg.returned ? "muted" : "coral"}
-              moving={!leg.returned}
-              dep={{ station: leg.dep_station, time: hhmm(leg.dep_at) }}
-              arr={{
-                station: leg.arr_station,
-                time: hhmm(leg.arr_at),
-                plus: dayOffset(leg.dep_at.replace(" ", "T"), leg.arr_at.replace(" ", "T")),
-              }}
-            />
-
-            <ListGroup label={leg.tickets.length > 1 ? `Yo'lovchilar · ${leg.tickets.length} ta` : "Yo'lovchi"}>
-              {leg.tickets.length === 0 ? (
-                <ListRow title="—" subtitle={leg.status_known ? undefined : "Yo'lovchi va holatni yuklab bo'lmadi."} />
-              ) : (
-                leg.tickets.map(d => {
-                  const s = statusOf(d.status);
-                  return (
-                    <ListRow
-                      key={d.ticket_id || d.seat}
-                      title={d.passenger_name || "—"}
-                      subtitle={`joy ${d.seat}`}
-                      after={<Badge variant={s.tone}>{s.text}</Badge>}
-                    />
-                  );
-                })
-              )}
-            </ListGroup>
-
-            {isReservedLeg(leg) && (
-              <p className="px-1 text-body-sm text-muted">
-                Bron to'lanmagan. To'lov o'tgach chipta shu yerda amal qiladi.
-              </p>
-            )}
-            {!leg.returned && !isReservedLeg(leg) && (
-              <div className="space-y-2.5">
-                <Button full loading={send.isPending} onClick={() => send.mutate(leg)}>
-                  {!send.isPending && <FileDown strokeWidth={2.2} />}
-                  {send.isPending ? "Yuborilmoqda…" : "PDF ni botga yuborish"}
-                </Button>
-                <p className="text-center text-caption text-muted">
-                  Chipta chatga fayl bo'lib tushadi — saqlash va chop etish oson.
-                </p>
-              </div>
-            )}
+            <div className={cn("font-display text-display-sm tabular-nums", timeTone)}>
+              {hhmm(t.dep_at)}
+            </div>
           </div>
-        )}
-      </SheetContent>
-    </Sheet>
+          <div className="flex-1 border-t border-dashed border-hairline pb-2" />
+          <div className="min-w-0 text-right">
+            <div className="truncate text-caption-upper uppercase text-muted">
+              {t.arr_station}
+            </div>
+            <div className={cn("font-display text-display-sm tabular-nums", timeTone)}>
+              {hhmm(t.arr_at)}
+              {plus > 0 && <sup className="ml-0.5 text-caption text-muted">+{plus}</sup>}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-hairline-soft pt-3 text-body-sm text-muted">
+          <span className="inline-flex items-center gap-1">
+            <CalendarDays className="h-3.5 w-3.5" strokeWidth={1.75} />
+            {dateOf(t.dep_at)}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Armchair className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Vagon {t.car_number} · joy {t.seats.join(", ") || "—"}
+          </span>
+        </div>
+      </button>
+
+      {open && (
+        <div className="space-y-3 border-t border-hairline-soft px-4 pb-4 pt-3">
+          {t.tickets.map(d => {
+            const s = statusOf(d.status);
+            return (
+              <div key={d.ticket_id || d.seat} className="flex items-center gap-2 text-body-sm">
+                <span className="min-w-0 flex-1 truncate text-ink">
+                  {d.passenger_name || "—"}
+                </span>
+                <span className="text-muted">joy {d.seat}</span>
+                <Badge variant={s.tone}>{s.text}</Badge>
+              </div>
+            );
+          })}
+          {!t.status_known && (
+            <p className="text-body-sm text-muted">Yo'lovchi va holatni yuklab bo'lmadi.</p>
+          )}
+
+          {reserved && (
+            <p className="text-body-sm text-muted">
+              Bron to'lanmagan. To'lov o'tgach chipta shu yerda amal qiladi.
+            </p>
+          )}
+          {!t.returned && !reserved && (
+            <>
+              <Button
+                full
+                variant="secondary"
+                disabled={send.isPending}
+                onClick={() => send.mutate()}
+              >
+                <FileDown size={16} strokeWidth={1.75} />
+                {send.isPending ? "Yuborilmoqda…" : "PDF ni botga yuborish"}
+              </Button>
+              <p className="text-center text-body-sm text-muted">
+                Chipta chatga fayl bo'lib tushadi — saqlash va chop etish oson.
+              </p>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -216,32 +194,34 @@ function byDeparture(dir: 1 | -1) {
 }
 
 function TabCount({ n }: { n: number }) {
-  return <span className="tnum opacity-60">{n}</span>;
+  return <span className="tabular-nums opacity-60">{n}</span>;
 }
 
-/** Tickets arrive one after another, a beat apart — when the screen is pushed
- *  or launched; from a tab switch they are simply there. */
-function Cards({ tickets, onOpen }: { tickets: PurchasedTicket[]; onOpen: (t: PurchasedTicket) => void }) {
-  const entering = useEntering();
+function Note({ title, body }: { title: string; body: string }) {
   return (
-    <div className="space-y-3.5">
-      {tickets.map((t, i) => (
-        <m.div
-          key={t.order_item_id}
-          initial={entering ? { opacity: 0, y: 14 } : false}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ ...spring.smooth, delay: Math.min(i, 6) * 0.05 }}
-        >
-          <TicketCard t={t} onOpen={() => onOpen(t)} />
-        </m.div>
-      ))}
+    <div className="rounded-2xl border border-dashed border-hairline px-4 py-8 text-center">
+      <p className="text-title-sm text-ink">{title}</p>
+      <p className="mt-1 text-body-sm text-muted">{body}</p>
+    </div>
+  );
+}
+
+function Cards({ tickets }: { tickets: PurchasedTicket[] }) {
+  return (
+    <div className="space-y-2">
+      {tickets.map(t => <TicketCard key={t.order_item_id} t={t} />)}
     </div>
   );
 }
 
 function SectionLabel({ children }: { children: string }) {
-  return <div className="px-1 text-caption font-semibold text-muted">{children}</div>;
+  return <div className="px-1 text-caption-upper uppercase text-muted">{children}</div>;
 }
+
+const STEP_BTN =
+  "flex h-9 w-9 shrink-0 items-center justify-center rounded-pill text-ink " +
+  "transition-colors active:bg-surface-cream-strong disabled:opacity-30 " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral/40";
 
 /** ‹ Avgust 2026 › — never past the current month. */
 function MonthStepper({
@@ -249,48 +229,36 @@ function MonthStepper({
 }: { month: string; onMonth: (m: string) => void; caption: string }) {
   const haptic = useHaptic();
   const thisMonth = tashkentMonth();
-  const [dir, setDir] = useState<1 | -1>(-1);
   const step = (delta: -1 | 1) => {
     haptic.selection();
-    setDir(delta);
     onMonth(shiftMonth(month, delta));
   };
   return (
-    <div className="glass flex items-center justify-between rounded-[24px] p-1.5">
-      <IconButton variant="ghost" aria-label="Oldingi oy" onClick={() => step(-1)}>
-        <ChevronLeft strokeWidth={2.4} />
-      </IconButton>
-      <div className="relative min-w-0 flex-1 overflow-hidden text-center">
-        <AnimatePresence mode="popLayout" initial={false} custom={dir}>
-          <m.div
-            key={month}
-            custom={dir}
-            initial={{ opacity: 0, x: dir * -22 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: dir * 22 }}
-            transition={spring.smooth}
-          >
-            <div className="text-title-md text-ink">{formatMonth(month)}</div>
-            <div className="text-caption text-muted">{caption}</div>
-          </m.div>
-        </AnimatePresence>
+    <div className="flex items-center justify-between rounded-2xl bg-surface-card px-2 py-1.5">
+      <button type="button" aria-label="Oldingi oy" className={STEP_BTN} onClick={() => step(-1)}>
+        <ChevronLeft className="h-5 w-5" strokeWidth={1.75} />
+      </button>
+      <div className="min-w-0 text-center">
+        <div className="text-title-sm text-ink">{formatMonth(month)}</div>
+        <div className="text-caption text-muted">{caption}</div>
       </div>
-      <IconButton
-        variant="ghost"
+      <button
+        type="button"
         aria-label="Keyingi oy"
+        className={STEP_BTN}
         disabled={month >= thisMonth}
         onClick={() => step(1)}
       >
-        <ChevronRight strokeWidth={2.4} />
-      </IconButton>
+        <ChevronRight className="h-5 w-5" strokeWidth={1.75} />
+      </button>
     </div>
   );
 }
 
-const ARCHIVE_EMPTY = {
-  past:     { title: "Bu oyda xarid qilingan safar yo'q", body: "Oldingi oylarni ‹ bilan varaqlang.", icon: Archive },
-  returned: { title: "Bu oyda qaytarilgan chipta yo'q",   body: "Oldingi oylarni ‹ bilan varaqlang.", icon: Undo2 },
-} as const;
+const ARCHIVE_EMPTY: Record<"past" | "returned", { title: string; body: string }> = {
+  past:     { title: "Bu oyda xarid qilingan safar yo'q", body: "Oldingi oylarni ‹ bilan varaqlang." },
+  returned: { title: "Bu oyda qaytarilgan chipta yo'q",   body: "Oldingi oylarni ‹ bilan varaqlang." },
+};
 
 /**
  * One month of eticket's archive — the month a ticket was BOUGHT, which is
@@ -298,8 +266,8 @@ const ARCHIVE_EMPTY = {
  * Most recent departure first.
  */
 function ArchivePanel({
-  month, onMonth, show, onOpen,
-}: { month: string; onMonth: (m: string) => void; show: "past" | "returned"; onOpen: (t: PurchasedTicket) => void }) {
+  month, onMonth, show,
+}: { month: string; onMonth: (m: string) => void; show: "past" | "returned" }) {
   const q = useQuery({
     queryKey: ["ticketsArchive", month],
     queryFn: () => listArchivedTickets(month),
@@ -317,29 +285,18 @@ function ArchivePanel({
     : `shu oyda xarid qilingan · ${tickets.length} ta`;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <MonthStepper month={month} onMonth={onMonth} caption={caption} />
       {q.isLoading ? (
-        <div className="flex justify-center py-10"><Spinner /></div>
+        <div className="flex justify-center py-8"><Spinner /></div>
       ) : q.isError ? (
-        <EmptyNote title="Arxivni yuklab bo'lmadi" body="Birozdan so'ng qayta urinib ko'ring." />
+        <Note title="Arxivni yuklab bo'lmadi" body="Birozdan so'ng qayta urinib ko'ring." />
       ) : tickets.length === 0 ? (
-        <EmptyNote {...ARCHIVE_EMPTY[show]} />
+        <Note {...ARCHIVE_EMPTY[show]} />
       ) : (
-        <Cards tickets={tickets} onOpen={onOpen} />
+        <Cards tickets={tickets} />
       )}
     </div>
-  );
-}
-
-function TicketsSkeleton() {
-  return (
-    <Screen tabbed padded title="Chiptalarim" reveal={false}>
-      <Skeleton className="h-11 rounded-full" />
-      <div className="space-y-3.5">
-        {[0, 1].map(i => <Skeleton key={i} className="h-[178px] rounded-[26px]" />)}
-      </div>
-    </Screen>
   );
 }
 
@@ -349,12 +306,6 @@ export function Tickets() {
   const q = useQuery({ queryKey: ["tickets"], queryFn: listTickets, retry: false });
   const [picked, setPicked] = useState<Leg | null>(null);
   const [month, setMonth] = useState(tashkentMonth);
-
-  // The ticket open in the sheet. Kept after closing so the sheet can animate
-  // out still showing it.
-  const [sheetLeg, setSheetLeg] = useState<PurchasedTicket | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const open = (t: PurchasedTicket) => { setSheetLeg(t); setSheetOpen(true); };
 
   // eticket's active list is upcoming travel, returned tickets included until
   // their travel date. Split them out; next trip first.
@@ -367,7 +318,7 @@ export function Tickets() {
     [q.data],
   );
 
-  if (q.isLoading) return <TicketsSkeleton />;
+  if (q.isLoading) return <StatusView kind="loading" />;
 
   if (q.isError) {
     const code = (q.error as any)?.response?.data?.error?.code;
@@ -378,7 +329,7 @@ export function Tickets() {
           header="Akkount ulanmagan"
           description="Chiptalaringizni ko'rish uchun eticket.railway.uz akkountingizni ulang."
           action={<Button onClick={() => navigate("/railway-link")}>
-            <Link2 strokeWidth={2.2} />
+            <Link2 size={16} strokeWidth={1.75} />
             Akkountni ulash
           </Button>}
         />
@@ -395,7 +346,7 @@ export function Tickets() {
       : "past");
 
   return (
-    <Screen tabbed padded title="Chiptalarim" reveal={false}>
+    <Screen padded title="Chiptalarim">
       <Tabs
         value={leg}
         onValueChange={v => { haptic.selection(); setPicked(v as Leg); }}
@@ -408,42 +359,36 @@ export function Tickets() {
           <TabsTrigger value="returned">Qaytarilgan</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="upcoming" className="mt-5">
+        <TabsContent value="upcoming" className="mt-3">
           {upcoming.length === 0 ? (
-            <EmptyNote
-              icon={TicketIcon}
-              title="Kelgusi safar yo'q"
-              body="Yangi chipta sotib olinganda shu yerda ko'rinadi."
-            />
+            <Note title="Kelgusi safar yo'q" body="Yangi chipta sotib olinganda shu yerda ko'rinadi." />
           ) : (
-            <Cards tickets={upcoming} onOpen={open} />
+            <Cards tickets={upcoming} />
           )}
         </TabsContent>
 
-        <TabsContent value="past" className="mt-5">
-          <ArchivePanel month={month} onMonth={setMonth} show="past" onOpen={open} />
+        <TabsContent value="past" className="mt-3">
+          <ArchivePanel month={month} onMonth={setMonth} show="past" />
         </TabsContent>
 
         {/* Returned tickets have no list of their own on eticket: the ones
             with a future date still sit in the active list, the rest in the
             archive under the month they were bought. Both, in that order. */}
-        <TabsContent value="returned" className="mt-5">
-          <div className="space-y-6">
+        <TabsContent value="returned" className="mt-3">
+          <div className="space-y-5">
             {upcomingReturned.length > 0 && (
-              <div className="space-y-2.5">
+              <div className="space-y-2">
                 <SectionLabel>Kelgusi sanaga</SectionLabel>
-                <Cards tickets={upcomingReturned} onOpen={open} />
+                <Cards tickets={upcomingReturned} />
               </div>
             )}
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               <SectionLabel>Arxiv</SectionLabel>
-              <ArchivePanel month={month} onMonth={setMonth} show="returned" onOpen={open} />
+              <ArchivePanel month={month} onMonth={setMonth} show="returned" />
             </div>
           </div>
         </TabsContent>
       </Tabs>
-
-      <TicketSheet leg={sheetLeg} open={sheetOpen} onOpenChange={setSheetOpen} />
     </Screen>
   );
 }

@@ -2,9 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import * as m from "motion/react-m";
-import { AnimatePresence } from "motion/react";
-import { CreditCard, Link2, Zap } from "lucide-react";
+import { Check, CreditCard, Zap } from "lucide-react";
 
 import {
   getCard,
@@ -15,18 +13,13 @@ import {
   type PaymentMethod,
   type SeatStrategy,
 } from "@/api/client";
-import { PassengerPicker, SeatStrategyGroup } from "@/components/PassengerPicker";
+import { PassengerPicker } from "@/components/PassengerPicker";
 import { Screen } from "@/components/Screen";
 import { StatusView } from "@/components/StatusView";
 import { StickyAction } from "@/components/StickyAction";
 import { Button } from "@/components/ui/button";
 import { ListGroup, ListRow } from "@/components/ui/list";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
-import { IconTile } from "@/components/ui/tile";
-import { useHaptic } from "@/hooks/useHaptic";
-import { spring } from "@/lib/motion";
 import { MAX_SEATED, passengerProblem } from "@/lib/passengers";
 
 const MAX_PASSENGERS = MAX_SEATED;
@@ -36,42 +29,11 @@ const PAYMENT_OPTIONS: { value: PaymentMethod; label: string; hint: string }[] =
   { value: "payme",      label: "Payme",         hint: "Payme karta yoki balans" },
 ];
 
-/** A text line's stand-in while its value loads. */
-const Bar = ({ w }: { w: string }) => (
-  <Skeleton className="my-[3px] h-3.5 rounded-full bg-ink/[0.07]" style={{ width: w }} />
-);
-
-/**
- * One payment method: a real radio, labelled by the whole row. Drawn like a
- * <ListRow> (height, press tint, hairline from the text edge) but it is a
- * <label>, so a tap anywhere on it picks the radio.
- */
-function PayRow({ value, label, hint }: { value: PaymentMethod; label: string; hint: string }) {
-  const id = `pm-${value}`;
-  return (
-    <label
-      htmlFor={id}
-      className={
-        "tap relative flex min-h-[52px] cursor-pointer items-center gap-3.5 px-4 py-2.5 " +
-        "transition-colors duration-150 active:bg-[color:var(--row-press)] " +
-        "after:pointer-events-none after:absolute after:bottom-0 after:left-[54px] after:right-0 after:h-px after:bg-hairline-soft last:after:hidden"
-      }
-    >
-      <RadioGroupItem id={id} value={value} />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-body-md text-ink">{label}</div>
-        <div className="mt-px text-body-sm text-muted">{hint}</div>
-      </div>
-    </label>
-  );
-}
-
 export function AutobuyConfig() {
   const { id } = useParams<{ id: string }>();
   const subId = Number(id);
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const haptic = useHaptic();
 
   const accountQ = useQuery({ queryKey: ["railwayAccount"], queryFn: getRailwayStatus });
   const subsQ = useQuery({ queryKey: ["subs"], queryFn: listSubscriptions });
@@ -117,13 +79,11 @@ export function AutobuyConfig() {
         lap_child_ids: enabled ? lapIds : null,
       }),
     onSuccess: () => {
-      haptic.notify("success");
       toast.success("Saqlandi");
       qc.invalidateQueries({ queryKey: ["subs"] });
       navigate(`/sub/${subId}`);
     },
     onError: (err: any) => {
-      haptic.notify("error");
       const code = err?.response?.data?.error?.code;
       if (code === "railway_account_required") {
         toast.error("Avval eticket akkountni ulang");
@@ -154,12 +114,7 @@ export function AutobuyConfig() {
         kind="empty"
         header="Akkount ulanmagan"
         description="Auto-buy uchun avval eticket.railway.uz akkountingizni ulang."
-        action={
-          <Button onClick={() => navigate("/railway-link")}>
-            <Link2 strokeWidth={2.2} />
-            Akkountni ulash
-          </Button>
-        }
+        action={<Button onClick={() => navigate("/railway-link")}>Akkountni ulash</Button>}
       />
     );
   }
@@ -178,82 +133,105 @@ export function AutobuyConfig() {
       title="Avto sotib olish"
       subtitle={`${sub.dep_name} → ${sub.arr_name} · ${sub.travel_date}`}
     >
-      {/* The switch, then — only while it is on — everything auto-buy needs. */}
-      <div className="space-y-6">
-        <ListGroup
-          label="Holat"
-          footer={enabled
+      <ListGroup label="Holat">
+        <ListRow
+          before={<Zap className="h-5 w-5 text-coral" strokeWidth={1.75} />}
+          title="Auto-buy yoqilgan"
+          subtitle={enabled
             ? "Chipta topilganda avtomatik bron qilinadi"
             : "Hozircha faqat xabar yuboriladi"}
-        >
-          <ListRow
-            before={<IconTile icon={Zap} tone={enabled ? "coral" : "gray"} />}
-            title="Auto-buy yoqilgan"
-            after={
-              <Switch
-                checked={enabled}
-                onCheckedChange={setEnabled}
-                aria-label="Auto-buy"
-              />
-            }
+          after={
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={e => setEnabled(e.target.checked)}
+              className="h-5 w-5 accent-coral"
+              aria-label="Auto-buy"
+            />
+          }
+        />
+      </ListGroup>
+
+      {enabled && (
+        <>
+          <ListGroup label="To'lov kartasi" footer="Karta auto-buy paytida avtomatik yuboriladi">
+            <ListRow
+              before={<CreditCard className={`h-5 w-5 ${cardQ.data ? "text-coral" : "text-muted-soft"}`} strokeWidth={1.75} />}
+              title={cardQ.data ? `•••• ${cardQ.data.last4}` : "Karta saqlanmagan"}
+              subtitle={cardQ.data ? "Saqlangan" : "Avval kartani saqlash kerak"}
+              onClick={() => navigate("/cards/add")}
+              chevron
+            />
+          </ListGroup>
+
+          <PassengerPicker
+            friends={friends}
+            travelDate={sub.travel_date}
+            seatedIds={friendIds}
+            lapIds={lapIds}
+            loading={friendsQ.isLoading}
+            onChange={(seated, lap) => { setFriendIds(seated); setLapIds(lap); }}
+            onAddFriend={() => navigate("/friends")}
           />
-        </ListGroup>
 
-        <AnimatePresence initial={false}>
-          {enabled && (
-            <m.div
-              key="autobuy"
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0, transition: spring.smooth }}
-              exit={{ opacity: 0, y: 8, transition: spring.snappy }}
-              className="space-y-6"
+
+          {validCount > 1 && (
+            <ListGroup
+              label="Joy yetmasa"
+              footer={
+                strategy === "partial"
+                  ? "Nechta joy bo'lsa, shuncha olinadi. Qolganlari uchun kuzatuv davom etadi."
+                  : "Hamma yo'lovchiga bitta vagondan joy topilmaguncha kutiladi."
+              }
             >
-              <ListGroup label="To'lov kartasi" footer="Karta auto-buy paytida avtomatik yuboriladi">
+              {([
+                { v: "all" as const, t: "Hammasi birga", d: "Yoki hech nima — guruh ajralmaydi" },
+                { v: "partial" as const, t: "Nechta bo'lsa, shuncha", d: "Kamida bittasini kafolatlash" },
+              ]).map(o => (
                 <ListRow
-                  before={<IconTile icon={CreditCard} tone={cardQ.data ? "coral" : "gray"} />}
-                  title={
-                    cardQ.isLoading ? <Bar w="7rem" />
-                      : cardQ.data ? <span className="tnum">{`•••• ${cardQ.data.last4}`}</span>
-                      : "Karta saqlanmagan"
+                  key={o.v}
+                  before={
+                    <span
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-pill border ${
+                        strategy === o.v ? "border-coral bg-coral text-on-primary" : "border-muted-soft"
+                      }`}
+                      aria-hidden
+                    >
+                      {strategy === o.v && <Check className="h-3 w-3" strokeWidth={3} />}
+                    </span>
                   }
-                  subtitle={
-                    cardQ.isLoading ? <Bar w="5rem" />
-                      : cardQ.data ? "Saqlangan"
-                      : "Avval kartani saqlash kerak"
-                  }
-                  onClick={() => navigate("/cards/add")}
-                  chevron
+                  title={o.t}
+                  subtitle={o.d}
+                  selected={strategy === o.v}
+                  onClick={() => setStrategy(o.v)}
                 />
-              </ListGroup>
-
-              <PassengerPicker
-                friends={friends}
-                travelDate={sub.travel_date}
-                seatedIds={friendIds}
-                lapIds={lapIds}
-                loading={friendsQ.isLoading}
-                onChange={(seated, lap) => { setFriendIds(seated); setLapIds(lap); }}
-                onAddFriend={() => navigate("/friends")}
-              />
-
-              {validCount > 1 && <SeatStrategyGroup value={strategy} onChange={setStrategy} />}
-
-              <ListGroup label="To'lov uslubi (ixtiyoriy)" footer="Tanlanmasa, bron paytida tanlaysiz">
-                <RadioGroup
-                  aria-label="To'lov uslubi"
-                  value={payMethod ?? ""}
-                  onValueChange={v => { haptic.selection(); setPayMethod(v as PaymentMethod); }}
-                  className="gap-0"
-                >
-                  {PAYMENT_OPTIONS.map(o => (
-                    <PayRow key={o.value} value={o.value} label={o.label} hint={o.hint} />
-                  ))}
-                </RadioGroup>
-              </ListGroup>
-            </m.div>
+              ))}
+            </ListGroup>
           )}
-        </AnimatePresence>
-      </div>
+          <ListGroup label="To'lov uslubi (ixtiyoriy)" footer="Tanlanmasa, bron paytida tanlaysiz">
+            <RadioGroup
+              value={payMethod ?? ""}
+              onValueChange={v => setPayMethod(v as PaymentMethod)}
+              className="gap-0"
+            >
+              {PAYMENT_OPTIONS.map(o => (
+                <label
+                  key={o.value}
+                  htmlFor={`pm-${o.value}`}
+                  className="flex items-center gap-3 px-4 py-3 cursor-pointer active:bg-hairline-soft transition-colors min-h-[56px] border-b border-hairline-soft last:border-b-0"
+                >
+                  <RadioGroupItem id={`pm-${o.value}`} value={o.value} />
+                  <CreditCard className="h-5 w-5 text-ink" strokeWidth={1.75} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-body-md font-medium truncate text-ink">{o.label}</div>
+                    <div className="text-body-sm text-muted truncate">{o.hint}</div>
+                  </div>
+                </label>
+              ))}
+            </RadioGroup>
+          </ListGroup>
+        </>
+      )}
 
       <StickyAction
         hint={
@@ -266,13 +244,7 @@ export function AutobuyConfig() {
                 : undefined
         }
       >
-        <Button
-          full
-          size="lg"
-          loading={save.isPending}
-          disabled={!canSave}
-          onClick={() => save.mutate()}
-        >
+        <Button full disabled={!canSave} onClick={() => save.mutate()}>
           {save.isPending ? "Saqlanyapti…" : "Saqlash"}
         </Button>
       </StickyAction>

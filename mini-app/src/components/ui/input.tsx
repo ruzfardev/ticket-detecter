@@ -6,34 +6,43 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
   after?: React.ReactNode;
 }
 
-/**
- * A recessed field: an inner shadow makes it read as a well cut into the
- * surface, and focus lights the well from within (a coral ring + glow).
- * 17px text so iOS never zooms the page on focus.
- */
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, before, after, ...props }, ref) => (
-    <div
-      className={cn(
-        "flex h-[52px] items-center gap-2.5 rounded-[18px] px-4",
-        "bg-surface-card shadow-[inset_0_1px_2px_hsl(var(--shadow)/0.12),inset_0_0_0_0.5px_hsl(var(--hairline))]",
-        "transition-shadow duration-200",
-        "focus-within:shadow-[inset_0_1px_2px_hsl(var(--shadow)/0.08),0_0_0_2px_hsl(var(--coral-bright)),0_0_22px_-4px_hsl(var(--coral-bright)/0.45)]",
-        "has-[[aria-invalid=true]]:shadow-[0_0_0_2px_hsl(var(--error))]",
-        "has-[:disabled]:opacity-60",
-        className,
-      )}
-    >
-      {before && <span className="flex shrink-0 items-center text-muted">{before}</span>}
+  ({ className, type, before, after, ...props }, ref) => {
+    if (before || after) {
+      return (
+        <div
+          className={cn(
+            "flex items-center gap-2 rounded-md border border-hairline bg-canvas px-3 h-10",
+            "focus-within:border-coral focus-within:ring-2 focus-within:ring-coral/15 transition-colors",
+            className,
+          )}
+        >
+          {before && <span className="text-muted flex-shrink-0">{before}</span>}
+          <input
+            type={type}
+            ref={ref}
+            className="flex-1 bg-transparent outline-none text-body-md text-ink placeholder:text-muted-soft min-w-0"
+            {...props}
+          />
+          {after && <span className="text-muted flex-shrink-0">{after}</span>}
+        </div>
+      );
+    }
+    return (
       <input
         type={type}
         ref={ref}
-        className="min-w-0 flex-1 bg-transparent text-[17px] text-ink outline-none placeholder:text-muted-soft"
+        className={cn(
+          "h-10 w-full rounded-md border border-hairline bg-canvas px-3 text-body-md text-ink",
+          "placeholder:text-muted-soft outline-none transition-colors",
+          "focus:border-coral focus:ring-2 focus:ring-coral/15",
+          "disabled:opacity-60",
+          className,
+        )}
         {...props}
       />
-      {after && <span className="flex shrink-0 items-center text-muted">{after}</span>}
-    </div>
-  ),
+    );
+  }
 );
 Input.displayName = "Input";
 

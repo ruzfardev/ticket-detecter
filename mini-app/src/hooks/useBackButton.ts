@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTelegram } from "./useTelegram";
-import { closeTopOverlay } from "@/store/overlays";
 
 /**
  * In-app navigations made since this WebView opened.
@@ -79,7 +78,7 @@ export function useBackButton(visible: boolean) {
   useEffect(() => {
     if (!backButton) return;
     if (visible) backButton.show(); else backButton.hide();
-    const handler = () => { if (!closeTopOverlay()) goBackRef.current(); };
+    const handler = () => goBackRef.current();
     backButton.onClick(handler);
     return () => {
       backButton.offClick(handler);

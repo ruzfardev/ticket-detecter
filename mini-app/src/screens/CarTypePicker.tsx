@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { TriangleAlert } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 
 import { searchTrains } from "@/api/client";
 import { useHaptic } from "@/hooks/useHaptic";
@@ -11,10 +11,9 @@ import { useWizard } from "@/store/wizard";
 import { Screen } from "@/components/Screen";
 import { StickyAction } from "@/components/StickyAction";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ListGroup, ListRow } from "@/components/ui/list";
-import { SelectMark } from "@/components/ui/select-mark";
 import { Skeleton } from "@/components/ui/skeleton";
-import { IconTile } from "@/components/ui/tile";
 import { carTypeLabel } from "@/lib/cartypes";
 
 /** Mirrors backend VALID_CAR_TYPES — the fallback when we have no train data. */
@@ -112,18 +111,18 @@ export function CarTypePicker() {
       }
     >
       {isLoading && (
-        <div className="space-y-px overflow-hidden rounded-[26px]" aria-hidden>
-          {[0, 1, 2].map(i => <Skeleton key={i} className="h-[63px] rounded-none" />)}
+        <div className="space-y-2">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-14" />)}
         </div>
       )}
 
       {fallback && (
-        <div role="note" className="surface-soft flex items-start gap-3.5 p-4">
-          <IconTile icon={TriangleAlert} tone="amber" soft />
-          <p className="min-w-0 text-body-sm text-body">
+        <div className="flex items-start gap-2 rounded-lg border border-hairline bg-surface-card p-3 text-body-sm text-muted">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted" strokeWidth={1.75} />
+          <span>
             Poyezd ma'lumotini olib bo'lmadi — barcha turlar ko'rsatilmoqda.
             Tanlagan turingiz bu poyezdda bo'lmasligi mumkin.
-          </p>
+          </span>
         </div>
       )}
 
@@ -134,14 +133,9 @@ export function CarTypePicker() {
             return (
               <ListRow
                 key={o.type}
-                // The row is the control: a checkbox the whole width of the card.
-                role="checkbox"
-                aria-checked={checked}
-                // hairline starts under the text: 16 padding + 24 mark + 14 gap
-                inset={54}
-                before={<SelectMark checked={checked} />}
+                before={<Checkbox checked={checked} tabIndex={-1} />}
                 title={o.label}
-                subtitle={o.seats > 0 ? <span className="tnum">{o.seats} ta joy</span> : undefined}
+                subtitle={o.seats > 0 ? `${o.seats} ta joy` : undefined}
                 selected={checked}
                 onClick={() => toggle(o.type)}
               />
@@ -151,7 +145,7 @@ export function CarTypePicker() {
       )}
 
       <StickyAction hint={selected.length === 0 ? "Kamida 1 ta vagon turini tanlang" : undefined}>
-        <Button full size="lg" disabled={selected.length === 0} onClick={handleContinue}>
+        <Button full disabled={selected.length === 0} onClick={handleContinue}>
           Davom etish
         </Button>
       </StickyAction>

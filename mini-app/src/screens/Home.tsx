@@ -1,74 +1,51 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-import * as m from "motion/react-m";
+import { useQuery } from "@tanstack/react-query";
 import {
   Plus, Sparkles, Bell, Ticket, TrainFront, CalendarDays, ChevronRight,
-  Train, AlertCircle, Clock, CheckCircle2, Zap, RefreshCw, Pause, Play, Trash2,
+  Train, AlertCircle, Clock, CheckCircle2, Zap, RefreshCw,
 } from "lucide-react";
 
 import {
-  deleteSubscription, getMe, getRailwayStatus, isReservedLeg, listOrders, listSubscriptions,
-  listTickets, patchSubscription, type Subscription,
+  getMe, getRailwayStatus, isReservedLeg, listOrders, listSubscriptions, listTickets,
+  type Subscription,
 } from "@/api/client";
-import { HOME_STALE_MS } from "@/api/warm";
 import { useWizard } from "@/store/wizard";
 import { useHaptic } from "@/hooks/useHaptic";
 import { useTelegram } from "@/hooks/useTelegram";
-import { spring } from "@/lib/motion";
 import { Screen } from "@/components/Screen";
 import { StatusView } from "@/components/StatusView";
 import { HomeSkeleton } from "@/components/HomeSkeleton";
-import { Collapse, useLast } from "@/components/Collapse";
 import { Logo } from "@/components/Logo";
-import { EmptyNote } from "@/components/EmptyNote";
-import { Specular } from "@/components/glass/Specular";
-import { Ticker } from "@/components/motion/Ticker";
-import { TicketShell } from "@/components/trip/TicketShell";
-import { TripTimes } from "@/components/trip/TripTimes";
-import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
 import { ListGroup, ListRow } from "@/components/ui/list";
-import { PressCard } from "@/components/ui/press-card";
-import { SwipeRow } from "@/components/ui/swipe-row";
-import { IconTile } from "@/components/ui/tile";
 import { cn } from "@/lib/utils";
 import { formatShortDate, tashkentDate } from "@/lib/dates";
-import { dayOffset, trainTime } from "@/lib/traintime";
 
 /* ── Small building blocks ─────────────────────────────────────────── */
 
-function AvatarButton({ url, name, onClick }: { url?: string; name: string; onClick: () => void }) {
+function Avatar({ url, name, onClick }: { url?: string; name: string; onClick: () => void }) {
   const initial = (name.trim()[0] ?? "C").toUpperCase();
   return (
-    <IconButton
-      aria-label={`${name} — sozlamalar`}
+    <button
+      type="button"
       onClick={onClick}
-      className="overflow-hidden p-0 text-[17px] font-semibold text-coral-ink"
+      aria-label={`${name} — sozlamalar`}
+      className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-pill bg-coral/15 text-caption font-semibold text-coral focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
     >
-      {url ? <img src={url} alt="" className="size-full rounded-full object-cover" /> : initial}
-    </IconButton>
+      {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : initial}
+    </button>
   );
 }
 
 function StatusPill({ sub }: { sub: Subscription }) {
   const text = !sub.is_active ? "pauzada" : sub.autobuy_enabled ? "avto-xarid" : "kuzatuvda";
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 whitespace-nowrap text-caption font-medium",
-        sub.is_active ? "text-coral-ink" : "text-muted",
-      )}
-    >
-      <i
-        aria-hidden
-        className={cn(
-          "live-dot live-dot--still !size-[7px]",
-          sub.is_active ? "" : "!bg-muted-soft !shadow-none",
-        )}
-      />
+    <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap text-caption",
+      sub.is_active ? "text-coral" : "text-muted")}>
+      <i aria-hidden className={cn("h-2 w-2 rounded-pill",
+        sub.is_active ? "bg-coral live-dot" : "bg-muted-soft")} />
       {text}
     </span>
   );
@@ -76,37 +53,16 @@ function StatusPill({ sub }: { sub: Subscription }) {
 
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
-/** A ring that drains as the SMS-code window closes. */
-function CountdownRing({ secs, total = 600 }: { secs: number | null; total?: number }) {
-  const r = 18;
-  const c = 2 * Math.PI * r;
-  const left = secs === null ? 1 : Math.max(0, Math.min(1, secs / total));
-  return (
-    <span className="relative flex size-11 shrink-0 items-center justify-center">
-      <svg viewBox="0 0 44 44" className="absolute inset-0 -rotate-90" aria-hidden>
-        <circle cx="22" cy="22" r={r} fill="none" stroke="currentColor" strokeOpacity="0.28" strokeWidth="3" />
-        <circle
-          cx="22" cy="22" r={r} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"
-          strokeDasharray={c} strokeDashoffset={c * (1 - left)}
-          style={{ transition: "stroke-dashoffset 1s linear" }}
-        />
-      </svg>
-      <Clock width={18} height={18} strokeWidth={2.2} />
-    </span>
-  );
-}
-
 /* ── Screen ────────────────────────────────────────────────────────── */
 
 export function Home() {
   const navigate = useNavigate();
   const haptic = useHaptic();
-  const { user: tgUser, showConfirm } = useTelegram();
-  const qc = useQueryClient();
+  const { user: tgUser } = useTelegram();
   const reset = useWizard(s => s.reset);
-  const me = useQuery({ queryKey: ["me"], queryFn: getMe, staleTime: HOME_STALE_MS });
-  const subs = useQuery({ queryKey: ["subs"], queryFn: listSubscriptions, staleTime: HOME_STALE_MS });
-  const railway = useQuery({ queryKey: ["railwayAccount"], queryFn: getRailwayStatus, staleTime: HOME_STALE_MS });
+  const me = useQuery({ queryKey: ["me"], queryFn: getMe });
+  const subs = useQuery({ queryKey: ["subs"], queryFn: listSubscriptions });
+  const railway = useQuery({ queryKey: ["railwayAccount"], queryFn: getRailwayStatus });
   const linked = railway.data?.linked === true;
   const orders = useQuery({
     queryKey: ["orders"], queryFn: listOrders,
@@ -119,37 +75,6 @@ export function Home() {
     enabled: linked,
     staleTime: 5 * 60_000,
   });
-  // Swipe actions on a subscription row: the same two mutations, with the same
-  // error handling, as the subscription's own screen.
-  const toggle = useMutation({
-    mutationFn: (s: Subscription) => patchSubscription(s.id, { is_active: !s.is_active }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["subs"] }),
-    onError: (err: any) => {
-      haptic.notify("error");
-      const code = err.response?.data?.error?.code;
-      if (code === "slot_limit_reached") {
-        toast.error("Slot to'lgan — boshqa xabarnomani pauza qiling yoki Premium oling");
-      } else if (code === "not_found" || code === "forbidden") {
-        toast.error("Xabarnoma topilmadi");
-        qc.invalidateQueries({ queryKey: ["subs"] });
-      } else {
-        toast.error(err.response?.data?.error?.message || err.message || "Bajarilmadi");
-      }
-    },
-  });
-  const remove = useMutation({
-    mutationFn: (s: Subscription) => deleteSubscription(s.id),
-    onSuccess: () => {
-      toast.success("O'chirildi");
-      qc.invalidateQueries({ queryKey: ["subs"] });
-      qc.invalidateQueries({ queryKey: ["me"] });
-    },
-    onError: () => {
-      haptic.notify("error");
-      toast.error("O'chirib bo'lmadi");
-    },
-  });
-
   const awaitingOtp = (orders.data ?? []).find(o => o.status === "awaiting_otp");
   // The nearest valid ticket leaving today or tomorrow, Tashkent time.
   const trip = useMemo(() => {
@@ -160,11 +85,6 @@ export function Home() {
       .sort((a, b) => (a.dep_at < b.dep_at ? -1 : a.dep_at > b.dep_at ? 1 : 0));
     return legs[0] ? { leg: legs[0], today: legs[0].dep_at.startsWith(today) } : null;
   }, [tickets.data]);
-
-  // Both arrive after first paint (eticket answers in seconds), so they open like
-  // drawers — and stay filled while they close.
-  const shownOtp = useLast(awaitingOtp);
-  const shownTrip = useLast(trip);
 
   // OTP countdown: tick locally between the 8 s refetches.
   const [now, setNow] = useState(() => Date.now());
@@ -200,7 +120,6 @@ export function Home() {
   const paused = all.filter(s => !s.is_active);
   const anyAutobuy = active.some(s => s.autobuy_enabled);
   const intervalS = me.data.watcher?.interval_s;
-  const unlimited = slot.max >= 999;
 
   const name =
     [tgUser?.first_name, tgUser?.last_name].filter(Boolean).join(" ") || "Mehmon";
@@ -221,42 +140,22 @@ export function Home() {
         : "Marshrut, sana va poyezdni tanlang — joy chiqsa xabar beramiz.";
 
   const subRow = (s: Subscription) => (
-    <SwipeRow
-      key={s.id}
-      actions={[
-        {
-          key: "toggle",
-          label: s.is_active ? "Pauza" : "Davom",
-          icon: s.is_active ? <Pause /> : <Play />,
-          tone: "amber",
-          onSelect: () => toggle.mutate(s),
-        },
-        {
-          key: "delete",
-          label: "O'chirish",
-          icon: <Trash2 />,
-          tone: "red",
-          onSelect: async () => {
-            if (await showConfirm("O'chirishni xohlaysizmi?")) remove.mutate(s);
-          },
-        },
-      ]}
-    >
     <ListRow
-      className="after:hidden"
+      key={s.id}
+      // No leading icon: every row would carry the same train glyph, and at
+      // 390 px it cost the width that keeps "Toshkent → Samarqand" on one line.
       title={`${s.dep_name} → ${s.arr_name}`}
       subtitle={
         <span className="inline-flex items-center gap-1.5">
-          <CalendarDays width={14} height={14} strokeWidth={1.9} />
+          <CalendarDays width={14} height={14} strokeWidth={1.75} />
           {formatShortDate(s.travel_date)} · {s.train_numbers.length ? s.train_numbers.join(", ") : "har qanday"}
         </span>
       }
-      // The status is the trailing element; a chevron as well would only
-      // eat title width ("Toshkent → Samarqand" has to stay on one line).
+      // The whole row is the tap target; the status pill is the trailing
+      // element, so no chevron — it only ate title width.
       after={<StatusPill sub={s} />}
       onClick={() => navigate(`/sub/${s.id}`)}
     />
-    </SwipeRow>
   );
 
   const ordersActive = (orders.data ?? []).filter(o =>
@@ -264,229 +163,224 @@ export function Home() {
   // A returned ticket is still in eticket's active list; it is not a trip.
   const ticketCount = (tickets.data ?? []).filter(t => !t.returned && !isReservedLeg(t)).length;
 
-  const tripDur = shownTrip
-    ? dayOffset(shownTrip.leg.dep_at.replace(" ", "T"), shownTrip.leg.arr_at.replace(" ", "T"))
-    : 0;
-
   return (
     <Screen tabbed padded>
-      <div>
-        {/* Top strip — the mark, then the account facts as one quiet line: tier,
-            poll cadence, eticket link. Nothing here competes with the OTP
-            banner or the CTA for attention. */}
-        <header className="flex min-h-11 items-center justify-between gap-3">
-          <h1 className="sr-only">Chiptachi</h1>
-          <div className="flex min-w-0 items-center gap-3 text-ink">
-            <Logo size={28} live={active.length > 0} />
-            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <Badge variant={isFree ? "pill" : "solid"}>{isFree ? "Free" : "Premium"}</Badge>
-              {intervalS !== undefined && (
-                <span className="inline-flex items-center gap-1 text-caption font-medium text-muted">
+      {/* Top strip — mark only (Telegram already draws the bot name right
+          above this), then the account facts as one quiet line: tier, poll
+          cadence, eticket link. Not badges: nothing here competes with the
+          OTP banner or the CTA for attention. */}
+      <header className="flex h-8 items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5 text-ink">
+          <Logo size={22} />
+          <div className="flex min-w-0 items-center gap-1.5 truncate text-caption text-muted">
+            <span className={cn("font-medium", isFree ? "text-body" : "text-coral")}>
+              {isFree ? "Free" : "Premium"}
+            </span>
+            {intervalS !== undefined && (
+              <>
+                <span aria-hidden>·</span>
+                <span className="inline-flex items-center gap-1">
                   {isFree
-                    ? <RefreshCw width={12} height={12} strokeWidth={2.2} />
-                    : <Zap width={12} height={12} strokeWidth={2.2} className="text-coral-ink" />}
+                    ? <RefreshCw width={11} height={11} strokeWidth={2} />
+                    : <Zap width={11} height={11} strokeWidth={2} className="text-coral" />}
                   har {intervalS} s
                 </span>
-              )}
-              {linked && (
-                <span className="inline-flex items-center gap-1 text-caption font-medium text-muted">
-                  <CheckCircle2 width={12} height={12} strokeWidth={2.2} className="text-success" />
-                  eticket
+              </>
+            )}
+            {linked && (
+              <>
+                <span aria-hidden>·</span>
+                <span className="inline-flex items-center gap-1 truncate">
+                  <CheckCircle2 width={11} height={11} strokeWidth={2} className="text-success" />
+                  eticket ulangan
                 </span>
-              )}
+              </>
+            )}
+          </div>
+        </div>
+        <Avatar url={tgUser?.photo_url} name={name} onClick={go("/settings")} />
+      </header>
+
+      {/* Awaiting-OTP banner — the one time-critical element, always first. */}
+      {awaitingOtp && (
+        <button
+          type="button"
+          onClick={() => navigate(`/order/${awaitingOtp.id}`)}
+          className="relative flex w-full items-center gap-3 rounded-xl bg-coral p-4 text-left text-on-primary transition-transform active:scale-[0.99]"
+        >
+          <span aria-hidden className="live-dot absolute right-3 top-3 h-1.5 w-1.5 rounded-pill bg-on-primary" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-on-primary/20">
+            <Clock width={20} height={20} strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-title-sm">SMS kodni kiriting</div>
+            <div className="truncate text-caption text-on-primary/80">
+              {awaitingOtp.train_number} · Vagon {awaitingOtp.car_number} · Joy{" "}
+              {awaitingOtp.seat_numbers?.length ? awaitingOtp.seat_numbers.join(", ") : awaitingOtp.seat_number}
             </div>
           </div>
-          <AvatarButton url={tgUser?.photo_url} name={name} onClick={go("/settings")} />
-        </header>
-
-        {/* Awaiting-OTP banner — the one time-critical element, always first. */}
-        <Collapse open={!!awaitingOtp}>
-          {shownOtp && (
-            <div className="pt-6">
-              <PressCard
-                material="none"
-                onClick={() => navigate(`/order/${shownOtp.id}`)}
-                className="glass-prominent relative flex items-center gap-3.5 overflow-hidden rounded-[26px] p-4"
-                aria-label="SMS kodni kiriting"
-              >
-                <Specular />
-                <CountdownRing secs={otpSecs} />
-                <div className="relative min-w-0 flex-1">
-                  <div className="text-title-md">SMS kodni kiriting</div>
-                  <div className="truncate text-caption text-on-primary/85">
-                    {shownOtp.train_number} · Vagon {shownOtp.car_number} · Joy{" "}
-                    {shownOtp.seat_numbers?.length ? shownOtp.seat_numbers.join(", ") : shownOtp.seat_number}
-                  </div>
-                </div>
-                {otpSecs !== null && (
-                  <Ticker value={mmss(otpSecs)} className="relative text-[24px] font-semibold" />
-                )}
-                <ChevronRight className="relative shrink-0 opacity-90" width={20} height={20} strokeWidth={2.4} />
-              </PressCard>
-            </div>
+          {otpSecs !== null && (
+            <span className="font-mono text-title-md tabular-nums">{mmss(otpSecs)}</span>
           )}
-        </Collapse>
-
-        {/* A trip today or tomorrow outranks the counters. */}
-        <Collapse open={!!trip}>
-          {shownTrip && (
-            <div className="pt-6">
-              <PressCard material="none" onClick={go("/tickets")} className="rounded-[26px]" aria-label="Safar chiptasi">
-                <TicketShell
-                  tone="tint"
-                  top={
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between text-caption font-semibold">
-                        <span className="inline-flex items-center gap-1.5 uppercase tracking-[0.06em] text-coral-ink">
-                          <TrainFront width={15} height={15} strokeWidth={2.2} />
-                          {shownTrip.today ? "Bugun safar" : "Ertaga safar"}
-                        </span>
-                        <span className="tnum text-muted">{shownTrip.leg.train_number}</span>
-                      </div>
-                      <TripTimes
-                        tone="coral"
-                        moving
-                        dep={{ station: shownTrip.leg.dep_station, time: trainTime(shownTrip.leg.dep_at.replace(" ", "T")) }}
-                        arr={{
-                          station: shownTrip.leg.arr_station,
-                          time: trainTime(shownTrip.leg.arr_at.replace(" ", "T")),
-                          plus: tripDur,
-                        }}
-                      />
-                    </div>
-                  }
-                  bottom={
-                    <div className="flex items-center justify-between text-body-sm text-body">
-                      <span>Vagon {shownTrip.leg.car_number} · joy {shownTrip.leg.seats.join(", ") || "—"}</span>
-                      <span className="inline-flex items-center gap-0.5 font-semibold text-coral-ink">
-                        Chipta <ChevronRight width={16} height={16} strokeWidth={2.6} />
-                      </span>
-                    </div>
-                  }
-                />
-              </PressCard>
-            </div>
-          )}
-        </Collapse>
-      </div>
+          <ChevronRight className="shrink-0" width={20} height={20} strokeWidth={1.75} />
+        </button>
+      )}
 
       {/* Hero — what the app is doing right now, and the one primary action. */}
-      <section className="glass glass-flat relative overflow-hidden rounded-[30px] p-5">
-        <Specular />
-        <div className="relative">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 text-caption font-semibold text-muted">
-                <i aria-hidden className={cn("live-dot", active.length === 0 && "live-dot--still !bg-muted-soft !shadow-none")} />
-                Kuzatuvda
-              </div>
-              <div className="mt-1.5 flex items-baseline gap-2">
-                <Ticker value={active.length} className="text-[64px] font-bold leading-none text-ink" />
-                <span className="text-title-md text-muted">/ {unlimited ? "∞" : slot.max} slot</span>
-              </div>
-            </div>
-            <Logo size={48} live={active.length > 0} className="text-ink/90" />
-          </div>
-
-          {!unlimited && (
-            <div className="mt-3.5 flex gap-1.5" aria-hidden>
-              {Array.from({ length: Math.min(slot.max, 8) }).map((_, i) => (
-                <m.span
-                  key={i}
-                  initial={false}
-                  animate={{ width: i < active.length ? 28 : 10 }}
-                  transition={spring.bouncy}
-                  className={cn(
-                    "h-2 rounded-full",
-                    i < active.length ? "bg-coral-bright shadow-[0_0_10px_hsl(var(--coral-bright)/0.6)]" : "bg-ink/14",
-                  )}
-                />
-              ))}
-            </div>
-          )}
-
-          <p className="mt-3.5 text-body-sm text-body">{caption}</p>
-
-          <Button size="lg" full className="mt-5" onClick={handleNew}>
-            {blocked
-              ? <><Sparkles strokeWidth={2.2} />Slot to'lgan — Premium</>
-              : <><Plus strokeWidth={2.6} />Yangi xabarnoma</>}
-          </Button>
+      <section className="relative overflow-hidden rounded-xl border border-coral/15 bg-surface-card p-5">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,hsl(var(--coral)/0.18),hsl(var(--accent-teal)/0.08)_60%,transparent)]"
+        />
+        <div className="absolute right-4 top-4 text-ink">
+          <Logo size={40} live={active.length > 0} />
         </div>
+        <div className="relative max-w-[calc(100%-52px)]">
+          <div className="text-caption-upper uppercase text-muted">Kuzatuvda</div>
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="font-display text-display-xl font-semibold tabular-nums text-ink">
+              {active.length}
+            </span>
+            <span className="text-title-md tabular-nums text-muted-soft">
+              / {slot.max >= 999 ? "∞" : slot.max} slot
+            </span>
+          </div>
+          <p className="mt-1.5 text-body-sm text-body">{caption}</p>
+        </div>
+        <Button size="lg" full className="relative mt-5 rounded-lg" onClick={handleNew}>
+          {blocked
+            ? <><Sparkles width={18} height={18} strokeWidth={2} />Slot to'lgan — Premium</>
+            : <><Plus width={18} height={18} strokeWidth={2} />Yangi xabarnoma</>}
+        </Button>
       </section>
 
       {/* Account states that need the user's hand */}
       {railway.data && !linked && (
-        <ListGroup>
-          <ListRow
-            before={<IconTile icon={Train} tone="coral" />}
-            title="eticket akkauntni ulang"
-            subtitle="Avto-xarid va chiptalar uchun"
-            chevron
-            onClick={go("/railway-link")}
-          />
-        </ListGroup>
+        <button
+          type="button"
+          onClick={go("/railway-link")}
+          className="flex w-full items-center gap-3 rounded-lg border border-hairline bg-canvas p-4 text-left transition-colors hover:bg-surface-soft active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-coral/12">
+            <Train className="text-coral" width={20} height={20} strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-title-sm text-ink">eticket akkauntni ulang</div>
+            <div className="text-caption text-muted">Avto-xarid va chiptalar uchun</div>
+          </div>
+          <ChevronRight className="shrink-0 text-muted-soft" width={20} height={20} strokeWidth={1.75} />
+        </button>
       )}
       {railway.data?.link_status === "login_failed" && (
-        <ListGroup>
-          <ListRow
-            before={<IconTile icon={AlertCircle} tone="red" />}
-            title="Parol eskirgan"
-            subtitle="eticket akkauntni qayta ulang"
-            chevron
-            onClick={go("/railway-link")}
-          />
-        </ListGroup>
+        <button
+          type="button"
+          onClick={go("/railway-link")}
+          className="flex w-full items-center gap-3 rounded-lg border border-error/40 bg-error/5 p-4 text-left transition-colors hover:bg-error/10 active:scale-[0.99]"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-error/15">
+            <AlertCircle className="text-error" width={20} height={20} strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-title-sm text-ink">Parol eskirgan</div>
+            <div className="text-caption text-muted">eticket akkauntni qayta ulang</div>
+          </div>
+          <ChevronRight className="shrink-0 text-muted-soft" width={20} height={20} strokeWidth={1.75} />
+        </button>
       )}
 
       {/* Notifications */}
       {all.length === 0 ? (
-        <EmptyNote
-          icon={TrainFront}
-          title="Hali xabarnoma yo'q"
-          body="“Yangi xabarnoma” tugmasini bosing — joy paydo bo'lishi bilan Telegram orqali xabar yetadi."
-        />
+        <Card variant="feature" pad="md">
+          <div className="flex items-start gap-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-canvas">
+              <TrainFront className="text-ink" width={20} height={20} strokeWidth={1.75} />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-display text-display-sm text-ink">Hali xabarnoma yo'q</h3>
+              <p className="text-body-sm text-body">
+                “Yangi xabarnoma” tugmasini bosing — joy paydo bo'lishi bilan Telegram orqali xabar yetadi.
+              </p>
+            </div>
+          </div>
+        </Card>
       ) : (
-        <div className="space-y-6">
+        <>
           {active.length > 0 && (
             <ListGroup label="Xabarnomalar">{active.map(subRow)}</ListGroup>
           )}
           {paused.length > 0 && (
             <ListGroup label="Pauzada">{paused.map(subRow)}</ListGroup>
           )}
-        </div>
+        </>
+      )}
+
+      {/* A trip today or tomorrow outranks the counters */}
+      {trip && (
+        <button
+          type="button"
+          onClick={go("/tickets")}
+          className="flex w-full items-center gap-3 rounded-lg bg-coral p-4 text-left text-on-primary transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-on-primary/20">
+            <TrainFront width={20} height={20} strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-caption-upper uppercase opacity-80">
+              {trip.today ? "Bugun safar" : "Ertaga safar"}
+            </div>
+            <div className="truncate text-title-sm">
+              {trip.leg.dep_station} → {trip.leg.arr_station}
+            </div>
+            <div className="text-caption opacity-80">
+              {trip.leg.dep_at.slice(11, 16)} · {trip.leg.train_number} · vagon {trip.leg.car_number} · joy {trip.leg.seats.join(", ")}
+            </div>
+          </div>
+          <ChevronRight width={20} height={20} strokeWidth={1.75} className="shrink-0 opacity-80" />
+        </button>
       )}
 
       {/* Glance: orders in flight / tickets owned — only meaningful once linked */}
       {linked && (
-        <div className="grid grid-cols-2 gap-3">
-          <PressCard onClick={go("/orders")} className="rounded-[24px] p-4">
-            <IconTile icon={Bell} tone="coral" soft size={36} />
-            <div className="mt-3.5 text-display-lg text-ink">
-              <Ticker value={ordersActive} />
-            </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={go("/orders")}
+            className="relative rounded-lg bg-surface-card p-4 text-left transition-transform active:scale-[0.99]"
+          >
+            <Bell className="absolute right-3 top-3 text-coral" width={18} height={18} strokeWidth={1.75} />
+            <div className="font-display text-display-sm tabular-nums text-ink">{ordersActive}</div>
             <div className="text-caption text-muted">Buyurtma jarayonda</div>
-          </PressCard>
-          <PressCard onClick={go("/tickets")} className="rounded-[24px] p-4">
-            <IconTile icon={Ticket} tone="teal" soft size={36} />
-            <div className="mt-3.5 text-display-lg text-ink">
-              {tickets.isLoading ? "…" : <Ticker value={ticketCount} />}
+          </button>
+          <button
+            type="button"
+            onClick={go("/tickets")}
+            className="relative rounded-lg bg-surface-card p-4 text-left transition-transform active:scale-[0.99]"
+          >
+            <Ticket className="absolute right-3 top-3 text-coral" width={18} height={18} strokeWidth={1.75} />
+            <div className="font-display text-display-sm tabular-nums text-ink">
+              {tickets.isLoading ? "…" : ticketCount}
             </div>
             <div className="text-caption text-muted">Chipta sotib olingan</div>
-          </PressCard>
+          </button>
         </div>
       )}
 
       {/* Premium upsell (free only) */}
       {isFree && (
-        <PressCard material="glass" onClick={go("/premium")} className="flex items-center gap-3.5 p-4">
-          <IconTile icon={Sparkles} tone="amber" size={40} />
+        <button
+          type="button"
+          onClick={go("/premium")}
+          className="flex w-full items-center gap-3 rounded-lg border border-hairline bg-canvas p-4 text-left transition-colors hover:bg-surface-soft active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-coral/12">
+            <Sparkles className="text-coral" width={20} height={20} strokeWidth={1.75} />
+          </div>
           <div className="min-w-0 flex-1">
-            <div className="text-title-md text-ink">Premium — 3× tezroq, 3 slot</div>
+            <div className="text-title-sm text-ink">Premium — 3× tezroq, 3 slot</div>
             <div className="text-caption text-muted">Joyni birinchi bo'lib ilg'ang</div>
           </div>
-          <ChevronRight className="shrink-0 text-muted-soft" width={20} height={20} strokeWidth={2.2} />
-        </PressCard>
+          <ChevronRight className="shrink-0 text-muted-soft" width={20} height={20} strokeWidth={1.75} />
+        </button>
       )}
     </Screen>
   );
