@@ -84,6 +84,10 @@ its edge, inputs `rounded-[18px]`, everything interactive is a capsule
 - `Sheet/SheetContent/SheetTitle/SheetDescription` — floating glass bottom
   sheet, drag-to-dismiss, Telegram Back closes it. Controlled: `open`,
   `onOpenChange`.
+- `SwipeRow actions={[{key,label,icon,tone,onSelect}]}` — iOS swipe actions
+  for a row (drag left). A pointer shortcut only: the same actions must exist
+  on the item's own screen (the panel is `aria-hidden`). Used on Home's
+  subscription rows: pause/resume and delete (delete behind `showConfirm`).
 - `Skeleton` (shimmer), `Spinner`.
 
 **Travel**
@@ -156,11 +160,47 @@ harmless. Use `notify` for outcomes (saved / failed).
 - Keep Uzbek copy exactly as it was. Keep every query, mutation, guard and
   haptic call; a redesign changes presentation, never behaviour.
 
+## Accessibility (already handled by the frame — keep it that way)
+
+- `Screen` renders one `<main>` (focus moves into it on every navigation
+  unless a field asked for focus), one `<header>` banner (the top bar), and the
+  large title as the page's `<h1>`. A screen without a visible title needs an
+  `sr-only` `<h1>` (Home has one).
+- Tokens are contrast-checked (WCAG AA) including secondary text directly on
+  the ambient light; don't introduce ad-hoc greys.
+- Zoom is not disabled (the viewport meta has no `user-scalable=no`); inputs
+  are 17 px so iOS doesn't zoom on focus.
+- Reduced motion drops transforms; reduced transparency (OS) forces the solid
+  material.
+
+## Bundle
+
+Non-launch screens are `React.lazy` chunks (see `App.tsx`) prefetched on idle,
+so the entry chunk stays small (the date step alone pulls in a calendar
+library). `OrderDetail` stays in the entry chunk: it is the bot's deep link for
+the SMS code. Add new screens to the `loaders` table unless they are needed at
+launch.
+
 ## Quality tiers
 
 `<html data-fx="full|lite|off">` (Settings → Shisha effekti; auto by default;
 the OS "reduce transparency" forces `off`). Layout never changes between
 tiers, only material. `lite` = smaller blur, still orbs; `off` = solid panes.
+
+## Testing notes
+
+- Chromium renders everything including blur. Headless **WebKit (Playwright)
+  does not paint `backdrop-filter` at all** — its screenshots show crisp
+  content under glass; that is the tool, not the CSS (real Safari/WKWebView
+  blur). It is still the right engine for masks, notches, gradients, fonts
+  (real SF Pro) and layout.
+- Never combine `backdrop-filter` with `mask-image` on one element (Safari can
+  blur the whole rectangle); the scroll-edge veil is a plain gradient for that
+  reason.
+- Verified behaviours worth re-checking after changes to shared chrome: tab
+  lens tap + drag, sheet drag-to-dismiss, page slide keeps fixed chrome fixed
+  and adds no horizontal overflow, scroll restoration on back, large-title
+  collapse, `data-fx` tiers, reduced motion, tilt highlight, swipe rows.
 
 ## Running it
 

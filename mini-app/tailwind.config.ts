@@ -35,7 +35,8 @@ const config: Config = {
         "canvas-2": c("canvas-2"),
         "surface-soft": cd("surface-soft", "surface-soft-a"),
         "surface-card": cd("surface-card", "surface-card-a"),
-        "surface-cream-strong": cd("surface-strong", "surface-strong-a"),
+        "surface-strong": cd("surface-strong", "surface-strong-a"),
+        "surface-cream-strong": cd("surface-strong", "surface-strong-a"), // legacy name
         "surface-dark": c("surface-dark"),
         "surface-dark-elevated": c("surface-dark-elevated"),
         "surface-dark-soft": c("surface-dark-soft"),
@@ -123,6 +124,10 @@ const config: Config = {
         section: "64px",
         tabbar: "96px",
       },
+
+      // Steps the default scale lacks but the design uses (tints of 6–22 %).
+      // Without them `bg-coral-bright/16` etc. silently generate no CSS.
+      opacity: { 6: "0.06", 14: "0.14", 16: "0.16", 22: "0.22" },
 
       boxShadow: {
         card: "0 1px 2px hsl(var(--shadow) / 0.06), 0 6px 20px -8px hsl(var(--shadow) / 0.14)",

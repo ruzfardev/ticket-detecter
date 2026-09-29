@@ -32,14 +32,20 @@ export function PageTransition({ children }: { children: ReactNode }) {
     tabSwitch ? { opacity: 0, scale: 0.985 } :
     { x: navType === "POP" ? -28 : 46 };
 
+  // `overflow-x: clip` (not `hidden`): a page arriving from the right must not
+  // widen the document — iOS would let the whole page be panned sideways for a
+  // moment — yet clip, unlike hidden, creates no scroll container, so the
+  // sticky top bar inside keeps sticking to the viewport.
   return (
-    <m.div
-      key={to}
-      initial={initial}
-      animate={{ x: 0, opacity: 1, scale: 1 }}
-      transition={spring.smooth}
-    >
-      {children}
-    </m.div>
+    <div className="overflow-x-clip">
+      <m.div
+        key={to}
+        initial={initial}
+        animate={{ x: 0, opacity: 1, scale: 1 }}
+        transition={spring.smooth}
+      >
+        {children}
+      </m.div>
+    </div>
   );
 }

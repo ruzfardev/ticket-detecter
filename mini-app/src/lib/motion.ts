@@ -25,12 +25,17 @@ export const easeOut = [0.16, 1, 0.3, 1] as const;
 /** Staggered entrance for the blocks of a screen. `custom` is the block index. */
 export const reveal: Variants = {
   hidden: { opacity: 0, y: 16, scale: 0.985 },
-  show: (i: number = 0) => ({
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    transition: { ...spring.smooth, delay: Math.min(i, 8) * 0.045 },
-  }),
+  show: (i: number = 0) => {
+    const delay = Math.min(i, 8) * 0.045;
+    return {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      // The fade is quick on purpose: while a block is below full opacity any
+      // glass inside it cannot blur its backdrop, so keep that window short.
+      transition: { opacity: { duration: 0.2, delay }, default: { ...spring.smooth, delay } },
+    };
+  },
 };
 
 /** A press: shrink fast, release with overshoot — the "gel" of Liquid Glass. */

@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import * as m from "motion/react-m";
 import {
   Plus, Sparkles, Bell, Ticket, TrainFront, CalendarDays, ChevronRight,
-  Train, AlertCircle, Clock, CheckCircle2, Zap, RefreshCw,
+  Train, AlertCircle, Clock, CheckCircle2, Zap, RefreshCw, Pause, Play, Trash2,
 } from "lucide-react";
 
 import {
-  getMe, getRailwayStatus, isReservedLeg, listOrders, listSubscriptions, listTickets,
-  type Subscription,
+  deleteSubscription, getMe, getRailwayStatus, isReservedLeg, listOrders, listSubscriptions,
+  listTickets, patchSubscription, type Subscription,
 } from "@/api/client";
 import { useWizard } from "@/store/wizard";
 import { useHaptic } from "@/hooks/useHaptic";
@@ -29,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { ListGroup, ListRow } from "@/components/ui/list";
 import { PressCard } from "@/components/ui/press-card";
+import { SwipeRow } from "@/components/ui/swipe-row";
 import { IconTile } from "@/components/ui/tile";
 import { cn } from "@/lib/utils";
 import { formatShortDate, tashkentDate } from "@/lib/dates";
@@ -97,7 +99,8 @@ function CountdownRing({ secs, total = 600 }: { secs: number | null; total?: num
 export function Home() {
   const navigate = useNavigate();
   const haptic = useHaptic();
-  const { user: tgUser } = useTelegram();
+  const { user: tgUser, showConfirm } = useTelegram();
+  const qc = useQueryClient();
   const reset = useWizard(s => s.reset);
   const me = useQuery({ queryKey: ["me"], queryFn: getMe });
   const subs = useQuery({ queryKey: ["subs"], queryFn: listSubscriptions });
@@ -114,6 +117,37 @@ export function Home() {
     enabled: linked,
     staleTime: 5 * 60_000,
   });
+  // Swipe actions on a subscription row: the same two mutations, with the same
+  // error handling, as the subscription's own screen.
+  const toggle = useMutation({
+    mutationFn: (s: Subscription) => patchSubscription(s.id, { is_active: !s.is_active }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["subs"] }),
+    onError: (err: any) => {
+      haptic.notify("error");
+      const code = err.response?.data?.error?.code;
+      if (code === "slot_limit_reached") {
+        toast.error("Slot to'lgan — boshqa xabarnomani pauza qiling yoki Premium oling");
+      } else if (code === "not_found" || code === "forbidden") {
+        toast.error("Xabarnoma topilmadi");
+        qc.invalidateQueries({ queryKey: ["subs"] });
+      } else {
+        toast.error(err.response?.data?.error?.message || err.message || "Bajarilmadi");
+      }
+    },
+  });
+  const remove = useMutation({
+    mutationFn: (s: Subscription) => deleteSubscription(s.id),
+    onSuccess: () => {
+      toast.success("O'chirildi");
+      qc.invalidateQueries({ queryKey: ["subs"] });
+      qc.invalidateQueries({ queryKey: ["me"] });
+    },
+    onError: () => {
+      haptic.notify("error");
+      toast.error("O'chirib bo'lmadi");
+    },
+  });
+
   const awaitingOtp = (orders.data ?? []).find(o => o.status === "awaiting_otp");
   // The nearest valid ticket leaving today or tomorrow, Tashkent time.
   const trip = useMemo(() => {
@@ -180,8 +214,29 @@ export function Home() {
         : "Marshrut, sana va poyezdni tanlang — joy chiqsa xabar beramiz.";
 
   const subRow = (s: Subscription) => (
-    <ListRow
+    <SwipeRow
       key={s.id}
+      actions={[
+        {
+          key: "toggle",
+          label: s.is_active ? "Pauza" : "Davom",
+          icon: s.is_active ? <Pause /> : <Play />,
+          tone: "amber",
+          onSelect: () => toggle.mutate(s),
+        },
+        {
+          key: "delete",
+          label: "O'chirish",
+          icon: <Trash2 />,
+          tone: "red",
+          onSelect: async () => {
+            if (await showConfirm("O'chirishni xohlaysizmi?")) remove.mutate(s);
+          },
+        },
+      ]}
+    >
+    <ListRow
+      className="after:hidden"
       title={`${s.dep_name} → ${s.arr_name}`}
       subtitle={
         <span className="inline-flex items-center gap-1.5">
@@ -194,6 +249,7 @@ export function Home() {
       after={<StatusPill sub={s} />}
       onClick={() => navigate(`/sub/${s.id}`)}
     />
+    </SwipeRow>
   );
 
   const ordersActive = (orders.data ?? []).filter(o =>
@@ -211,6 +267,7 @@ export function Home() {
           poll cadence, eticket link. Nothing here competes with the OTP
           banner or the CTA for attention. */}
       <header className="flex min-h-11 items-center justify-between gap-3">
+        <h1 className="sr-only">Chiptachi</h1>
         <div className="flex min-w-0 items-center gap-3 text-ink">
           <Logo size={28} live={active.length > 0} />
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">

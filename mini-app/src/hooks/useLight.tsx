@@ -17,8 +17,9 @@ import { tgVersionAtLeast } from "@/lib/platform";
  * elements that read them move, on the compositor.
  *
  * Sources, best first: Telegram's DeviceOrientation API (radians, no iOS
- * permission dance) → the browser's deviceorientation event where it needs no
- * permission (Android) → mouse position → scroll. Sensors only run while some
+ * permission dance) → the browser's deviceorientation event (fires on Android;
+ * iOS withholds it without a permission we deliberately never prompt for) →
+ * mouse position → scroll. Sensors only run while some
  * mounted element has asked for the light (`retain`), and never on the "lite"
  * / "off" tiers or under reduced motion.
  */
@@ -71,10 +72,10 @@ export function LightProvider({ children }: { children: ReactNode }) {
         tg.offEvent("deviceOrientationChanged", onChange);
         try { DO.stop?.(); } catch { /* noop */ }
       });
-    } else if (
-      typeof DeviceOrientationEvent !== "undefined" &&
-      typeof (DeviceOrientationEvent as any).requestPermission !== "function"
-    ) {
+    } else if (typeof DeviceOrientationEvent !== "undefined") {
+      // Never asks for permission. Where the platform gates the sensor behind
+      // one (iOS Safari) the event simply never fires and the light follows
+      // the scroll instead; where it doesn't (Android) this just works.
       const on = (e: DeviceOrientationEvent) => {
         if (e.gamma == null || e.beta == null) return;
         sensor = true;

@@ -31,21 +31,21 @@ export function NavBar({ progress, title, leading, trailing, center, overlay }: 
         className={cn(overlay && "pointer-events-none absolute inset-x-0 top-0")}
         style={{ paddingTop: "var(--safe-t)" }}
       >
-      <m.div aria-hidden className="glass-bar absolute inset-0" style={{ opacity: progress }} />
-      <div className="page-frame relative flex h-[var(--nav-h)] items-center gap-3">
-        <div className="flex min-w-[44px] shrink-0 justify-start">{leading}</div>
-        <div className="flex min-w-0 flex-1 items-center justify-center">
-          {center ?? (
-            <m.h2
-              className="truncate font-display text-title-lg text-ink"
-              style={{ opacity: progress, y: titleY }}
-            >
-              {title}
-            </m.h2>
-          )}
+        <m.div aria-hidden className="glass-bar absolute inset-0" style={{ opacity: progress }} />
+        <div className="page-frame relative flex h-[var(--nav-h)] items-center gap-3">
+          <div className="flex min-w-[44px] shrink-0 justify-start">{leading}</div>
+          <div className="flex min-w-0 flex-1 items-center justify-center">
+            {center ?? (
+              <m.h2
+                className="truncate font-display text-title-lg text-ink"
+                style={{ opacity: progress, y: titleY }}
+              >
+                {title}
+              </m.h2>
+            )}
+          </div>
+          <div className="flex min-w-[44px] shrink-0 items-center justify-end gap-2">{trailing}</div>
         </div>
-        <div className="flex min-w-[44px] shrink-0 items-center justify-end gap-2">{trailing}</div>
-      </div>
       </div>
     </header>
   );

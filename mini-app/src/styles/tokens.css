@@ -49,9 +49,9 @@
   --surface-dark-soft:     20 12% 14%;
 
   --ink:         20 14% 10%;
-  --body:        24  8% 26%;
+  --body:        24  8% 23%;
   --body-strong: 22 10% 16%;
-  --muted:       26  7% 40%;
+  --muted:       26  7% 33%;
   --muted-soft:  28  6% 52%;
   --hairline:      30 18% 80%;
   --hairline-soft: 30 20% 88%;
@@ -138,9 +138,9 @@
   --surface-strong: 214 30% 92%;
 
   --ink:         215 25% 12%;
-  --body:        215 16% 28%;
+  --body:        215 16% 25%;
   --body-strong: 215 20% 18%;
-  --muted:       215 10% 40%;
+  --muted:       215 10% 36%;
   --muted-soft:  215  8% 52%;
   --hairline:      214 22% 82%;
   --hairline-soft: 214 24% 90%;
@@ -180,7 +180,7 @@
   --ink:         220 30% 96%;
   --body:        222 15% 82%;
   --body-strong: 220 22% 90%;
-  --muted:       224 10% 68%;
+  --muted:       224 10% 71%;
   --muted-soft:  224  8% 52%;
   --hairline:      232 12% 26%;
   --hairline-soft: 232 14% 20%;
@@ -212,9 +212,9 @@
   --surface-strong: 144 20% 91%;
 
   --ink:         168 30% 9%;
-  --body:        165 12% 26%;
+  --body:        165 12% 24%;
   --body-strong: 166 18% 16%;
-  --muted:       160  8% 38%;
+  --muted:       160  8% 33%;
   --muted-soft:  158  7% 50%;
   --hairline:      145 15% 80%;
   --hairline-soft: 143 16% 88%;

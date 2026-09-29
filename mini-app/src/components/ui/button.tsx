@@ -33,7 +33,7 @@ const buttonVariants = cva(
       size: {
         // 50pt is Apple's large control height; nothing here is under 38.
         default: "h-[50px] px-6 rounded-pill",
-        sm: "h-[38px] px-4 text-[15px] rounded-pill",
+        sm: "h-[38px] px-4 text-[15px] font-semibold rounded-pill",
         lg: "h-[56px] px-7 rounded-pill",
         icon: "h-11 w-11 p-0 rounded-pill",
       },

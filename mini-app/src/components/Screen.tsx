@@ -1,5 +1,5 @@
 import {
-  Children, useLayoutEffect, useMemo, useRef, useState, type ReactNode,
+  Children, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode,
 } from "react";
 import { useLocation } from "react-router-dom";
 import * as m from "motion/react-m";
@@ -65,6 +65,7 @@ export function Screen({
   const location = useLocation();
   const tabRoot = isTabRoute(location.pathname);
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
   const [threshold, setThreshold] = useState(0);
   const { scrollY } = useScroll();
 
@@ -74,6 +75,15 @@ export function Screen({
   // the large title can sit at the top, and appear only when it is needed.
   const overlayNav = showNav && !hasBack && !actions && !wizard;
   const navText = navTitle ?? (typeof title === "string" ? title : undefined);
+
+  // A new screen is a new "page": move focus into it so keyboard and screen
+  // reader users land there instead of on the control that was just tapped.
+  // Never steals focus from a field that asked for it (autoFocus runs first).
+  useEffect(() => {
+    if (document.activeElement === document.body || document.activeElement === null) {
+      mainRef.current?.focus({ preventScroll: true });
+    }
+  }, []);
 
   // Where the large title has scrolled fully under the bar.
   useLayoutEffect(() => {
@@ -96,7 +106,7 @@ export function Screen({
   const progress = useTransform(scrollY, range, [0, 1], { clamp: true });
 
   const blocks = stagger && !center ? Children.toArray(children) : null;
-  const longTitle = typeof title === "string" && title.length > 20;
+  const longTitle = typeof title === "string" && title.length > 16;
 
   return (
     <div className={cn("relative min-h-[100dvh]", center && "flex flex-col")}>
@@ -111,8 +121,11 @@ export function Screen({
         />
       )}
 
-      <div
+      <main
+        ref={mainRef}
+        tabIndex={-1}
         className={cn(
+          "outline-none",
           padded && "page-frame",
           (!showNav || overlayNav) && "pt-[calc(var(--safe-t)+14px)]",
           tabbed
@@ -123,7 +136,7 @@ export function Screen({
         )}
       >
         {(title || subtitle) && (
-          <header className="pb-5 pt-1">
+          <div className="pb-5 pt-1">
             {title && (
               <h1
                 ref={titleRef}
@@ -136,7 +149,7 @@ export function Screen({
               </h1>
             )}
             {subtitle && <p className="mt-1.5 text-body-md text-muted">{subtitle}</p>}
-          </header>
+          </div>
         )}
 
         {blocks ? (
@@ -154,7 +167,7 @@ export function Screen({
         ) : (
           <div className={cn(!center && "space-y-6", center && "w-full")}>{children}</div>
         )}
-      </div>
+      </main>
     </div>
   );
 }

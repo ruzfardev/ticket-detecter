@@ -29,8 +29,10 @@ export function StickyAction({ children, hint, className }: Props) {
       {createPortal(
         <m.div
           className={cn("pointer-events-none fixed inset-x-0 bottom-0 z-40", className)}
-          initial={{ y: 90, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
+          // Slide only. Its glass hint must never sit under an ancestor at
+          // opacity < 1 (a "backdrop root" blinds it until the fade ends).
+          initial={{ y: 90 }}
+          animate={{ y: 0 }}
           transition={spring.smooth}
         >
           <div className="scrim-bottom" aria-hidden />
