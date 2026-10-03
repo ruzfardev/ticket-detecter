@@ -58,13 +58,28 @@ V3_DETAIL = {
                           "birthday": "1977-02-15", "child": None},
         "pricingMode": "FULL", "id": "77015208506833", "seatNumber": "017", "seatType": "Н",
         "tariff": {"@type": "EXPRESS", "type": "FULL", "amount": 245140},
-        "mask": 1,
+        "mask": 0,
     }],
     "insurances": [], "caterings": [], "systemId": "77015208506833",
     "departureDateTime": "2026-10-08T16:45:00Z",
     "onlineReturnAvailabilityTime": "2026-10-08T15:45:00Z",
-    "type": "TICKET", "status": "CONFIRMED", "mask": 1,
+    "type": "TICKET", "status": "CONFIRMED", "mask": 0,
     "returns": [], "greenTickets": [], "itemReturns": [],
+}
+
+# Live 2026-10-03: the same leg after an online return. The item status is
+# STILL "CONFIRMED"; the return lives in `returns[]` and the ticket's mask is 1.
+V3_DETAIL_RETURNED = {
+    **V3_DETAIL,
+    "tickets": [{**V3_DETAIL["tickets"][0], "mask": 1}],
+    "returns": [{
+        "ticketId": "77015208506833", "mask": 1,
+        "returnedAt": "2026-10-03T01:25:00Z", "returnedTariff": 190140.0,
+        "returnType": "RETURN",
+        "expressReturnTariff": {"returnedTicketId": "28062742",
+                                "returnedTicketTariff": 190140.0},
+        "sorbonReturnTariff": None,
+    }],
 }
 
 
@@ -93,6 +108,24 @@ def test_v3_detail_takes_the_item_status_and_reorders_the_name():
     assert ticket_amount(V3_DETAIL["tickets"][0]) == 245140
     assert is_confirmed([t]) is True
     assert is_returned([t]) is False
+
+
+def test_v3_return_is_read_from_returns_not_from_the_status():
+    [t] = summarize_tickets(V3_DETAIL_RETURNED)
+    assert t["status"] == "RETURNED"
+    assert is_returned([t]) is True
+    assert is_confirmed([t]) is False
+
+
+def test_v3_partial_return_marks_only_the_returned_ticket():
+    two = {
+        **V3_DETAIL_RETURNED,
+        "tickets": [V3_DETAIL_RETURNED["tickets"][0],
+                    {**V3_DETAIL["tickets"][0], "id": "77015208506834", "seatNumber": "018"}],
+    }
+    a, b = summarize_tickets(two)
+    assert (a["status"], b["status"]) == ("RETURNED", "CONFIRMED")
+    assert is_returned([a, b]) is False      # someone still travels on this leg
 
 
 @pytest.mark.parametrize("status", ["RETURNED", "RETURN_SUCCEEDED", "REFUNDED"])

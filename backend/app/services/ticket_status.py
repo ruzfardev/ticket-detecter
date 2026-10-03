@@ -36,6 +36,13 @@ def summarize_tickets(raw: dict) -> list[dict]:
     """
     out: list[dict] = []
     item_status = raw.get("status")
+    # v3 never changes the item status on a return: a returned ticket still
+    # reads CONFIRMED (live, 2026-10-03). The return is recorded in
+    # `returns[]`, keyed by the ticket id, and that is the only place it shows.
+    returned_ids = {
+        str(r.get("ticketId") or "")
+        for r in (raw.get("returns") or []) if isinstance(r, dict)
+    } - {""}
     for t in (raw.get("tickets") or []):
         if "passengerInfo" in t:
             name = _v3_name(str((t.get("passengerInfo") or {}).get("fullName") or ""))
@@ -44,10 +51,14 @@ def summarize_tickets(raw: dict) -> list[dict]:
             name = " ".join(
                 str(x) for x in (p.get("firstname"), p.get("lastname")) if x
             ).strip()
+        ticket_id = str(t.get("ticketId") or t.get("id") or "")
+        status = str(t.get("status") or item_status or "")
+        if ticket_id and ticket_id in returned_ids:
+            status = "RETURNED"
         out.append({
-            "ticket_id": str(t.get("ticketId") or t.get("id") or ""),
+            "ticket_id": ticket_id,
             "seat": str(t.get("seatNumber") or ""),
-            "status": str(t.get("status") or item_status or ""),
+            "status": status,
             "passenger_name": name,
         })
     return out
