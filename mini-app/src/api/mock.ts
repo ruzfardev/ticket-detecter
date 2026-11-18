@@ -241,9 +241,12 @@ export const mockApi = {
       s.name_ru.toLowerCase().includes(lc));
   },
 
-  async searchTrains(_body: { dep_code: string; arr_code: string; date: string }): Promise<Train[]> {
+  async searchTrains(body: { dep_code: string; arr_code: string; date: string }): Promise<Train[]> {
     await wait(600);
-    return fakeTrains;
+    // Dates more than 30 days out have no trains yet, like a timetable that is
+    // not published, so the "notify when trains appear" path can be previewed.
+    const daysOut = (new Date(body.date).getTime() - Date.now()) / 86_400_000;
+    return daysOut > 30 ? [] : fakeTrains;
   },
 
   async listSubscriptions(): Promise<{ subscriptions: Subscription[]; slot: { max: number; used: number } }> {
@@ -441,7 +444,12 @@ export const mockApi = {
     await wait(120);
     const o = mockOrders.find(x => x.id === id);
     if (!o) throw new Error("order not found");
-    return { ...o, seconds_until_expiry: Math.max(0, (o.seconds_until_expiry ?? 600) - 1) };
+    // Count down in real time from hold_until, the way the backend does, so
+    // the screen's local ticking lines up with each refetch.
+    const secs = o.hold_until
+      ? Math.max(0, Math.round((new Date(o.hold_until).getTime() - Date.now()) / 1000))
+      : o.seconds_until_expiry;
+    return { ...o, seconds_until_expiry: secs };
   },
   async submitOrderOtp(id: number, _otp: string): Promise<AutobuyOrder> {
     await wait(400);

@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
-import { addDays, formatISO } from "date-fns";
+import { addDays, format, formatISO, parseISO } from "date-fns";
+import { uz } from "date-fns/locale";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/style.css";
 
@@ -12,15 +13,14 @@ import { StickyAction } from "@/components/StickyAction";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
+/** "Chorshanba, 18-noyabr". Uzbek writes the month in lower case after the
+ *  day; date-fns capitalises it, so it is lowered here. */
 function fmtHuman(iso: string | undefined): string | undefined {
   if (!iso) return undefined;
   try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
+    const d = parseISO(iso);
+    const month = format(d, "MMMM", { locale: uz }).toLowerCase();
+    return `${format(d, "EEEE", { locale: uz })}, ${format(d, "d")}-${month}`;
   } catch {
     return iso;
   }
@@ -45,8 +45,12 @@ export function DateScreen() {
     >
       <Card variant="feature" pad="sm">
         <DayPicker
+          className="td-cal"
+          locale={uz}
           mode="single"
-          selected={travel_date ? new Date(travel_date) : undefined}
+          startMonth={today}
+          endMonth={maxDate}
+          selected={travel_date ? parseISO(travel_date) : undefined}
           onSelect={d => {
             if (!d) return;
             haptic.selection();

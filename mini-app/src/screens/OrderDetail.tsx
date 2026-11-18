@@ -21,17 +21,16 @@ import { ListGroup, ListRow } from "@/components/ui/list";
 import { Spinner } from "@/components/ui/spinner";
 import { StickyAction } from "@/components/StickyAction";
 import { useTelegram } from "@/hooks/useTelegram";
+import { useHaptic } from "@/hooks/useHaptic";
+import { formatMmSs, useCountdown } from "@/hooks/useCountdown";
+import { cn } from "@/lib/utils";
 
-function formatMmSs(secs: number | null): string {
-  if (secs === null) return "—";
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
+/** Under this many seconds the timer turns red and the phone buzzes once. */
+const OTP_URGENT_S = 60;
 
 const STATUS_LABEL: Record<AutobuyOrderStatus, { text: string; tone: "muted"|"success"|"coral"|"outline" }> = {
   reserving:    { text: "Bron qilinmoqda",   tone: "outline" },
-  awaiting_otp: { text: "OTP kutilmoqda",    tone: "coral" },
+  awaiting_otp: { text: "SMS kod kutilmoqda", tone: "coral" },
   paying:       { text: "To'lov ishlanmoqda", tone: "outline" },
   paid:         { text: "To'landi",          tone: "success" },
   failed:       { text: "Xato",              tone: "muted" },
@@ -58,6 +57,27 @@ export function OrderDetail() {
 
   const [otp, setOtp] = useState("");
   const [otpError, setOtpError] = useState<string | null>(null);
+  const haptic = useHaptic();
+
+  // Ticks every second between the 4 s polls, so the clock never jumps.
+  const awaiting = order.data?.status === "awaiting_otp";
+  const otpSecs = useCountdown(
+    awaiting ? order.data?.seconds_until_expiry : null,
+    order.dataUpdatedAt,
+  );
+  // The server sends only "seconds left", not the full window. The largest
+  // value seen stands in for it, which is enough to draw the bar.
+  const otpWindow = useRef(0);
+  if (otpSecs !== null && otpSecs > otpWindow.current) otpWindow.current = otpSecs;
+  const otpUrgent = otpSecs !== null && otpSecs <= OTP_URGENT_S;
+  const otpOver = otpSecs === 0;
+  const buzzed = useRef(false);
+  useEffect(() => {
+    if (otpUrgent && !otpOver && !buzzed.current) {
+      buzzed.current = true;
+      haptic.notify("warning");
+    }
+  }, [otpUrgent, otpOver, haptic]);
 
   const submit = useMutation({
     mutationFn: (code: string) => submitOrderOtp(orderId, code),
@@ -134,58 +154,102 @@ export function OrderDetail() {
   const seats = o.seat_numbers?.length ? o.seat_numbers : [o.seat_number];
   const passengers = o.passenger_names ?? [];
 
+  // While a code is awaited the input comes first: on a short phone the
+  // order details would otherwise push it below the fold.
+  const details = (
+    <ListGroup label="Tafsilotlar">
+      <ListRow
+        before={<TrainIcon className="h-5 w-5 text-ink" strokeWidth={1.75} />}
+        title={`${o.train_number} · Vagon ${o.car_number}`}
+        subtitle={seats.length > 1 ? `Joylar: ${seats.join(", ")}` : `Joy ${seats[0]}`}
+      />
+      <ListRow
+        before={<CalendarDays className="h-5 w-5 text-ink" strokeWidth={1.75} />}
+        title={o.travel_date}
+        subtitle="Sana"
+      />
+      {passengers.length > 0 ? (
+        <ListRow
+          title={passengers.join(", ")}
+          subtitle={passengers.length > 1 ? `Yo'lovchilar · ${passengers.length} ta` : "Yo'lovchi"}
+        />
+      ) : o.friend_name ? (
+        <ListRow title={o.friend_name} subtitle="Yo'lovchi" />
+      ) : null}
+      {o.amount_uzs !== null && (
+        <ListRow
+          title={`${o.amount_uzs.toLocaleString("ru-RU")} so'm`}
+          subtitle="Narx"
+        />
+      )}
+      {o.last4 && (
+        <ListRow title={`•••• ${o.last4}`} subtitle="Karta" />
+      )}
+    </ListGroup>
+  );
+
   return (
     <Screen
       padded
       title="Buyurtma"
       subtitle={<Badge variant={label.tone}>{label.text}</Badge>}
     >
-      <ListGroup label="Tafsilotlar">
-        <ListRow
-          before={<TrainIcon className="h-5 w-5 text-ink" strokeWidth={1.75} />}
-          title={`${o.train_number} · Vagon ${o.car_number}`}
-          subtitle={seats.length > 1 ? `Joylar: ${seats.join(", ")}` : `Joy ${seats[0]}`}
-        />
-        <ListRow
-          before={<CalendarDays className="h-5 w-5 text-ink" strokeWidth={1.75} />}
-          title={o.travel_date}
-          subtitle="Sana"
-        />
-        {passengers.length > 0 ? (
-          <ListRow
-            title={passengers.join(", ")}
-            subtitle={passengers.length > 1 ? `Yo'lovchilar · ${passengers.length} ta` : "Yo'lovchi"}
-          />
-        ) : o.friend_name ? (
-          <ListRow title={o.friend_name} subtitle="Yo'lovchi" />
-        ) : null}
-        {o.amount_uzs !== null && (
-          <ListRow
-            title={`${o.amount_uzs.toLocaleString("ru-RU")} so'm`}
-            subtitle="Narx"
-          />
-        )}
-        {o.last4 && (
-          <ListRow title={`•••• ${o.last4}`} subtitle="Karta" />
-        )}
-      </ListGroup>
+      {/* The deadline comes first: on this screen it is the only thing that
+          is time-critical, so it must not sit below the order details. */}
+      {o.status === "awaiting_otp" && otpSecs !== null && (
+        <div
+          role="timer"
+          aria-live={otpUrgent ? "assertive" : "off"}
+          className={cn(
+            "rounded-2xl border p-4 transition-colors duration-500",
+            otpUrgent
+              ? "border-error/40 bg-error/10"
+              : "border-coral/30 bg-coral/10",
+          )}
+        >
+          <div className="flex items-center gap-3">
+            <Clock
+              className={cn("h-6 w-6 shrink-0", otpUrgent ? "text-error" : "text-coral")}
+              strokeWidth={1.75}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="text-body-sm text-muted">
+                {otpOver ? "Vaqt tugadi" : "Telefoningizga kelgan kodni kiriting"}
+              </div>
+              <div
+                className={cn(
+                  "mt-1 font-mono text-display-xl font-medium tabular-nums leading-none",
+                  otpUrgent ? "text-error" : "text-ink",
+                  otpUrgent && !otpOver && "motion-safe:animate-pulse",
+                )}
+              >
+                {formatMmSs(otpSecs)}
+              </div>
+            </div>
+          </div>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-pill bg-hairline-soft">
+            <div
+              className={cn(
+                "h-full rounded-pill transition-[width] duration-1000 ease-linear",
+                otpUrgent ? "bg-error" : "bg-coral",
+              )}
+              style={{
+                width: `${otpWindow.current ? (otpSecs / otpWindow.current) * 100 : 0}%`,
+              }}
+            />
+          </div>
+          {otpUrgent && !otpOver && (
+            <p className="mt-2 text-body-sm text-error">
+              Shoshiling — vaqt tugasa, bron bekor bo'ladi.
+            </p>
+          )}
+        </div>
+      )}
+
+      {o.status !== "awaiting_otp" && details}
 
       {o.status === "awaiting_otp" && (
         <>
-          <ListGroup
-            label="SMS-OTP kodi"
-            footer={
-              o.seconds_until_expiry !== null && o.seconds_until_expiry < 60
-                ? "Muddat tugamoqda!"
-                : "Telefoningizga kelgan kodni kiriting"
-            }
-          >
-            <ListRow
-              before={<Clock className="h-5 w-5 text-coral" strokeWidth={1.75} />}
-              title={formatMmSs(o.seconds_until_expiry)}
-              subtitle="Buyurtma bekor bo'lishi qoldi"
-            />
-          </ListGroup>
           <div className="space-y-1">
             <Label htmlFor="otp">SMS kod</Label>
             <Input
@@ -241,13 +305,19 @@ export function OrderDetail() {
             </Button>
           </div>
 
+          {details}
+
           <StickyAction
-            hint={otpDigits.length < 3 ? "Kod kiriting" : undefined}
+            hint={
+              otpOver ? "Vaqt tugadi — buyurtma yopilmoqda"
+                : otpDigits.length < 3 ? "Kod kiriting"
+                : undefined
+            }
           >
             <div className="flex flex-col gap-2">
               <Button
                 full
-                disabled={otpDigits.length < 3 || submit.isPending}
+                disabled={otpDigits.length < 3 || submit.isPending || otpOver}
                 onClick={() => submit.mutate(otpDigits)}
               >
                 {submit.isPending ? "Yuborilmoqda…" : "Tasdiqlash"}

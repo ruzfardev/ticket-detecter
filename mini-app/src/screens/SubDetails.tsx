@@ -5,12 +5,13 @@ import { toast } from "sonner";
 import {
   CalendarDays, TrainFront, Armchair, Activity,
   Pause, Play, Trash2, ArrowDownToLine, ArrowUpToLine, Minus,
-  Zap,
+  Zap, Pencil,
 } from "lucide-react";
 
 import {
-  deleteSubscription, listSubscriptions, patchSubscription,
+  deleteSubscription, listOrders, listSubscriptions, patchSubscription,
 } from "@/api/client";
+import { useWizard } from "@/store/wizard";
 import { carTypeLabels } from "@/lib/cartypes";
 import { useHaptic } from "@/hooks/useHaptic";
 import { useTelegram } from "@/hooks/useTelegram";
@@ -40,6 +41,16 @@ export function SubDetails() {
   const sub = useMemo(
     () => data?.subscriptions.find(s => s.id === subId),
     [data, subId],
+  );
+  const loadFromSub = useWizard(s => s.loadFromSub);
+
+  // Editing replaces the subscription, which must not happen while an
+  // auto-buy order is still holding seats for it. Not gated on
+  // autobuy_enabled: auto-buy may have been switched off since the order.
+  const orders = useQuery({ queryKey: ["orders"], queryFn: listOrders });
+  const liveOrder = (orders.data ?? []).some(
+    o => o.subscription_id === subId
+      && ["reserving", "awaiting_otp", "paying"].includes(o.status),
   );
 
   const toggle = useMutation({
@@ -135,9 +146,11 @@ export function SubDetails() {
       <ListGroup
         label="Avto sotib olish"
         footer={
-          sub.autobuy_enabled
-            ? "Chipta topilganda avtomatik bron qilinadi — sizga faqat SMS kod kerak bo'ladi"
-            : "Yoqilsa, chipta topilgan paytda avtomatik bron qilinadi"
+          sub.train_numbers.length === 0
+            ? "Poyezd tanlanmagan — avto sotib olish birinchi joy chiqqan istalgan poyezdga chipta oladi."
+            : sub.autobuy_enabled
+              ? "Chipta topilganda avtomatik bron qilinadi — sizga faqat SMS kod kerak bo'ladi"
+              : "Yoqilsa, chipta topilgan paytda avtomatik bron qilinadi"
         }
       >
         <ListRow
@@ -185,6 +198,22 @@ export function SubDetails() {
       </ListGroup>
 
       <ListGroup label="Boshqarish">
+        <ListRow
+          before={<Pencil className="h-5 w-5 text-ink" strokeWidth={1.75} />}
+          title="Tahrirlash"
+          subtitle={
+            liveOrder
+              ? "Buyurtma jarayonda — tugashini kuting"
+              : "Sana, poyezd yoki vagonni o'zgartirish"
+          }
+          chevron={!liveOrder}
+          disabled={busy || liveOrder}
+          onClick={() => {
+            haptic.selection();
+            loadFromSub(sub);
+            navigate("/new/confirm");
+          }}
+        />
         <ListRow
           before={
             sub.is_active ? (

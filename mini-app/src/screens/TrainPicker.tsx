@@ -1,7 +1,7 @@
 import { Fragment, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Check, Inbox } from "lucide-react";
+import { AlertTriangle, BellRing, CalendarClock, Check } from "lucide-react";
 
 import { searchTrains } from "@/api/client";
 import { useHaptic } from "@/hooks/useHaptic";
@@ -26,6 +26,22 @@ export function TrainPicker() {
   const arr_code = useWizardField("arr_code");
   const travel_date = useWizardField("travel_date");
   const train_numbers = useWizardField("train_numbers");
+  const any_train = useWizardField("any_train");
+
+  // "Any train" and a list of specific trains are mutually exclusive answers.
+  const pickAnyTrain = () => {
+    haptic.selection();
+    setField("train_numbers", []);
+    setField("any_train", !any_train);
+  };
+  const toggleTrain = (number: string, selected: boolean) => {
+    haptic.selection();
+    setField("any_train", false);
+    setField(
+      "train_numbers",
+      selected ? train_numbers.filter(n => n !== number) : [...train_numbers, number],
+    );
+  };
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["trains", dep_code, arr_code, travel_date],
@@ -55,6 +71,8 @@ export function TrainPicker() {
       wizard
       title="Poyezd tanlang"
       subtitle={
+        data?.length === 0 ? "Chiqishini kuzatib turamiz" :
+        any_train ? "Istalgan poyezd" :
         train_numbers.length ? `${train_numbers.length} ta tanlandi` :
         data ? `${onSale.length} ta poyezdda joy bor · bir nechtasini tanlash mumkin` :
         isLoading ? "Qidirilmoqda..." :
@@ -77,14 +95,53 @@ export function TrainPicker() {
         </div>
       )}
 
+      {/* railway.uz lists nothing for a date whose timetable is not out yet.
+          The watcher keeps polling such a date anyway, so offer to watch it
+          for any train rather than ending the wizard here. */}
       {!isLoading && !error && data?.length === 0 && (
         <div className="flex flex-col items-center gap-3 py-8 text-center">
-          <Inbox className="h-8 w-8 text-muted-soft" strokeWidth={1.5} />
+          <CalendarClock className="h-8 w-8 text-coral" strokeWidth={1.5} />
           <div>
-            <h3 className="font-display text-display-sm text-ink">Poyezdlar topilmadi</h3>
-            <p className="text-body-md text-muted mt-1">Boshqa sanani tanlang.</p>
+            <h3 className="font-display text-display-sm text-ink">Poyezdlar hali chiqmagan</h3>
+            <p className="text-body-md text-muted mt-1">
+              Bu sanaga poyezdlar hali e'lon qilinmagan. Kuzatib turamiz —
+              poyezd chiqib, bo'sh joy paydo bo'lishi bilan xabar beramiz.
+            </p>
           </div>
+          <Button variant="ghost" onClick={() => navigate("/new/date")}>
+            Boshqa sana tanlash
+          </Button>
         </div>
+      )}
+
+      {!!data?.length && (
+        <button
+          type="button"
+          aria-pressed={any_train}
+          onClick={pickAnyTrain}
+          className={cn(
+            "mb-2 flex w-full items-center gap-3 rounded-2xl p-4 text-left transition-colors",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral/30",
+            any_train
+              ? "bg-surface-cream-strong border-2 border-coral"
+              : "bg-surface-card border-2 border-hairline-soft hover:bg-surface-cream-strong",
+          )}
+        >
+          <BellRing className="h-5 w-5 shrink-0 text-coral" strokeWidth={1.75} />
+          <span className="min-w-0 flex-1">
+            <span className="block font-medium text-ink">Istalgan poyezd</span>
+            <span className="block text-body-sm text-muted">
+              Yangi chiqqanlari ham — qaysi birida joy bo'lsa, xabar beramiz
+            </span>
+          </span>
+          {any_train ? (
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-coral text-on-primary">
+              <Check className="h-4 w-4" strokeWidth={3} />
+            </span>
+          ) : (
+            <span className="block h-6 w-6 shrink-0 rounded-full border-2 border-hairline" />
+          )}
+        </button>
       )}
 
       {onSale.length > 0 && notOnSale.length > 0 && (
@@ -116,15 +173,7 @@ export function TrainPicker() {
             <button
               type="button"
               aria-pressed={selected}
-              onClick={() => {
-                haptic.selection();
-                setField(
-                  "train_numbers",
-                  selected
-                    ? train_numbers.filter(n => n !== t.number)
-                    : [...train_numbers, t.number],
-                );
-              }}
+              onClick={() => toggleTrain(t.number, selected)}
               className={cn(
                 "w-full overflow-hidden rounded-2xl text-left transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral/30",
@@ -231,11 +280,29 @@ export function TrainPicker() {
         })}
       </div>
 
-      {!!data?.length && (
-        <StickyAction hint={train_numbers.length === 0 ? "Kamida bitta poyezd tanlang" : undefined}>
+      {data?.length === 0 && (
+        <StickyAction>
           <Button
             full
-            disabled={train_numbers.length === 0}
+            onClick={() => {
+              haptic.impact("light");
+              setField("train_numbers", []);
+              setField("any_train", true);
+              navigate("/new/car-type");
+            }}
+          >
+            Poyezdlar chiqqanda xabar ber
+          </Button>
+        </StickyAction>
+      )}
+
+      {!!data?.length && (
+        <StickyAction
+          hint={train_numbers.length === 0 && !any_train ? "Kamida bitta poyezd tanlang" : undefined}
+        >
+          <Button
+            full
+            disabled={train_numbers.length === 0 && !any_train}
             onClick={() => {
               haptic.impact("light");
               navigate("/new/car-type");

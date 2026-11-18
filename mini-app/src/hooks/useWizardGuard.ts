@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWizard, WizardState } from "@/store/wizard";
 
-type RequiredField = Exclude<keyof WizardState, "setField" | "reset">;
+type RequiredField = Exclude<keyof WizardState, "setField" | "reset" | "loadFromSub">;
 
 export function useWizardGuard(required: RequiredField[], redirectTo = "/new") {
   const navigate = useNavigate();
@@ -17,6 +17,9 @@ export function useWizardGuard(required: RequiredField[], redirectTo = "/new") {
       return;
     }
     const missing = required.some(k => {
+      // An empty list is a valid answer once the user chose "any" for it.
+      if (k === "train_numbers" && state.any_train) return false;
+      if (k === "car_types" && state.any_car_type) return false;
       const v = state[k];
       if (Array.isArray(v)) return v.length === 0;
       return v === undefined || v === null || v === "";

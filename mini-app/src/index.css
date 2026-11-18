@@ -244,57 +244,6 @@
     @apply font-display text-ink;
   }
 
-  /* react-day-picker (v9) — fully themed to the Anthropic palette.
-     Defaults leak browser-blue for today + nav chevrons and render the
-     selected day as a ring; we re-skin everything to coral and fill the
-     selected day. All colors are var-based so dark mode adapts. */
-  .rdp-root {
-    --rdp-accent-color: hsl(var(--coral));
-    --rdp-accent-background-color: hsl(var(--coral) / 0.12);
-    --rdp-background-color: hsl(var(--coral) / 0.12);
-    --rdp-day-height: 42px;
-    --rdp-day-width: 42px;
-    font-family: inherit;
-    padding: 8px 6px 4px;
-    width: 100%;
-  }
-  .rdp-months, .rdp-month, .rdp-month_grid { width: 100%; max-width: 100%; }
-  .rdp-month_caption { padding: 0 6px 10px; }
-  .rdp-caption_label {
-    font-family: inherit;
-    font-size: 20px;
-    font-weight: 500;
-    color: hsl(var(--ink));
-  }
-  .rdp-weekday {
-    color: hsl(var(--muted));
-    font-size: 12px;
-    font-weight: 500;
-    text-transform: none;
-  }
-  .rdp-day_button {
-    border-radius: 9999px;
-    color: hsl(var(--ink));
-    font-size: 15px;
-  }
-  /* nav chevrons — ink, coral on hover (kill the default blue) */
-  .rdp-chevron { fill: hsl(var(--ink)); }
-  .rdp-button_previous:hover .rdp-chevron,
-  .rdp-button_next:hover .rdp-chevron { fill: hsl(var(--coral)); }
-  /* today — coral text instead of blue */
-  .rdp-today:not(.rdp-selected) .rdp-day_button {
-    color: hsl(var(--coral));
-    font-weight: 600;
-  }
-  /* selected — filled coral circle, white text (not a ring) */
-  .rdp-selected .rdp-day_button {
-    background: hsl(var(--coral)) !important;
-    color: hsl(var(--on-primary)) !important;
-    border: none !important;
-    font-weight: 600;
-  }
-  .rdp-disabled { opacity: 0.3; }
-
   /* Subtle scrollbar */
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: hsl(var(--hairline)); border-radius: 4px; }
@@ -304,6 +253,75 @@
   .hairline {
     @apply border border-hairline;
   }
+}
+
+/* ── react-day-picker (v9), themed to the active palette ──────────────
+   Deliberately outside any @layer: the library's own style.css is unlayered,
+   and unlayered rules beat layered ones whatever their specificity. Inside
+   @layer base these overrides lost, which leaked the library's blue into
+   today and the nav chevrons (unreadable on the dark theme). The extra
+   `.td-cal` class (set on <DayPicker>) out-ranks the library's single-class
+   selectors. All colours are tokens, so every palette and theme adapts. */
+.rdp-root.td-cal {
+  --rdp-accent-color: hsl(var(--coral));
+  --rdp-accent-background-color: hsl(var(--coral) / 0.12);
+  --rdp-background-color: hsl(var(--coral) / 0.12);
+  --rdp-today-color: hsl(var(--coral));
+  /* 7 × 42px still fits a 320px-wide phone inside the card */
+  --rdp-day-height: 44px;
+  --rdp-day-width: 42px;
+  --rdp-day_button-height: 40px;
+  --rdp-day_button-width: 40px;
+  font-family: inherit;
+  padding: 8px 6px 4px;
+  width: 100%;
+}
+.td-cal .rdp-months, .td-cal .rdp-month, .td-cal .rdp-month_grid { width: 100%; max-width: 100%; }
+.td-cal .rdp-month_caption { padding: 0 6px 10px; }
+.td-cal .rdp-caption_label {
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 500;
+  color: hsl(var(--ink));
+}
+.td-cal .rdp-weekday {
+  color: hsl(var(--muted));
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: none;
+}
+.td-cal .rdp-day_button {
+  border-radius: 9999px;
+  color: hsl(var(--ink));
+  font-size: 15px;
+}
+/* nav chevrons: ink, primary on hover; faded when there is no month to go to */
+.td-cal .rdp-chevron { fill: hsl(var(--ink)); }
+.td-cal .rdp-button_previous:hover .rdp-chevron,
+.td-cal .rdp-button_next:hover .rdp-chevron { fill: hsl(var(--coral)); }
+.td-cal .rdp-button_previous:is(:disabled, [aria-disabled="true"]) .rdp-chevron,
+.td-cal .rdp-button_next:is(:disabled, [aria-disabled="true"]) .rdp-chevron { fill: hsl(var(--muted)); opacity: .35; }
+/* today: primary text with a soft ring, so it reads as "now", not "picked" */
+.td-cal .rdp-today:not(.rdp-selected) .rdp-day_button {
+  color: hsl(var(--coral));
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1.5px hsl(var(--coral) / 0.35);
+}
+/* selected: filled circle, on-primary text (not the library's ring) */
+.td-cal .rdp-selected .rdp-day_button {
+  background: hsl(var(--coral));
+  color: hsl(var(--on-primary));
+  border: none;
+  font-weight: 600;
+  animation: cal-pick 220ms cubic-bezier(.2, .8, .2, 1);
+}
+/* The dark themes brighten the primary, and white on it drops to ~2:1. The
+   page background colour reads clearly on it instead. */
+.dark .td-cal .rdp-selected .rdp-day_button { color: hsl(var(--canvas)); }
+.td-cal .rdp-disabled { opacity: 0.3; }
+@keyframes cal-pick { from { transform: scale(.82); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .td-cal .rdp-selected .rdp-day_button { animation: none; }
 }
 
 /* ── Brand motion (Logo / Welcome / Home) ────────────────────────────

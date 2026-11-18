@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -11,6 +11,7 @@ import {
   type Subscription,
 } from "@/api/client";
 import { useWizard } from "@/store/wizard";
+import { useCountdown } from "@/hooks/useCountdown";
 import { useHaptic } from "@/hooks/useHaptic";
 import { useTelegram } from "@/hooks/useTelegram";
 import { Screen } from "@/components/Screen";
@@ -87,16 +88,7 @@ export function Home() {
   }, [tickets.data]);
 
   // OTP countdown: tick locally between the 8 s refetches.
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!awaitingOtp) return;
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [awaitingOtp?.id]);
-  const otpSecs =
-    awaitingOtp && awaitingOtp.seconds_until_expiry !== null
-      ? Math.max(0, awaitingOtp.seconds_until_expiry - Math.floor((now - orders.dataUpdatedAt) / 1000))
-      : null;
+  const otpSecs = useCountdown(awaitingOtp?.seconds_until_expiry, orders.dataUpdatedAt);
   // One haptic nudge per new OTP request — it is the only time-critical thing here.
   const warned = useRef<number | null>(null);
   useEffect(() => {

@@ -36,6 +36,7 @@ export function CarTypePicker() {
   const arr_code = useWizardField("arr_code");
   const travel_date = useWizardField("travel_date");
   const train_numbers = useWizardField("train_numbers");
+  const any_car_type = useWizardField("any_car_type");
 
   // Same key as TrainPicker, so this normally reads straight from cache.
   const { data: trains, isLoading } = useQuery({
@@ -73,6 +74,9 @@ export function CarTypePicker() {
   // No train data (offline, or trains not on sale yet) — fall back to the full
   // canonical list rather than blocking the wizard.
   const fallback = !isLoading && options.length === 0;
+  // An empty train list is expected when watching a date whose trains are not
+  // published yet. It is not a failure, so it gets no warning.
+  const notPublished = !isLoading && trains?.length === 0;
   const shown: Option[] = fallback
     ? ALL_CAR_TYPES.map(t => ({ type: t, label: carTypeLabel(t), seats: 0 }))
     : options;
@@ -82,8 +86,16 @@ export function CarTypePicker() {
   const valid = new Set(shown.map(o => o.type));
   const selected = car_types.filter(t => valid.has(t));
 
+  // "Any car type" and specific types are mutually exclusive answers.
+  const pickAnyCarType = () => {
+    haptic.selection();
+    setField("car_types", []);
+    setField("any_car_type", !any_car_type);
+  };
+
   const toggle = (t: string) => {
     haptic.selection();
+    setField("any_car_type", false);
     setField(
       "car_types",
       selected.includes(t) ? selected.filter(x => x !== t) : [...selected, t],
@@ -92,6 +104,13 @@ export function CarTypePicker() {
 
   const handleContinue = () => {
     haptic.impact("light");
+    if (any_car_type) {
+      // Lower/upper only applies to two car types, so asking for it here would
+      // quietly narrow "any car" down to them.
+      setField("berth", "any");
+      navigate("/new/confirm");
+      return;
+    }
     if (selected.length !== car_types.length) setField("car_types", selected);
     const needsBerth = selected.some(t => BERTH_TYPES.has(t));
     navigate(needsBerth ? "/new/berth" : "/new/confirm");
@@ -104,6 +123,7 @@ export function CarTypePicker() {
       title="Vagon turi"
       subtitle={
         isLoading ? "Yuklanmoqda…"
+          : any_car_type ? "Istalgan vagon"
           : fallback ? "Barcha turlar"
           : train_numbers.length
             ? `Tanlangan ${train_numbers.length} ta poyezdda mavjud`
@@ -116,7 +136,7 @@ export function CarTypePicker() {
         </div>
       )}
 
-      {fallback && (
+      {fallback && !notPublished && (
         <div className="flex items-start gap-2 rounded-lg border border-hairline bg-surface-card p-3 text-body-sm text-muted">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted" strokeWidth={1.75} />
           <span>
@@ -124,6 +144,25 @@ export function CarTypePicker() {
             Tanlagan turingiz bu poyezdda bo'lmasligi mumkin.
           </span>
         </div>
+      )}
+
+      {notPublished && (
+        <p className="px-1 text-body-sm text-muted">
+          Poyezdlar hali chiqmagan, shuning uchun qaysi vagonlar bo'lishi
+          noma'lum. Ishonchingiz komil bo'lmasa, «Istalgan vagon»ni tanlang.
+        </p>
+      )}
+
+      {!isLoading && (
+        <ListGroup>
+          <ListRow
+            before={<Checkbox checked={any_car_type} tabIndex={-1} />}
+            title="Istalgan vagon"
+            subtitle="Qaysi vagonda joy bo'lsa, xabar beramiz"
+            selected={any_car_type}
+            onClick={pickAnyCarType}
+          />
+        </ListGroup>
       )}
 
       {!isLoading && (
@@ -144,8 +183,10 @@ export function CarTypePicker() {
         </ListGroup>
       )}
 
-      <StickyAction hint={selected.length === 0 ? "Kamida 1 ta vagon turini tanlang" : undefined}>
-        <Button full disabled={selected.length === 0} onClick={handleContinue}>
+      <StickyAction
+        hint={selected.length === 0 && !any_car_type ? "Kamida 1 ta vagon turini tanlang" : undefined}
+      >
+        <Button full disabled={selected.length === 0 && !any_car_type} onClick={handleContinue}>
           Davom etish
         </Button>
       </StickyAction>
