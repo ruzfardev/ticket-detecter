@@ -56,7 +56,8 @@ const config: Config = {
         },
         destructive: {
           DEFAULT: "hsl(var(--error))",
-          foreground: "hsl(var(--on-primary))",
+          // Not on-primary: that is dark on most palettes, and dark on red reads poorly.
+          foreground: "hsl(0 0% 100%)",
         },
         accent: {
           DEFAULT: "hsl(var(--surface-cream-strong))",

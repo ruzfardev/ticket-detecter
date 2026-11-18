@@ -69,7 +69,7 @@ export function BottomNav({ children }: Props) {
                   "transition-colors duration-200",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral/40",
                   active
-                    ? "bg-coral/12 text-coral"
+                    ? "bg-coral/10 text-coral"
                     : "text-muted hover:text-ink active:scale-95",
                 )}
               >

@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  Armchair, CalendarDays, ChevronLeft, ChevronRight, FileDown, Link2, TrainFront,
+  ChevronDown, ChevronLeft, ChevronRight, FileDown, Link2, TrainFront,
 } from "lucide-react";
 
 import {
@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useHaptic } from "@/hooks/useHaptic";
-import { formatMonth, shiftMonth, tashkentMonth } from "@/lib/dates";
+import { formatMonth, formatTravelDate, shiftMonth, tashkentMonth } from "@/lib/dates";
 import { dayOffset, trainTime } from "@/lib/traintime";
 import { cn } from "@/lib/utils";
 
@@ -75,6 +75,11 @@ function statusOf(raw: string): { text: string; tone: Tone } {
 
 function TicketCard({ t }: { t: PurchasedTicket }) {
   const [open, setOpen] = useState(false);
+  // The collapsed body stays mounted so its height can animate; `inert`
+  // keeps its button out of tab order and screen readers meanwhile.
+  // (React 18 has no typed `inert` prop, hence the attribute toggle.)
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { bodyRef.current?.toggleAttribute("inert", !open); }, [open]);
 
   const send = useMutation({
     mutationFn: () => sendTicketPdf(t),
@@ -87,59 +92,105 @@ function TicketCard({ t }: { t: PurchasedTicket }) {
     t.arr_at.replace(" ", "T"),
   );
   const reserved = isReservedLeg(t);
-  const timeTone = t.returned ? "text-muted" : "text-coral";
+  const timeTone = t.returned ? "text-muted" : "text-ink";
+  const seats = t.seats.join(", ") || "—";
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-hairline-soft bg-surface-card">
+    // A boarding pass: the journey on top, a perforated tear line with two
+    // notches, and a stub with the facts a conductor asks for.
+    <div
+      className={cn(
+        "relative overflow-hidden rounded-2xl border border-hairline-soft bg-surface-card",
+        t.returned && "opacity-70 saturate-50",
+      )}
+    >
       <button
         type="button"
+        aria-expanded={open}
         onClick={() => setOpen(v => !v)}
-        className="w-full space-y-3 p-4 text-left transition-colors active:bg-surface-cream-strong"
+        className="block w-full text-left transition-colors active:bg-surface-cream-strong"
       >
-        <div className="flex items-center gap-2">
-          <TrainFront className="h-4 w-4 text-muted" strokeWidth={1.75} />
-          <span className="font-display text-display-sm text-ink">{t.train_number}</span>
-          {t.returned && <Badge variant="muted">Qaytarilgan</Badge>}
-          {reserved && <Badge variant="coral">Bron</Badge>}
-          <span className="ml-auto text-body-sm tabular-nums text-muted">
-            {t.amount_uzs.toLocaleString("ru-RU").replace(/ /g, " ")} so'm
-          </span>
+        <div className="space-y-4 p-4 pb-5">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-pill bg-coral/10 text-coral">
+              <TrainFront className="h-4 w-4" strokeWidth={1.75} />
+            </span>
+            <span className="font-display text-display-sm text-ink">{t.train_number}</span>
+            {t.returned && <Badge variant="muted">Qaytarilgan</Badge>}
+            {reserved && <Badge variant="coral">Bron</Badge>}
+            <span className="ml-auto text-body-sm tabular-nums text-muted">
+              {t.amount_uzs.toLocaleString("ru-RU").replace(/ /g, " ")} so'm
+            </span>
+          </div>
+
+          <div className="flex items-end gap-3">
+            <div className="min-w-0">
+              <div className={cn("font-display text-display-lg tabular-nums leading-none", timeTone)}>
+                {hhmm(t.dep_at)}
+              </div>
+              <div className="mt-1.5 truncate text-caption-upper uppercase text-muted">
+                {t.dep_station}
+              </div>
+            </div>
+            {/* the track, with the train riding it */}
+            <div className="relative mb-6 flex-1">
+              <div className="border-t-2 border-dotted border-hairline" />
+              <span className="ticket-train absolute -top-[9px] left-1/2 -translate-x-1/2 rounded-pill bg-surface-card px-1 text-coral">
+                <TrainFront className="h-4 w-4" strokeWidth={2} />
+              </span>
+            </div>
+            <div className="min-w-0 text-right">
+              <div className={cn("font-display text-display-lg tabular-nums leading-none", timeTone)}>
+                {hhmm(t.arr_at)}
+                {plus > 0 && <sup className="ml-0.5 text-caption text-muted">+{plus}</sup>}
+              </div>
+              <div className="mt-1.5 truncate text-caption-upper uppercase text-muted">
+                {t.arr_station}
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-end gap-2">
+        {/* tear line: dashes between two notches cut out of the card's edges */}
+        <div aria-hidden className="relative h-0">
+          <span className="absolute -left-[11px] -top-[11px] h-[22px] w-[22px] rounded-pill border border-hairline-soft bg-canvas" />
+          <span className="absolute -right-[11px] -top-[11px] h-[22px] w-[22px] rounded-pill border border-hairline-soft bg-canvas" />
+          <div className="mx-5 border-t-2 border-dashed border-hairline" />
+        </div>
+
+        <div className="grid grid-cols-[1fr_auto_auto] items-end gap-x-5 px-4 pb-4 pt-5">
           <div className="min-w-0">
-            <div className="truncate text-caption-upper uppercase text-muted">
-              {t.dep_station}
-            </div>
-            <div className={cn("font-display text-display-sm tabular-nums", timeTone)}>
-              {hhmm(t.dep_at)}
-            </div>
+            <div className="text-caption-upper uppercase text-muted">Sana</div>
+            <div className="mt-0.5 truncate text-title-sm text-ink">{formatTravelDate(dateOf(t.dep_at))}</div>
           </div>
-          <div className="flex-1 border-t border-dashed border-hairline pb-2" />
-          <div className="min-w-0 text-right">
-            <div className="truncate text-caption-upper uppercase text-muted">
-              {t.arr_station}
-            </div>
-            <div className={cn("font-display text-display-sm tabular-nums", timeTone)}>
-              {hhmm(t.arr_at)}
-              {plus > 0 && <sup className="ml-0.5 text-caption text-muted">+{plus}</sup>}
-            </div>
+          <div>
+            <div className="text-caption-upper uppercase text-muted">Vagon</div>
+            <div className="mt-0.5 text-title-sm tabular-nums text-ink">{t.car_number}</div>
           </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-hairline-soft pt-3 text-body-sm text-muted">
-          <span className="inline-flex items-center gap-1">
-            <CalendarDays className="h-3.5 w-3.5" strokeWidth={1.75} />
-            {dateOf(t.dep_at)}
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Armchair className="h-3.5 w-3.5" strokeWidth={1.75} />
-            Vagon {t.car_number} · joy {t.seats.join(", ") || "—"}
-          </span>
+          <div className="flex items-end gap-2">
+            <div>
+              <div className="text-caption-upper uppercase text-muted">Joy</div>
+              <div className="mt-0.5 text-title-sm tabular-nums text-ink">{seats}</div>
+            </div>
+            <ChevronDown
+              className={cn(
+                "mb-0.5 h-4 w-4 text-muted transition-transform duration-300",
+                open && "rotate-180",
+              )}
+              strokeWidth={1.75}
+            />
+          </div>
         </div>
       </button>
 
-      {open && (
+      {/* Height animates via grid rows 0fr→1fr — no measuring, no layout jank. */}
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-300 ease-out",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}
+      >
+       <div ref={bodyRef} className="min-h-0 overflow-hidden">
         <div className="space-y-3 border-t border-hairline-soft px-4 pb-4 pt-3">
           {t.tickets.map(d => {
             const s = statusOf(d.status);
@@ -179,7 +230,8 @@ function TicketCard({ t }: { t: PurchasedTicket }) {
             </>
           )}
         </div>
-      )}
+       </div>
+      </div>
     </div>
   );
 }

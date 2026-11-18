@@ -41,7 +41,7 @@
     --muted-soft:  219 15% 67%;
     --hairline:      229 31% 90%;
     --hairline-soft: 223 30% 95%;
-    --on-primary:   0 0% 100%;
+    --on-primary:   235 30% 14%;  /* eticket navy: 7.4:1 on the turquoise (white was 2.3:1) */
     --on-dark:      0 0% 100%;
     --on-dark-soft: 235 10% 75%;
 
@@ -80,7 +80,7 @@
     --muted-soft:  232 7% 52%;
     --hairline:      233 12% 25%;
     --hairline-soft: 234 14% 20%;
-    --on-primary:   0 0% 100%;
+    --on-primary:   235 30% 14%;  /* 9:1 on the brightened turquoise (white was 1.9:1) */
     --on-dark:      220 30% 95%;
     --on-dark-soft: 230 8% 65%;
 
@@ -113,7 +113,7 @@
     --muted-soft:  42 6% 46%;
     --hairline:      30 26% 87%;
     --hairline-soft: 35 26% 90%;
-    --on-primary:   0 0% 100%;
+    --on-primary:   30 15% 10%;   /* warm near-black: 5.4:1 on coral (white was 3.2:1) */
     --on-dark:      48 33% 97%;
     --on-dark-soft: 42 6% 61%;
 
@@ -145,7 +145,7 @@
     --muted-soft:  42  7% 52%;
     --hairline:      40 6% 22%;
     --hairline-soft: 40 6% 18%;
-    --on-primary:   0 0% 100%;
+    --on-primary:   30 15% 10%;   /* 6.5:1 (white was 2.7:1) */
     --on-dark:      48 20% 94%;
     --on-dark-soft: 42  7% 64%;
 
@@ -178,7 +178,7 @@
     --muted-soft:  158 7% 48%;
     --hairline:      145 15% 85%;
     --hairline-soft: 143 15% 89%;
-    --on-primary:   0 0% 100%;
+    --on-primary:   0 0% 100%;    /* white stays: on deep green it out-reads dark (4.2 vs 4.0) */
     --on-dark:      140 25% 97%;
     --on-dark-soft: 150 8% 63%;
 
@@ -210,7 +210,7 @@
     --muted-soft:  152 6% 52%;
     --hairline:      160 10% 22%;
     --hairline-soft: 162 10% 18%;
-    --on-primary:   0 0% 100%;
+    --on-primary:   168 30% 9%;   /* 7.4:1 on the light green (white was 2.4:1) */
     --on-dark:      150 20% 94%;
     --on-dark-soft: 152 7% 65%;
 
@@ -315,9 +315,6 @@
   font-weight: 600;
   animation: cal-pick 220ms cubic-bezier(.2, .8, .2, 1);
 }
-/* The dark themes brighten the primary, and white on it drops to ~2:1. The
-   page background colour reads clearly on it instead. */
-.dark .td-cal .rdp-selected .rdp-day_button { color: hsl(var(--canvas)); }
 .td-cal .rdp-disabled { opacity: 0.3; }
 @keyframes cal-pick { from { transform: scale(.82); } to { transform: none; } }
 @media (prefers-reduced-motion: reduce) {
@@ -348,4 +345,27 @@
   .splash-in, .splash-rail, .splash-rail > i, .logo-halo, .live-dot { animation: none !important; }
   .splash-in { opacity: 1; transform: none; }
   .logo-halo { opacity: 0; }
+}
+
+/* ── Tickets: the train rides into the middle of its track ────────────
+   `left` on a tiny absolutely-placed icon: no layout beyond itself. */
+@keyframes ticket-ride { from { left: 6%; opacity: 0; } 35% { opacity: 1; } to { left: 50%; } }
+.ticket-train { animation: ticket-ride 900ms cubic-bezier(.2, .8, .2, 1) 120ms both; }
+
+/* ── Purchase success: a ticket prints out of a slot ──────────────────
+   The pass slides down from behind the slot (its wrapper clips it), then
+   the check pops and a few sparks fly. Transform/opacity only. */
+@keyframes paid-print { from { transform: translateY(-104%); } to { transform: none; } }
+@keyframes paid-pop   { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes paid-spark {
+  from { transform: rotate(var(--a)) translateY(-18px) scale(1);  opacity: 1; }
+  to   { transform: rotate(var(--a)) translateY(-46px) scale(.3); opacity: 0; }
+}
+.paid-print { animation: paid-print 900ms cubic-bezier(.2, .9, .25, 1) 150ms both; }
+.paid-pop   { animation: paid-pop 420ms cubic-bezier(.3, 1.6, .5, 1) 950ms both; }
+.paid-spark { animation: paid-spark 700ms ease-out 1050ms both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ticket-train, .paid-print, .paid-pop { animation: none; }
+  .paid-spark { display: none; }
 }

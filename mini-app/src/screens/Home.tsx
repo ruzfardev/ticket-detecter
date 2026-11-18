@@ -253,7 +253,7 @@ export function Home() {
           onClick={go("/railway-link")}
           className="flex w-full items-center gap-3 rounded-lg border border-hairline bg-canvas p-4 text-left transition-colors hover:bg-surface-soft active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
         >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-coral/12">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-coral/10">
             <Train className="text-coral" width={20} height={20} strokeWidth={1.75} />
           </div>
           <div className="min-w-0 flex-1">
@@ -364,7 +364,7 @@ export function Home() {
           onClick={go("/premium")}
           className="flex w-full items-center gap-3 rounded-lg border border-hairline bg-canvas p-4 text-left transition-colors hover:bg-surface-soft active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
         >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-coral/12">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-coral/10">
             <Sparkles className="text-coral" width={20} height={20} strokeWidth={1.75} />
           </div>
           <div className="min-w-0 flex-1">

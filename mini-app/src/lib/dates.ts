@@ -13,6 +13,19 @@ const MONTHS_UZ_FULL = [
   "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr",
 ];
 
+const WEEKDAYS_UZ = ["yakshanba", "dushanba", "seshanba", "chorshanba", "payshanba", "juma", "shanba"];
+
+/** "2026-11-19" → "19-noyabr, payshanba" — the long form for a travel date. */
+export function formatTravelDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const month = (MONTHS_UZ_FULL[mo - 1] ?? m[2]).toLowerCase();
+  // UTC, so the browser's own timezone can't shift the weekday.
+  const weekday = WEEKDAYS_UZ[new Date(Date.UTC(y, mo - 1, d)).getUTCDay()];
+  return `${d}-${month}, ${weekday}`;
+}
+
 /** "2026-08" → "Avgust 2026". */
 export function formatMonth(ym: string): string {
   const m = /^(\d{4})-(\d{2})$/.exec(ym);

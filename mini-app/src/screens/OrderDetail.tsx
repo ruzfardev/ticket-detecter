@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  AlertCircle, CalendarDays, CheckCircle2, Clock, KeyRound, RefreshCw,
+  AlertCircle, CalendarDays, Check, CheckCircle2, Clock, KeyRound, RefreshCw,
   Train as TrainIcon, X, XCircle,
 } from "lucide-react";
 
@@ -24,9 +24,63 @@ import { useTelegram } from "@/hooks/useTelegram";
 import { useHaptic } from "@/hooks/useHaptic";
 import { formatMmSs, useCountdown } from "@/hooks/useCountdown";
 import { cn } from "@/lib/utils";
+import { formatTravelDate } from "@/lib/dates";
 
 /** Under this many seconds the timer turns red and the phone buzzes once. */
 const OTP_URGENT_S = 60;
+
+const SPARK_ANGLES = [-70, -40, -12, 12, 40, 70];
+
+/**
+ * The purchase moment: a small boarding pass slides out of a "printer" slot,
+ * then a check pops on it with a few sparks. Shown only when the payment
+ * completes on this screen, never for an order that was already paid.
+ */
+function PrintedTicket({ train, car, seats, date }: {
+  train: string; car: string; seats: string; date: string;
+}) {
+  return (
+    <div className="flex flex-col items-center pt-2" role="status" aria-label="Chipta sotib olindi">
+      {/* the slot */}
+      <div className="relative z-10 h-3 w-64 rounded-pill bg-ink/85 shadow-[inset_0_2px_4px_rgba(0,0,0,.45)] dark:bg-black/70 dark:ring-1 dark:ring-hairline" />
+      {/* the clip: the pass starts hidden behind the slot */}
+      <div className="-mt-1.5 w-56 overflow-hidden pb-6">
+        <div className="paid-print relative rounded-b-2xl border border-t-0 border-hairline-soft bg-surface-card px-4 pb-4 pt-5 shadow-[0_12px_24px_-12px_rgba(0,0,0,.35)]">
+          <div className="flex items-center gap-2">
+            <TrainIcon className="h-4 w-4 text-coral" strokeWidth={2} />
+            <span className="font-display text-display-sm text-ink">{train}</span>
+          </div>
+          <div className="mt-1 text-body-sm text-muted">{date}</div>
+          <div className="mt-3 border-t-2 border-dashed border-hairline" />
+          <div className="mt-3 flex gap-6">
+            <div>
+              <div className="text-caption-upper uppercase text-muted">Vagon</div>
+              <div className="text-title-sm tabular-nums text-ink">{car}</div>
+            </div>
+            <div>
+              <div className="text-caption-upper uppercase text-muted">Joy</div>
+              <div className="text-title-sm tabular-nums text-ink">{seats}</div>
+            </div>
+          </div>
+          {/* the check, stamped on the corner, with sparks */}
+          <div className="absolute -bottom-4 right-4">
+            {SPARK_ANGLES.map(a => (
+              <span
+                key={a}
+                aria-hidden
+                className="paid-spark absolute left-1/2 top-1/2 -ml-1 -mt-1 h-2 w-2 rounded-pill bg-coral"
+                style={{ "--a": `${a}deg` } as React.CSSProperties}
+              />
+            ))}
+            <span className="paid-pop flex h-10 w-10 items-center justify-center rounded-pill bg-coral text-on-primary shadow-lg">
+              <Check className="h-5 w-5" strokeWidth={3} />
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const STATUS_LABEL: Record<AutobuyOrderStatus, { text: string; tone: "muted"|"success"|"coral"|"outline" }> = {
   reserving:    { text: "Bron qilinmoqda",   tone: "outline" },
@@ -88,9 +142,8 @@ export function OrderDetail() {
       // settled; `paying` means we are still waiting on them. Saying
       // "successful" on `paying` (as this used to) was a lie the user saw
       // seconds before the polling showed otherwise.
-      if (updated.status === "paid") {
-        toast.success("Chipta sotib olindi!");
-      } else if (updated.status === "paying") {
+      // `paid` gets no toast: the printed-ticket scene already says it.
+      if (updated.status === "paying") {
         toast.message(updated.failure_reason ?? "Kod yuborildi — eticket tasdiqlashi kutilmoqda");
       } else if (updated.failure_reason) {
         toast.message(updated.failure_reason);
@@ -134,16 +187,21 @@ export function OrderDetail() {
   // Keyed on the transition (live status -> paid) rather than on "status is
   // paid", so opening an already-paid order from the list does not bounce
   // straight back to it.
+  // The same transition plays the "ticket prints" moment; the hand-off waits
+  // for it to finish (~1.8 s) plus a beat to take it in.
   const prevStatus = useRef<string | undefined>(undefined);
+  const [justPaid, setJustPaid] = useState(false);
   useEffect(() => {
     const status = order.data?.status;
     const was = prevStatus.current;
     prevStatus.current = status;
     if (status !== "paid" || !was || was === "paid") return;
     if (!["reserving", "awaiting_otp", "paying"].includes(was)) return;
-    const t = setTimeout(() => navigate("/orders", { replace: true }), 1500);
+    setJustPaid(true);
+    haptic.notify("success");
+    const t = setTimeout(() => navigate("/orders", { replace: true }), 2800);
     return () => clearTimeout(t);
-  }, [order.data?.status, navigate]);
+  }, [order.data?.status, navigate, haptic]);
 
   if (order.isLoading) return <StatusView kind="loading" />;
   if (!order.data) return <StatusView kind="error" description="Buyurtma topilmadi" />;
@@ -244,6 +302,15 @@ export function OrderDetail() {
             </p>
           )}
         </div>
+      )}
+
+      {justPaid && o.status === "paid" && (
+        <PrintedTicket
+          train={o.train_number}
+          car={o.car_number}
+          seats={seats.join(", ")}
+          date={formatTravelDate(o.travel_date)}
+        />
       )}
 
       {o.status !== "awaiting_otp" && details}
@@ -377,7 +444,7 @@ export function OrderDetail() {
 
       {o.status === "paid" && (
         <div className="flex flex-col items-center gap-3 py-6">
-          <CheckCircle2 className="h-12 w-12 text-coral" strokeWidth={1.5} />
+          {!justPaid && <CheckCircle2 className="h-12 w-12 text-coral" strokeWidth={1.5} />}
           <div className="text-title-md text-ink">Chipta sotib olindi!</div>
           <p className="text-body-sm text-muted text-center">
             Chipta eticket.railway.uz akkountingizdagi
