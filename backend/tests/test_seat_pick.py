@@ -118,3 +118,11 @@ def test_partial_together_ignores_side_berths():
 
 def test_partial_any_takes_what_is_there():
     assert pick_partial(PLATS, [53], 2, "any") == ([53], False)
+
+
+def test_last_compartment_not_the_side_berths_beside_it():
+    # Seen live: a "together" pair was booked as 33 + 37 by the old worker.
+    # 33-35 share a compartment; 37-40 are side berths across the aisle.
+    assert pick_seats(PLATS, [33, 35, 37, 39], 2, "together") == ([33, 35], True)
+    assert pick_seats(PLATS, [33, 37], 2, "together") is None
+    assert pick_seats(PLATS, [37, 38, 39, 40], 2, "together") is None
