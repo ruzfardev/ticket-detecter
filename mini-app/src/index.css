@@ -341,8 +341,15 @@
                animation: logo-halo 1.6s cubic-bezier(.2, .6, .3, 1) 600ms infinite; }
 .live-dot    { animation: live-ping 1.6s ease-in-out infinite; }
 
+/* Home: a watching subscription sends a slow ring out of its mark — radar,
+   not a blink. transform/opacity only; the ring is a pseudo-element. */
+@keyframes sub-live { 0% { transform: scale(1); opacity: .45; } 75%, 100% { transform: scale(1.55); opacity: 0; } }
+.sub-live::after { content: ""; position: absolute; inset: 0; border-radius: 9999px;
+                   border: 1.5px solid hsl(var(--coral)); animation: sub-live 2.4s cubic-bezier(.2, .6, .3, 1) infinite; }
+
 @media (prefers-reduced-motion: reduce) {
   .splash-in, .splash-rail, .splash-rail > i, .logo-halo, .live-dot { animation: none !important; }
+  .sub-live::after { animation: none; opacity: 0; }
   .splash-in { opacity: 1; transform: none; }
   .logo-halo { opacity: 0; }
 }

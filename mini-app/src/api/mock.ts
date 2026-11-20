@@ -311,6 +311,15 @@ export const mockApi = {
 
   async patchSubscription(id: number, body: { is_active?: boolean }): Promise<Subscription> {
     await wait(200);
+    // Resuming takes a slot, exactly like the backend.
+    if (body.is_active && !subscriptions.find(s => s.id === id)?.is_active) {
+      const used = subscriptions.filter(s => s.is_active).length;
+      if (used >= (me.user.tier === "premium" ? 3 : 1)) {
+        const err: any = new Error("slot_limit_reached");
+        err.response = { data: { error: { code: "slot_limit_reached", message: "Slot to'lgan" } } };
+        throw err;
+      }
+    }
     subscriptions = subscriptions.map(s =>
       s.id === id ? { ...s, ...(body.is_active !== undefined ? { is_active: body.is_active } : {}) } : s
     );

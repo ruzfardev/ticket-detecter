@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
-  Plus, Sparkles, Bell, Ticket, TrainFront, CalendarDays, ChevronRight,
-  Train, AlertCircle, Clock, CheckCircle2, Zap, RefreshCw,
+  Plus, Sparkles, Bell, BellRing, Ticket, TrainFront, ChevronRight,
+  Train, AlertCircle, Clock, CheckCircle2, Zap, RefreshCw, Pause,
 } from "lucide-react";
 
 import {
   getMe, getRailwayStatus, isReservedLeg, listOrders, listSubscriptions, listTickets,
-  type Subscription,
+  patchSubscription, type Subscription,
 } from "@/api/client";
 import { useWizard } from "@/store/wizard";
 import { useCountdown } from "@/hooks/useCountdown";
@@ -20,7 +21,7 @@ import { HomeSkeleton } from "@/components/HomeSkeleton";
 import { Logo } from "@/components/Logo";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ListGroup, ListRow } from "@/components/ui/list";
+import { ListGroup } from "@/components/ui/list";
 import { cn } from "@/lib/utils";
 import { formatShortDate, tashkentDate } from "@/lib/dates";
 
@@ -40,15 +41,49 @@ function Avatar({ url, name, onClick }: { url?: string; name: string; onClick: (
   );
 }
 
-function StatusPill({ sub }: { sub: Subscription }) {
-  const text = !sub.is_active ? "pauzada" : sub.autobuy_enabled ? "avto-xarid" : "kuzatuvda";
+/** What a subscription is doing, at a glance: a live ring while it watches
+ *  (a bolt when it will also buy), a still pause glyph when it does not. */
+function SubMark({ sub }: { sub: Subscription }) {
+  if (!sub.is_active) {
+    return (
+      <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-pill border border-hairline bg-canvas text-muted">
+        <Pause width={14} height={14} strokeWidth={2.25} />
+      </span>
+    );
+  }
+  const Icon = sub.autobuy_enabled ? Zap : BellRing;
   return (
-    <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap text-caption",
-      sub.is_active ? "text-coral" : "text-muted")}>
-      <i aria-hidden className={cn("h-2 w-2 rounded-pill",
-        sub.is_active ? "bg-coral live-dot" : "bg-muted-soft")} />
-      {text}
+    <span aria-hidden className="sub-live relative flex h-8 w-8 shrink-0 items-center justify-center rounded-pill bg-coral/10 text-coral">
+      <Icon width={15} height={15} strokeWidth={2} />
     </span>
+  );
+}
+
+/** On = watching. A real switch, so pausing never needs a trip to the details. */
+function WatchSwitch({ on, busy, onToggle, label }: {
+  on: boolean; busy: boolean; onToggle: () => void; label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      disabled={busy}
+      onClick={onToggle}
+      // 44 px tap target around a 44×26 track.
+      className="flex h-11 w-14 shrink-0 items-center justify-center rounded-pill focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral/40 disabled:opacity-60"
+    >
+      <span className={cn(
+        "relative h-[26px] w-11 rounded-pill transition-colors duration-200",
+        on ? "bg-coral" : "bg-muted-soft/45",
+      )}>
+        <span className={cn(
+          "absolute left-[3px] top-[3px] h-5 w-5 rounded-pill bg-white shadow-sm transition-transform duration-200 ease-out",
+          on && "translate-x-[18px]",
+        )} />
+      </span>
+    </button>
   );
 }
 
@@ -61,6 +96,7 @@ export function Home() {
   const haptic = useHaptic();
   const { user: tgUser } = useTelegram();
   const reset = useWizard(s => s.reset);
+  const qc = useQueryClient();
   const me = useQuery({ queryKey: ["me"], queryFn: getMe });
   const subs = useQuery({ queryKey: ["subs"], queryFn: listSubscriptions });
   const railway = useQuery({ queryKey: ["railwayAccount"], queryFn: getRailwayStatus });
@@ -98,6 +134,40 @@ export function Home() {
     }
   }, [awaitingOtp?.id, haptic]);
 
+  // Pause / resume straight from the list. The switch flips at once and rolls
+  // back if the server says no — resuming can fail when every slot is taken.
+  type SubsData = Awaited<ReturnType<typeof listSubscriptions>>;
+  const toggle = useMutation({
+    mutationFn: (s: Subscription) => patchSubscription(s.id, { is_active: !s.is_active }),
+    onMutate: async (s: Subscription) => {
+      haptic.selection();
+      await qc.cancelQueries({ queryKey: ["subs"] });
+      const prev = qc.getQueryData<SubsData>(["subs"]);
+      if (prev) {
+        qc.setQueryData<SubsData>(["subs"], {
+          ...prev,
+          subscriptions: prev.subscriptions.map(x =>
+            x.id === s.id ? { ...x, is_active: !s.is_active } : x),
+        });
+      }
+      return { prev };
+    },
+    onError: (err: any, _s, ctx) => {
+      if (ctx?.prev) qc.setQueryData(["subs"], ctx.prev);
+      haptic.notify("error");
+      const code = err.response?.data?.error?.code;
+      if (code === "slot_limit_reached") {
+        toast.error("Slot to'lgan — boshqasini pauza qiling yoki Premium oling");
+      } else {
+        toast.error(err.response?.data?.error?.message || "Bajarilmadi");
+      }
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["subs"] });
+      qc.invalidateQueries({ queryKey: ["me"] });
+    },
+  });
+
   if (me.isLoading || subs.isLoading) return <HomeSkeleton />;
   if (!me.data || !subs.data) {
     return <StatusView kind="error" description="Ma'lumotni yuklab bo'lmadi." />;
@@ -128,27 +198,46 @@ export function Home() {
     active.length > 0
       ? `Joy chiqsa — darhol xabar${anyAutobuy ? " yoki avto-xarid" : ""}.`
       : paused.length > 0
-        ? "Hammasi pauzada — ro'yxatdan qayta yoqing."
+        ? "Hammasi pauzada — ro'yxatdagi tugma bilan qayta yoqing."
         : "Marshrut, sana va poyezdni tanlang — joy chiqsa xabar beramiz.";
 
-  const subRow = (s: Subscription) => (
-    <ListRow
-      key={s.id}
-      // No leading icon: every row would carry the same train glyph, and at
-      // 390 px it cost the width that keeps "Toshkent → Samarqand" on one line.
-      title={`${s.dep_name} → ${s.arr_name}`}
-      subtitle={
-        <span className="inline-flex items-center gap-1.5">
-          <CalendarDays width={14} height={14} strokeWidth={1.75} />
-          {formatShortDate(s.travel_date)} · {s.train_numbers.length ? s.train_numbers.join(", ") : "har qanday"}
-        </span>
-      }
-      // The whole row is the tap target; the status pill is the trailing
-      // element, so no chevron — it only ate title width.
-      after={<StatusPill sub={s} />}
-      onClick={() => navigate(`/sub/${s.id}`)}
-    />
-  );
+  const subRow = (s: Subscription) => {
+    const status = !s.is_active ? "Pauzada" : s.autobuy_enabled ? "Avto-xarid" : "Kuzatuvda";
+    return (
+      <div key={s.id} className="flex min-h-[64px] items-center gap-1 pr-1.5">
+        <button
+          type="button"
+          onClick={() => navigate(`/sub/${s.id}`)}
+          className="flex min-w-0 flex-1 items-center gap-3 self-stretch py-3 pl-4 text-left transition-colors active:bg-hairline-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-coral/40"
+        >
+          <SubMark sub={s} />
+          <span className="min-w-0 flex-1">
+            <span className={cn(
+              "block truncate text-body-md font-medium transition-colors",
+              s.is_active ? "text-ink" : "text-muted",
+            )}>
+              {s.dep_name} → {s.arr_name}
+            </span>
+            <span className="mt-0.5 block truncate text-body-sm text-muted">
+              <span className={cn("font-medium", s.is_active ? "text-coral" : "text-muted-soft")}>
+                {status}
+              </span>
+              {" · "}{formatShortDate(s.travel_date)}
+              {" · "}{s.train_numbers.length ? s.train_numbers.join(", ") : "istalgan poyezd"}
+            </span>
+          </span>
+        </button>
+        <WatchSwitch
+          on={s.is_active}
+          busy={toggle.isPending && toggle.variables?.id === s.id}
+          onToggle={() => toggle.mutate(s)}
+          label={s.is_active
+            ? `${s.dep_name} → ${s.arr_name}: pauza qilish`
+            : `${s.dep_name} → ${s.arr_name}: davom ettirish`}
+        />
+      </div>
+    );
+  };
 
   const ordersActive = (orders.data ?? []).filter(o =>
     ["reserving", "awaiting_otp", "paying"].includes(o.status)).length;
@@ -297,12 +386,14 @@ export function Home() {
         </Card>
       ) : (
         <>
-          {active.length > 0 && (
-            <ListGroup label="Xabarnomalar">{active.map(subRow)}</ListGroup>
-          )}
-          {paused.length > 0 && (
-            <ListGroup label="Pauzada">{paused.map(subRow)}</ListGroup>
-          )}
+          {/* One list in a stable order: a row that moved to another group
+              the moment its switch flipped would jump out from under the
+              finger. The mark and the switch say which is paused. */}
+          <ListGroup
+            label={`Xabarnomalar · ${active.length}/${all.length} faol`}
+          >
+            {all.map(subRow)}
+          </ListGroup>
         </>
       )}
 
