@@ -44,7 +44,7 @@ export function PassengerPicker({
   return (
     <ListGroup
       label={`Yo'lovchilar${seatedValid ? ` · ${seatedValid}/${MAX_SEATED}` : ""}`}
-      footer={problem ?? `Bir vagondan ${MAX_SEATED} tagacha yonma-yon joy izlanadi. 5 yoshgacha bola quchoqda bepul, joy olmaydi.`}
+      footer={problem ?? `Hammaga bitta vagondan joy olinadi, ${MAX_SEATED} kishigacha. 5 yoshgacha bola quchoqda bepul, joy olmaydi.`}
     >
       {loading ? (
         <ListRow title="Yuklanmoqda…" />

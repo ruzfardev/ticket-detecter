@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { Subscription } from "@/api/client";
+import type { SeatAdjacency, Subscription } from "@/api/client";
 
 export type Berth = "lower" | "upper" | "any";
 export type PayMethod = "hamkorbank" | "payme";
@@ -28,6 +28,7 @@ export type WizardState = {
   autobuy_lap_child_ids: number[];
   autobuy_payment_method: PayMethod | null;
   autobuy_seat_strategy: SeatStrategy;
+  autobuy_seat_adjacency: SeatAdjacency;
   // Set once the subscription is saved. Every /new/* route self-evicts to Home
   // while this is true, so back-stepping can never land on a finished wizard
   // (which previously let the user save the same subscription twice).
@@ -55,6 +56,7 @@ const initial = {
   autobuy_lap_child_ids: [] as number[],
   autobuy_payment_method: null as PayMethod | null,
   autobuy_seat_strategy: "all" as SeatStrategy,
+  autobuy_seat_adjacency: "any" as SeatAdjacency,
   completed: false,
   editing_sub_id: null as number | null,
 };
@@ -90,6 +92,7 @@ export const useWizard = create<WizardState>()(
         autobuy_payment_method: WIZARD_PAY_METHODS.includes(sub.autobuy_payment_method as PayMethod)
           ? (sub.autobuy_payment_method as PayMethod) : null,
         autobuy_seat_strategy: sub.autobuy_seat_strategy ?? "all",
+        autobuy_seat_adjacency: sub.autobuy_seat_adjacency ?? "any",
         editing_sub_id: sub.id,
       }),
     }),

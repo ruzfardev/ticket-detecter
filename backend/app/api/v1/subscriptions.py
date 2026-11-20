@@ -36,6 +36,8 @@ class PatchAutobuy(BaseModel):
     payment_method: str | None = None
     # 'all' (default) or 'partial' — see subscription_service.SEAT_STRATEGIES
     seat_strategy: str | None = None
+    # 'any' (default) or 'together' — see app.worker.seats. Omitted = unchanged.
+    seat_adjacency: str | None = None
     # Children under 5 riding on a lap: no seat, filed under an adult
     lap_child_ids: list[int] | None = None
 
@@ -112,6 +114,7 @@ async def patch_autobuy(
         payment_method=body.payment_method,
         seat_strategy=body.seat_strategy,
         lap_child_ids=body.lap_child_ids,
+        seat_adjacency=body.seat_adjacency,
     )
     return {"subscription": sub.to_dict()}
 

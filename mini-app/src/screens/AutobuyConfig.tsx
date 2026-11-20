@@ -11,9 +11,11 @@ import {
   listSubscriptions,
   patchAutobuy,
   type PaymentMethod,
+  type SeatAdjacency,
   type SeatStrategy,
 } from "@/api/client";
 import { PassengerPicker } from "@/components/PassengerPicker";
+import { SeatAdjacencyPicker } from "@/components/SeatAdjacencyPicker";
 import { Screen } from "@/components/Screen";
 import { StatusView } from "@/components/StatusView";
 import { StickyAction } from "@/components/StickyAction";
@@ -51,6 +53,7 @@ export function AutobuyConfig() {
   const [lapIds, setLapIds] = useState<number[]>([]);
   const [payMethod, setPayMethod] = useState<PaymentMethod | null>(null);
   const [strategy, setStrategy] = useState<SeatStrategy>("all");
+  const [adjacency, setAdjacency] = useState<SeatAdjacency>("any");
 
   // Seed local state when the subscription loads.
   useEffect(() => {
@@ -66,6 +69,7 @@ export function AutobuyConfig() {
       setLapIds(sub.autobuy_lap_child_ids ?? []);
       setPayMethod(sub.autobuy_payment_method);
       setStrategy(sub.autobuy_seat_strategy ?? "all");
+      setAdjacency(sub.autobuy_seat_adjacency ?? "any");
     }
   }, [sub?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -77,6 +81,7 @@ export function AutobuyConfig() {
         payment_method: enabled ? payMethod : null,
         seat_strategy: enabled ? strategy : null,
         lap_child_ids: enabled ? lapIds : null,
+        seat_adjacency: enabled ? adjacency : null,
       }),
     onSuccess: () => {
       toast.success("Saqlandi");
@@ -174,6 +179,9 @@ export function AutobuyConfig() {
             onAddFriend={() => navigate("/friends")}
           />
 
+          {validCount > 1 && (
+            <SeatAdjacencyPicker value={adjacency} onChange={setAdjacency} />
+          )}
 
           {validCount > 1 && (
             <ListGroup

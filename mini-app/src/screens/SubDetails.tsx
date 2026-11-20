@@ -164,7 +164,7 @@ export function SubDetails() {
           subtitle={
             sub.autobuy_enabled
               ? sub.autobuy_friend_names?.length
-                ? `${sub.autobuy_friend_names.length} yo'lovchi: ${sub.autobuy_friend_names.join(", ")}${sub.autobuy_lap_child_names?.length ? ` · quchoqda: ${sub.autobuy_lap_child_names.join(", ")}` : ""}`
+                ? `${sub.autobuy_friend_names.length} yo'lovchi: ${sub.autobuy_friend_names.join(", ")}${sub.autobuy_lap_child_names?.length ? ` · quchoqda: ${sub.autobuy_lap_child_names.join(", ")}` : ""}${sub.autobuy_friend_names.length > 1 ? (sub.autobuy_seat_adjacency === "together" ? " · yonma-yon" : " · istalgan joy") : ""}`
                 : sub.autobuy_friend_name
                   ? `Yo'lovchi: ${sub.autobuy_friend_name}`
                   : "Yo'lovchi tanlanmagan"

@@ -129,6 +129,7 @@ async def _process_group(pool: asyncpg.Pool, g: asyncpg.Record) -> None:
         SELECT s.id, s.user_id, s.train_numbers, s.car_types, s.berth, s.muted_until,
                s.autobuy_enabled, s.autobuy_friend_id, s.autobuy_friend_ids,
                s.autobuy_payment_method, s.autobuy_seat_strategy,
+               s.autobuy_seat_adjacency,
                u.tg_user_id, u.lang
         FROM subscriptions s
         JOIN users u ON u.id = s.user_id
@@ -314,39 +315,55 @@ async def _maybe_autobuy(
     """Pick seats in one car and fire autobuy.
 
     A single eticket order covers one car, so all seats must come from the same
-    one. What to do when no car fits everyone is the subscription's choice
-    (`autobuy_seat_strategy`):
+    one. Two choices on the subscription shape the pick (see app.worker.seats):
 
-      'all'     buy only if one car seats every passenger (default)
-      'partial' take as many as the best car offers, at least one
+      `autobuy_seat_adjacency`  'any' (prefer one compartment) or 'together'
+                                (one compartment, or neighbouring ones, only)
+      `autobuy_seat_strategy`   when no car seats everyone:
+                                'all'     buy nothing and keep watching
+                                'partial' take the largest group one car offers
 
-    A car that seats everyone always wins, whatever the strategy.
+    A car that seats everyone always wins over a partial pick, and among those
+    one that seats them together wins.
     """
+    from app.worker import seats as seat_pick
+
     friend_ids = list(sub["autobuy_friend_ids"] or [])
     if not friend_ids and sub["autobuy_friend_id"]:
         friend_ids = [sub["autobuy_friend_id"]]
     n = max(1, len(friend_ids))
     strategy = sub["autobuy_seat_strategy"] or "all"
+    adjacency = sub.get("autobuy_seat_adjacency") or "any"
 
     car_lookup = {c.number: c for c in cars}
-    full: tuple[str, list[int], object] | None = None      # seats everyone
-    partial: tuple[str, list[int], object] | None = None   # best short option
+    # (sort key, car_number, seats, car); lower key wins.
+    full: tuple[tuple, str, list[int], object] | None = None      # seats everyone
+    partial: tuple[tuple, str, list[int], object] | None = None   # best short option
     for car_number, payload in snapshot.items():
         car = car_lookup.get(car_number)
         if not car:
             continue
-        seats_in_car: list[int] = []
-        seats_in_car.extend(payload.get("lower") or [])
-        seats_in_car.extend(payload.get("upper") or [])
-        seats_in_car.extend(payload.get("places") or [])
-        if not seats_in_car:
+        free: list[int] = []
+        free.extend(payload.get("lower") or [])
+        free.extend(payload.get("upper") or [])
+        free.extend(payload.get("places") or [])
+        if not free:
             continue
-        chosen = sorted(seats_in_car)[:n]
-        if len(chosen) >= n:
-            if full is None or chosen[0] < full[1][0]:
-                full = (car_number, chosen, car)
-        elif partial is None or len(chosen) > len(partial[1]):
-            partial = (car_number, chosen, car)
+        got = seat_pick.pick_seats(car.type, free, n, adjacency)
+        if got:
+            chosen, together = got
+            key = (not together, chosen[0])
+            if full is None or key < full[0]:
+                full = (key, car_number, chosen, car)
+            continue
+        if strategy != "partial":
+            continue
+        got = seat_pick.pick_partial(car.type, free, n, adjacency)
+        if got:
+            chosen, together = got
+            key = (-len(chosen), not together, chosen[0])
+            if partial is None or key < partial[0]:
+                partial = (key, car_number, chosen, car)
 
     candidate = full or (partial if strategy == "partial" else None)
     if candidate is None:
@@ -355,14 +372,13 @@ async def _maybe_autobuy(
         # has, so say why.
         logger.info("autobuy_not_enough_seats",
                     sub_id=sub["id"], train=train.number, needed=n,
-                    best_car_seats=len(partial[1]) if partial else 0,
-                    strategy=strategy)
+                    strategy=strategy, adjacency=adjacency)
         return
     if candidate is partial:
         logger.info("autobuy_partial_seats", sub_id=sub["id"],
-                    train=train.number, needed=n, taking=len(candidate[1]))
+                    train=train.number, needed=n, taking=len(candidate[2]))
 
-    car_number, seats, car = candidate
+    _, car_number, seats, car = candidate
     dep_time = _extract_hhmm(train.departure)
     from app.services import autobuy_service
     try:

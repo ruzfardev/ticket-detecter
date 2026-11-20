@@ -17,6 +17,7 @@ import { useHaptic } from "@/hooks/useHaptic";
 import { useWizardGuard } from "@/hooks/useWizardGuard";
 import { useWizard } from "@/store/wizard";
 import { PassengerPicker } from "@/components/PassengerPicker";
+import { SeatAdjacencyPicker } from "@/components/SeatAdjacencyPicker";
 import { Screen } from "@/components/Screen";
 import { StickyAction } from "@/components/StickyAction";
 import { Button } from "@/components/ui/button";
@@ -83,6 +84,7 @@ export function Confirm() {
       payment_method: w.autobuy_payment_method,
       seat_strategy: w.autobuy_seat_strategy,
       lap_child_ids: lapIds,
+      seat_adjacency: w.autobuy_seat_adjacency,
     });
   };
 
@@ -302,6 +304,13 @@ export function Confirm() {
             }}
             onAddFriend={() => navigate("/friends")}
           />
+
+          {validCount > 1 && (
+            <SeatAdjacencyPicker
+              value={w.autobuy_seat_adjacency}
+              onChange={v => w.setField("autobuy_seat_adjacency", v)}
+            />
+          )}
 
           {validCount > 1 && (
             <ListGroup

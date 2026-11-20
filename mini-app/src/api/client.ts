@@ -84,6 +84,8 @@ export type Train = {
 
 export type PaymentMethod = "payme" | "click" | "hamkorbank" | "kapitalbank";
 export type SeatStrategy = "all" | "partial";
+/** 'together' = one compartment only (never side berths); 'any' = anywhere in the car. */
+export type SeatAdjacency = "any" | "together";
 
 export type Subscription = {
   id: number;
@@ -109,6 +111,7 @@ export type Subscription = {
   autobuy_payment_method: PaymentMethod | null;
   /** 'all' = everyone in one car or nothing; 'partial' = take what's there. */
   autobuy_seat_strategy?: SeatStrategy;
+  autobuy_seat_adjacency?: SeatAdjacency;
   /** Children under 5 riding on a lap — no seat, not in friend_ids. */
   autobuy_lap_child_ids?: number[] | null;
   autobuy_lap_child_names?: string[] | null;
@@ -303,6 +306,7 @@ export const patchAutobuy = (
     payment_method?: PaymentMethod | null;
     seat_strategy?: SeatStrategy | null;
     lap_child_ids?: number[] | null;
+    seat_adjacency?: SeatAdjacency | null;
   },
 ) =>
   mockApi.isEnabled

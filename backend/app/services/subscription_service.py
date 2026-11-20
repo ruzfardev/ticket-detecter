@@ -18,6 +18,8 @@ ALLOWED_PAYMENT_METHODS = {"payme", "click", "hamkorbank", "kapitalbank"}
 #   all     -> buy nothing until one car fits the whole group (default)
 #   partial -> take what the best car offers, at least one seat
 SEAT_STRATEGIES = {"all", "partial"}
+# Whether a group must sit in one compartment — see app.worker.seats.
+SEAT_ADJACENCIES = {"any", "together"}
 
 
 @dataclass(slots=True)
@@ -44,6 +46,7 @@ class SubscriptionRow:
     autobuy_friend_names: list[str] | None = None
     autobuy_payment_method: str | None = None
     autobuy_seat_strategy: str = "all"
+    autobuy_seat_adjacency: str = "any"
     # Children under 5 riding on a lap — no seat, not counted in friend_ids.
     autobuy_lap_child_ids: list[int] | None = None
     autobuy_lap_child_names: list[str] | None = None
@@ -62,7 +65,7 @@ SELECT s.id, s.user_id, s.dep_code, s.arr_code, s.travel_date,
        s.train_numbers, s.car_types, s.berth, s.is_active,
        s.muted_until, s.created_at,
        s.autobuy_enabled, s.autobuy_friend_id, s.autobuy_friend_ids, s.autobuy_payment_method,
-       s.autobuy_seat_strategy, s.autobuy_lap_child_ids,
+       s.autobuy_seat_strategy, s.autobuy_seat_adjacency, s.autobuy_lap_child_ids,
        (SELECT array_agg(TRIM(BOTH ' ' FROM (fc3.firstname || ' ' || fc3.lastname)))
           FROM railway_friends_cache fc3 WHERE fc3.id = ANY(s.autobuy_lap_child_ids)) AS autobuy_lap_child_names,
        sd.name_uz AS dep_name, sa.name_uz AS arr_name,
@@ -108,6 +111,7 @@ def _row_to_sub(row: asyncpg.Record) -> SubscriptionRow:
         autobuy_friend_names=list(row.get("autobuy_friend_names") or []) or None,
         autobuy_payment_method=row.get("autobuy_payment_method"),
         autobuy_seat_strategy=row.get("autobuy_seat_strategy") or "all",
+        autobuy_seat_adjacency=row.get("autobuy_seat_adjacency") or "any",
         autobuy_lap_child_ids=[int(x) for x in (row.get("autobuy_lap_child_ids") or [])] or None,
         autobuy_lap_child_names=list(row.get("autobuy_lap_child_names") or []) or None,
     )
@@ -220,6 +224,7 @@ async def update_autobuy(
     payment_method: str | None,
     seat_strategy: str | None = None,
     lap_child_ids: list[int] | None = None,
+    seat_adjacency: str | None = None,
 ) -> SubscriptionRow:
     """Toggle/configure auto-buy on a subscription (1-4 seated passengers).
 
@@ -239,6 +244,15 @@ async def update_autobuy(
             f"Invalid seat_strategy: {seat_strategy}",
             {"allowed": sorted(SEAT_STRATEGIES)},
         )
+
+    if seat_adjacency is not None and seat_adjacency not in SEAT_ADJACENCIES:
+        raise InvalidPayload(
+            f"Invalid seat_adjacency: {seat_adjacency}",
+            {"allowed": sorted(SEAT_ADJACENCIES)},
+        )
+    # Not sent = unchanged: a client that predates the option must not quietly
+    # undo a group's "together".
+    adjacency = seat_adjacency or sub.autobuy_seat_adjacency or "any"
 
     if payment_method is not None and payment_method not in ALLOWED_PAYMENT_METHODS:
         raise InvalidPayload(
@@ -286,6 +300,7 @@ async def update_autobuy(
             autobuy_payment_method = $4,
             autobuy_seat_strategy = $5,
             autobuy_lap_child_ids = $7::bigint[],
+            autobuy_seat_adjacency = $8,
             updated_at = now()
         WHERE id = $6
         """,
@@ -296,6 +311,7 @@ async def update_autobuy(
         seat_strategy or "all",
         sub_id,
         laps,
+        adjacency,
     )
     logger.info(
         "autobuy_config_changed",
@@ -304,6 +320,7 @@ async def update_autobuy(
         friend_ids=ids if enabled else [],
         payment_method=payment_method if enabled else None,
         seat_strategy=seat_strategy or "all",
+        seat_adjacency=adjacency,
         lap_child_ids=laps,
     )
     return await get_by_id(pool, sub_id, user_id)

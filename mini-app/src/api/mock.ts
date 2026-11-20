@@ -13,6 +13,8 @@ import type {
   PaymentMethod,
   PlansResponse,
   RailwayAccountStatus,
+  SeatAdjacency,
+  SeatStrategy,
   SavedCard,
   Station,
   PurchasedTicket,
@@ -44,7 +46,7 @@ let subscriptions: Subscription[] = [
     is_active: true, muted_until: null, created_at: new Date().toISOString(),
     last_notified_at: null, notif_count: 3,
     autobuy_enabled: true, autobuy_friend_id: 1, autobuy_friend_name: "Farrux",
-    autobuy_payment_method: "hamkorbank", autobuy_seat_strategy: "all",
+    autobuy_payment_method: "hamkorbank", autobuy_seat_strategy: "all", autobuy_seat_adjacency: "together",
   },
   {
     id: 2, user_id: 1, dep_code: "2900000", arr_code: "2900800",
@@ -134,6 +136,22 @@ const FAKE_FRIENDS_SEED: Friend[] = [
     doc_masked: "••••6191",
     citizenship: "UZB",
     region_id: "03",
+    is_self: false,
+  },
+  {
+    // A second adult, so multi-passenger options (seats together, partial)
+    // can be seen in mock mode.
+    id: 3,
+    railway_friend_id: "mock-friend-2",
+    firstname: "Dilnoza",
+    lastname: "Karimova",
+    midname: null,
+    sex: "F",
+    birth_day: "1997-08-21",
+    doc_type: "ПУ",
+    doc_masked: "••••5520",
+    citizenship: "UZB",
+    region_id: "10",
     is_self: false,
   },
 ];
@@ -388,7 +406,8 @@ export const mockApi = {
     id: number,
     body: {
       enabled: boolean; friend_ids?: number[] | null; payment_method?: PaymentMethod | null;
-      lap_child_ids?: number[] | null;
+      lap_child_ids?: number[] | null; seat_strategy?: SeatStrategy | null;
+      seat_adjacency?: SeatAdjacency | null;
     },
   ): Promise<Subscription> {
     await wait(200);
@@ -417,6 +436,8 @@ export const mockApi = {
         autobuy_payment_method: body.enabled ? body.payment_method ?? null : null,
         autobuy_lap_child_ids: laps.length ? laps : null,
         autobuy_lap_child_names: lapNames.length ? lapNames : null,
+        autobuy_seat_strategy: body.seat_strategy ?? s.autobuy_seat_strategy,
+        autobuy_seat_adjacency: body.seat_adjacency ?? s.autobuy_seat_adjacency,
       };
     });
     return subscriptions.find(s => s.id === id)!;
