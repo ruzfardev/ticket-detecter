@@ -58,3 +58,4 @@ mini-app/tsconfig.tsbuildinfo
 .claude
 screenshots/
 .vercel
+.agents
